@@ -1,0 +1,15 @@
+# Dependencias (Estaciona no usa, pero por si acaso)
+node_modules/
+
+# Logs y temporales
+*.log
+npm-debug.log*
+
+# Secretos / entorno
+.env
+.env.*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini

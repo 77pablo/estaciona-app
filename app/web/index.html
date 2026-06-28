@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Estaciona — encuentra estacionamiento en Temuco: dónde hay, cuánto cobran y si es gratis." />
+  <title>Estaciona — estacionamiento en Temuco</title>
+  <!-- Favicon: emoji 🅿️ como SVG en data-URI (sin archivos extra). -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🅿️</text></svg>" />
+  <!-- Color de barra del navegador (claro/oscuro según el sistema). -->
+  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0f141b" media="(prefers-color-scheme: dark)" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="phone">
+    <!-- Encabezado -->
+    <header class="appbar">
+      <div class="brand">🅿️ <b>Estaciona</b></div>
+      <div class="loc" id="loc-label">Temuco Centro</div>
+    </header>
+
+    <!-- VISTA: BUSCAR -->
+    <section class="view active" id="view-buscar">
+      <div class="searchbar">
+        <span aria-hidden="true">🔍</span>
+        <input id="search" type="text" placeholder="Buscar nombre, calle o dirección…" autocomplete="off" aria-label="Buscar estacionamiento por nombre, calle o dirección" />
+        <button id="btn-filtros" class="has-badge" title="Filtros" aria-label="Filtros"><span aria-hidden="true">⚙️</span><span class="badge" id="filtros-badge" hidden></span></button>
+      </div>
+      <div class="chips" id="chips">
+        <button class="chip" data-f="gratis">🆓 Gratis</button>
+        <button class="chip" data-f="barato">💸 Barato</button>
+        <button class="chip" data-f="techado">🏠 Techado</button>
+        <button class="chip" data-f="abierto">⏰ Abierto</button>
+      </div>
+      <div id="map"></div>
+      <button id="btn-zona" class="zona-btn">🔄 Buscar en esta zona</button>
+      <div class="sheet">
+        <div class="sheet-head">
+          <span id="sheet-count">Cargando…</span>
+          <label class="orden-lbl">Ordenar:
+            <select id="sheet-order" aria-label="Ordenar resultados">
+              <option value="cercania">Cercanía</option>
+              <option value="precio">Precio</option>
+            </select>
+          </label>
+        </div>
+        <div id="lista"></div>
+      </div>
+      <!-- Botón para plegar/desplegar el panel izquierdo (solo PC). -->
+      <button id="btn-panel" class="panel-toggle" title="Ocultar/mostrar panel" aria-label="Ocultar panel"><span aria-hidden="true">⟨</span></button>
+    </section>
+
+    <!-- VISTA: MI AUTO -->
+    <section class="view" id="view-miauto"></section>
+
+    <!-- VISTA: FAVORITOS -->
+    <section class="view" id="view-favoritos"></section>
+
+    <!-- Navegación inferior -->
+    <nav class="bottomnav">
+      <button class="nav active" data-view="buscar" aria-label="Buscar"><span aria-hidden="true">🔍</span>Buscar</button>
+      <button class="nav" data-view="miauto" aria-label="Mi auto"><span aria-hidden="true">🚗</span>Mi auto</button>
+      <button class="nav" data-view="favoritos" aria-label="Favoritos"><span aria-hidden="true">⭐</span>Favoritos</button>
+    </nav>
+
+    <!-- Overlays -->
+    <div class="overlay" id="detalle"></div>
+    <div class="modal-bg" id="modal-bg"><div class="modal" id="modal"></div></div>
+    <div class="onboard" id="onboard"></div>
+    <div id="banner"></div>
+    <div id="toast"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,389 @@
+/* ============================================================================
+   Estaciona — estilos (tema claro, amigable, "todo público")
+   Marco tipo teléfono centrado para que se vea como una app real.
+   ============================================================================ */
+:root {
+  --bg: #f4f6f9;
+  --card: #ffffff;
+  --line: #e4e8ee;
+  --text: #1b2430;
+  --muted: #6b7785;
+  --accent: #2563eb;
+  --green: #16a34a;
+  --amber: #f59e0b;
+  --red: #dc2626;
+  --shadow: 0 6px 20px rgba(20,30,50,.10);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: #c9d2dd; color: var(--text);
+  display: flex; justify-content: center; align-items: center; min-height: 100vh;
+}
+
+/* Marco teléfono */
+.phone {
+  position: relative; width: 100%; max-width: 430px; height: 100vh; max-height: 920px;
+  background: var(--bg); overflow: hidden; display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+/* Tablet/medio: mantiene el "marco teléfono" centrado y elegante. */
+@media (min-width: 460px) and (max-width: 859px) { .phone { border-radius: 28px; height: 900px; } }
+/* PC: ocupa TODA la ventana, con layout de escritorio. */
+@media (min-width: 860px) {
+  body { background: var(--bg); }
+  .phone { max-width: none; width: 100vw; height: 100vh; max-height: none; box-shadow: none; }
+}
+
+/* Appbar */
+.appbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 16px; background: var(--accent); color: #fff; flex-shrink: 0;
+}
+.appbar .brand { font-size: 18px; }
+.appbar .loc { font-size: 13px; opacity: .9; }
+
+/* Vistas */
+main, .view { flex: 1; min-height: 0; }
+.view { display: none; flex-direction: column; height: 100%; }
+.view.active { display: flex; }
+
+/* Buscar */
+.searchbar {
+  display: flex; align-items: center; gap: 8px; margin: 12px; padding: 10px 14px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); flex-shrink: 0;
+}
+.searchbar input { flex: 1; border: none; outline: none; font-size: 15px; background: transparent; color: var(--text); }
+.searchbar button { border: none; background: transparent; font-size: 18px; cursor: pointer; }
+
+.chips { display: flex; gap: 8px; padding: 0 12px 10px; overflow-x: auto; flex-shrink: 0; }
+.chip {
+  border: 1px solid var(--line); background: var(--card); color: var(--text);
+  padding: 7px 12px; border-radius: 20px; font-size: 13px; white-space: nowrap; cursor: pointer; font-weight: 600;
+}
+.chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+#map { flex: 1; min-height: 180px; background: #dde3ea; z-index: 0; }
+#map .nomap { padding: 20px; color: var(--muted); text-align: center; font-size: 14px; }
+
+/* Pin personalizado */
+.pin {
+  display: flex; align-items: center; gap: 3px; padding: 3px 7px; border-radius: 14px;
+  font-size: 12px; font-weight: 800; color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); white-space: nowrap;
+  border: 2px solid #fff; transform: translateY(-50%);
+}
+.pin.verde { background: var(--green); } .pin.amarillo { background: var(--amber); }
+.pin.rojo { background: var(--red); } .pin.cerrado { background: #94a3b8; }
+/* Pin seleccionado: más grande, con anillo, por encima del resto. */
+.pin.sel { transform: translateY(-50%) scale(1.18); box-shadow: 0 0 0 4px rgba(37,99,235,.45), 0 3px 10px rgba(0,0,0,.4); z-index: 1000; }
+/* Pin simplificado (mapa alejado): solo un punto, sin precio. */
+.pin-dot {
+  width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4); transform: translate(-50%, -50%);
+}
+.pin-dot.verde { background: var(--green); } .pin-dot.amarillo { background: var(--amber); }
+.pin-dot.rojo { background: var(--red); } .pin-dot.cerrado { background: #94a3b8; }
+.me-dot { width: 16px; height: 16px; background: var(--accent); border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 0 4px rgba(37,99,235,.25); }
+
+/* Botón flotante "mi ubicación" (control Leaflet bottomright). */
+.leaflet-geo-btn {
+  width: 42px; height: 42px; border-radius: 50%; border: none; cursor: pointer;
+  background: var(--card); color: var(--text); font-size: 20px; box-shadow: var(--shadow);
+  display: flex; align-items: center; justify-content: center;
+}
+.leaflet-geo-btn:hover { background: #eaf1ff; }
+
+/* Botón "Buscar en esta zona" (aparece al alejar el centro del mapa). */
+.zona-btn {
+  position: absolute; top: 150px; left: 50%; transform: translateX(-50%) translateY(-8px);
+  background: var(--card); color: var(--accent); border: 1px solid var(--line); font-weight: 800;
+  border-radius: 22px; padding: 9px 16px; font-size: 13px; box-shadow: var(--shadow);
+  z-index: 40; cursor: pointer; opacity: 0; pointer-events: none; transition: all .2s;
+}
+.zona-btn.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+
+/* Botón de plegar panel: oculto en celular (ahí el panel es la hoja inferior). */
+.panel-toggle { display: none; }
+
+/* Hoja de resultados */
+.sheet {
+  flex-shrink: 0; max-height: 42%; overflow-y: auto; background: var(--card);
+  border-top-left-radius: 18px; border-top-right-radius: 18px; box-shadow: 0 -6px 20px rgba(0,0,0,.08);
+  margin-top: -16px; position: relative; z-index: 1; transition: height .25s ease;
+}
+.sheet-head { display: flex; justify-content: space-between; padding: 12px 16px 6px; font-size: 12px; color: var(--muted); position: sticky; top: 0; background: var(--card); touch-action: none; cursor: grab; user-select: none; }
+.sheet-head:active { cursor: grabbing; }
+.sheet-head::before { content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 38px; height: 4px; background: var(--line); border-radius: 3px; }
+
+/* Tarjeta de estacionamiento */
+.card {
+  display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); cursor: pointer;
+}
+.card:active { background: #f0f4fb; }
+.card .ic { font-size: 22px; }
+.card .info { flex: 1; min-width: 0; }
+.card .nm { font-weight: 700; font-size: 15px; }
+.card .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.card .price { text-align: right; }
+.card .price b { font-size: 15px; }
+.card .free { color: var(--green); font-weight: 800; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+.dot.verde { background: var(--green); } .dot.amarillo { background: var(--amber); }
+.dot.rojo { background: var(--red); } .dot.cerrado { background: #94a3b8; }
+.badge-free { background: #dcfce7; color: var(--green); font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 10px; }
+
+/* Navegación inferior */
+.bottomnav {
+  display: flex; background: var(--card); border-top: 1px solid var(--line); flex-shrink: 0;
+}
+.bottomnav .nav {
+  flex: 1; border: none; background: transparent; padding: 8px 0 10px; font-size: 11px; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; font-weight: 600;
+}
+.bottomnav .nav span { font-size: 20px; }
+.bottomnav .nav.active { color: var(--accent); }
+
+/* Overlay de detalle */
+.overlay {
+  position: absolute; inset: 0; background: var(--bg); z-index: 50; transform: translateY(100%);
+  transition: transform .28s ease; overflow-y: auto; display: flex; flex-direction: column;
+}
+.overlay.open { transform: translateY(0); }
+.det-top { display: flex; align-items: center; gap: 10px; padding: 14px 16px; background: var(--accent); color: #fff; position: sticky; top: 0; z-index: 2; }
+.det-top button { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; }
+.det-top .t { flex: 1; font-weight: 700; font-size: 16px; }
+.det-body { padding: 16px; }
+.det-hero { position: relative; height: 130px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; margin-bottom: 14px; overflow: hidden; background: linear-gradient(135deg,#2563eb,#60a5fa); color: #fff; }
+.det-hero .hero-ic { font-size: 46px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.25)); }
+.det-hero .hero-nm { font-size: 15px; font-weight: 800; text-align: center; padding: 0 16px; text-shadow: 0 1px 3px rgba(0,0,0,.35); }
+.det-status { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+.det-status small { font-weight: 600; color: var(--muted); }
+.det-row { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; align-items: center; }
+.det-row .k { color: var(--muted); width: 22px; text-align: center; }
+.attrs { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.attr { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font-size: 13px; }
+.calc { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 14px 0; box-shadow: var(--shadow); }
+.calc h4 { font-size: 14px; margin-bottom: 8px; }
+.calc select { font-size: 15px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); }
+.calc .total { font-size: 22px; font-weight: 800; color: var(--accent); margin-top: 8px; }
+.disclaimer { font-size: 12px; color: var(--muted); background: #fff8e6; border: 1px solid #f3e2b3; border-radius: 10px; padding: 10px 12px; margin-top: 14px; }
+.det-actions { padding: 0 16px 24px; display: flex; flex-direction: column; gap: 10px; }
+.btn {
+  border: none; border-radius: 14px; padding: 15px; font-size: 16px; font-weight: 800; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-second { background: var(--card); color: var(--text); border: 1px solid var(--line); }
+.btn-ghost { background: transparent; color: var(--accent); font-weight: 700; }
+.thumbs { display: flex; gap: 10px; margin-top: 10px; }
+.thumbs button { flex: 1; border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 10px; font-size: 18px; cursor: pointer; }
+
+/* Modal */
+.modal-bg { position: absolute; inset: 0; background: rgba(0,0,0,.45); z-index: 60; display: none; align-items: center; justify-content: center; padding: 24px; }
+.modal-bg.open { display: flex; }
+.modal { background: var(--card); border-radius: 18px; padding: 20px; width: 100%; box-shadow: var(--shadow); }
+.modal h3 { font-size: 17px; margin-bottom: 6px; }
+.modal p { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+.opts { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.opts button { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 10px 14px; font-size: 14px; cursor: pointer; font-weight: 600; }
+.opts button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* Mi auto / favoritos (vistas simples) */
+.simple { padding: 16px; overflow-y: auto; }
+.simple h2 { font-size: 18px; margin-bottom: 12px; }
+.empty-big { text-align: center; color: var(--muted); padding: 50px 20px; }
+.empty-big .em { font-size: 48px; display: block; margin-bottom: 12px; }
+.miauto-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); text-align: center; }
+.miauto-card .big { font-size: 34px; font-weight: 800; }
+.miauto-card .cost { font-size: 28px; font-weight: 800; color: var(--accent); margin: 6px 0; }
+.miauto-card .lbl { color: var(--muted); font-size: 13px; }
+.fav-item { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; cursor: pointer; }
+.fav-item .ic { font-size: 22px; }
+.fav-item .nm { font-weight: 700; }
+.fav-item .sub { font-size: 12px; color: var(--muted); }
+
+/* Banner alarma + toast */
+#banner {
+  position: absolute; top: 60px; left: 12px; right: 12px; background: var(--red); color: #fff;
+  padding: 14px 16px; border-radius: 12px; font-weight: 700; z-index: 80; box-shadow: var(--shadow);
+  display: none; align-items: center; justify-content: space-between; gap: 10px;
+}
+#banner.show { display: flex; }
+#banner button { background: rgba(255,255,255,.25); border: none; color: #fff; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+#toast {
+  position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: #1b2430; color: #fff; padding: 10px 18px; border-radius: 22px; font-size: 14px;
+  opacity: 0; transition: all .25s; z-index: 90; pointer-events: none; white-space: nowrap;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ============================================================================
+   LAYOUT DE ESCRITORIO (PC): lista a la izquierda + mapa grande a la derecha.
+   ============================================================================ */
+@media (min-width: 860px) {
+  /* La barra superior se ve mejor más alta y con el menú a la derecha. */
+  .appbar { padding: 16px 28px; }
+  .appbar .brand { font-size: 20px; }
+
+  /* Vista Buscar en 2 columnas. */
+  #view-buscar.active {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "search map"
+      "chips  map"
+      "sheet  map";
+  }
+  #view-buscar .searchbar { grid-area: search; margin: 18px; }
+  #view-buscar .chips { grid-area: chips; padding: 0 18px 14px; flex-wrap: wrap; }
+  #view-buscar #map { grid-area: map; height: 100%; min-height: 0; }
+  #view-buscar .sheet {
+    grid-area: sheet; max-height: none; height: 100%; margin-top: 0;
+    border-radius: 0; box-shadow: none; border-right: 1px solid var(--line); overflow-y: auto;
+  }
+  .sheet-head::before { display: none; } /* sin "manija" de arrastre en PC */
+  .sheet-head { cursor: default; touch-action: auto; }
+  .card:hover { background: #f0f4fb; }
+
+  /* El detalle es un panel a la izquierda (no tapa todo el mapa). */
+  .overlay { width: 460px; right: auto; box-shadow: 6px 0 28px rgba(0,0,0,.18); }
+
+  /* Mi auto / Favoritos: contenido centrado y legible, no estirado. */
+  #view-miauto .simple, #view-favoritos .simple { max-width: 680px; margin: 0 auto; width: 100%; }
+
+  /* Navegación: píldora flotante abajo-centro (no la barra llena). */
+  .bottomnav {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    width: auto; border: 1px solid var(--line); background: var(--card);
+    border-radius: 16px; padding: 4px; gap: 4px; z-index: 70; box-shadow: var(--shadow);
+  }
+  .bottomnav .nav { flex-direction: row; gap: 6px; padding: 10px 18px; border-radius: 12px; }
+  .bottomnav .nav.active { background: #eaf1ff; }
+
+  /* Banner/toast respecto a la ventana completa. */
+  #banner { left: auto; right: 24px; top: 80px; max-width: 380px; }
+
+  /* --- Panel izquierdo plegable (PC) --- */
+  #view-buscar.active { transition: grid-template-columns .25s ease; }
+  .panel-toggle {
+    display: flex; align-items: center; justify-content: center;
+    position: absolute; top: 50%; left: 420px; transform: translateY(-50%);
+    width: 26px; height: 58px; cursor: pointer; z-index: 46;
+    background: var(--card); color: var(--muted); border: 1px solid var(--line); border-left: none;
+    border-radius: 0 10px 10px 0; box-shadow: 4px 0 12px rgba(0,0,0,.10);
+    font-size: 14px; transition: left .25s ease, color .15s;
+  }
+  .panel-toggle:hover { color: var(--accent); }
+  /* Estado plegado: el panel se va y el mapa ocupa todo. */
+  .phone.panel-cerrado #view-buscar.active { grid-template-columns: 0 1fr; }
+  .phone.panel-cerrado #view-buscar .searchbar,
+  .phone.panel-cerrado #view-buscar .chips,
+  .phone.panel-cerrado #view-buscar .sheet { display: none; }
+  .phone.panel-cerrado .panel-toggle { left: 0; }
+}
+
+/* ============================================================================
+   PULIDO: badge de filtros, orden, skeleton, bienvenida, mini-mapa,
+   accesibilidad, microinteracciones y reduced-motion.
+   ============================================================================ */
+
+/* Badge con el número de filtros activos sobre el botón ⚙️ */
+.searchbar button.has-badge { position: relative; }
+.badge {
+  position: absolute; top: -7px; right: -7px; min-width: 16px; height: 16px; padding: 0 4px;
+  background: var(--red); color: #fff; font-size: 10px; font-weight: 800; line-height: 16px;
+  border-radius: 9px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.badge[hidden] { display: none; }
+
+/* Selector de orden en la cabecera de resultados */
+.orden-lbl { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+.sheet-head select {
+  font-size: 12px; font-weight: 700; color: var(--text); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 3px 6px; cursor: pointer; touch-action: auto;
+}
+
+/* Skeleton de carga (shimmer) */
+.skel-card { display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.skel-info { flex: 1; display: flex; flex-direction: column; gap: 7px; }
+.skel {
+  background: linear-gradient(90deg, var(--line) 25%, rgba(255,255,255,.55) 37%, var(--line) 63%);
+  background-size: 400% 100%; border-radius: 6px; animation: shimmer 1.3s ease infinite;
+}
+.skel-ic { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; }
+.skel-line { height: 10px; }
+.skel-line.w70 { width: 70%; } .skel-line.w50 { width: 50%; } .skel-line.w40 { width: 40%; }
+.skel-price { width: 46px; height: 22px; }
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+/* Mini-mapa de la vista "Mi auto" */
+.mini-map { height: 160px; margin-top: 14px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); }
+
+/* Bienvenida (onboarding, solo la primera vez) */
+.onboard { position: absolute; inset: 0; background: rgba(0,0,0,.5); z-index: 100; display: none; align-items: center; justify-content: center; padding: 24px; }
+.onboard.show { display: flex; animation: fadeIn .2s ease; }
+.onboard-card { background: var(--card); color: var(--text); border-radius: 20px; padding: 24px 22px; width: 100%; max-width: 380px; box-shadow: var(--shadow); animation: modalPop .24s ease; }
+.onboard-ic { font-size: 46px; text-align: center; }
+.onboard-card h3 { font-size: 19px; text-align: center; margin: 8px 0 10px; }
+.onboard-card > p { font-size: 14px; color: var(--muted); text-align: center; margin-bottom: 14px; }
+.onboard-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.onboard-list li { font-size: 13px; line-height: 1.45; }
+
+/* Microinteracciones: aparición suave + feedback al presionar */
+.modal-bg.open .modal { animation: modalPop .22s ease; }
+#banner.show { animation: slideDown .3s ease; }
+.btn:active { transform: scale(.97); }
+.card:active { transform: scale(.995); }
+.chip:active, .opts button:active, .fav-item:active, .bottomnav .nav:active { transform: scale(.96); }
+@keyframes modalPop { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Accesibilidad: foco visible claro y consistente */
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.card:focus-visible, .fav-item:focus-visible { outline-offset: -3px; }
+
+/* Respeta "reducir movimiento": apaga animaciones/transiciones fuertes */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important; scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
+   MODO OSCURO AUTOMÁTICO (según preferencia del sistema operativo).
+   Solo redefine la paleta; el resto del CSS usa estas variables.
+   ============================================================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f141b;
+    --card: #1a212b;
+    --line: #2b3543;
+    --text: #e7edf4;
+    --muted: #97a3b2;
+    --accent: #3b82f6;
+    --green: #22c55e;
+    --amber: #fbbf24;
+    --red: #ef4444;
+    --shadow: 0 6px 20px rgba(0,0,0,.45);
+  }
+  body { background: #05080c; }
+  .phone { background: var(--bg); }
+  #map { background: #0b1016; }
+  .card:active, .card:hover { background: #222c38; }
+  .bottomnav .nav.active { background: #1e2a3d; }
+  .det-hero { background: linear-gradient(135deg,#1e3a8a,#2563eb); }
+  .disclaimer { background: #2a2410; border-color: #4a3f17; }
+  .badge-free { background: #14361f; }
+  .leaflet-geo-btn:hover { background: #222c38; }
+  /* Skeleton: brillo tenue (no un flash blanco) sobre fondo oscuro. */
+  .skel { background: linear-gradient(90deg, #222c38 25%, #313d4d 37%, #222c38 63%); background-size: 400% 100%; }
+  /* Oscurece las teselas del mapa (truco de inversión) y mantiene legibles
+     los controles/atribución de Leaflet, que NO deben invertirse. */
+  .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.9); }
+  .leaflet-control-attribution { background: rgba(26,33,43,.8) !important; color: var(--muted) !important; }
+  .leaflet-control-attribution a { color: var(--accent) !important; }
+}
