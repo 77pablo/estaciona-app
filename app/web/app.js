@@ -81,6 +81,64 @@ function precioHTML(p) {
   return `<b>${CLP(p.precioHora)}</b><small>/hr</small>`;
 }
 
+// --- Cálculo de costo realista (descuenta horas gratis y cerradas) ----------
+// Extrae el primer rango "HH:MM–HH:MM" de un texto (horario o regla de gratis).
+function rangoTexto(txt) {
+  const m = (txt || '').match(/(\d{1,2}):\d{2}\D+(\d{1,2}):\d{2}/);
+  return m ? { desde: +m[1], hasta: +m[2] } : null;
+}
+const enRango = (h, r) => r.desde > r.hasta ? (h >= r.desde || h < r.hasta) : (h >= r.desde && h < r.hasta);
+// ¿Es gratis a esta hora/día? (siempre / domingos / rango nocturno).
+function gratisEnHora(info, hora, dia) {
+  const g = info || '';
+  if (/siempre/i.test(g)) return true;
+  if (/domingo/i.test(g) && dia === 0) return true;
+  const r = rangoTexto(g);
+  return r ? enRango(hora, r) : false;
+}
+// ¿Estás dentro de la ventana en que SÍ se cobra (parquímetro / horario)?
+function dentroVentanaPago(horario, hora) {
+  if (/24h|libre/i.test(horario || '')) return true;
+  const r = rangoTexto(horario);
+  return r ? enRango(hora, r) : true;
+}
+// ¿Se paga en esta hora concreta? (no gratis, dentro de ventana, con tarifa).
+function pagaEnHora(precioHora, gratisInfo, horario, hora, dia) {
+  if (!precioHora) return false;
+  if (gratisEnHora(gratisInfo, hora, dia)) return false;
+  return dentroVentanaPago(horario, hora);
+}
+// Costo de estacionar `horas` enteras desde AHORA (cuenta solo horas que se pagan).
+function costoEstimado(p, horas) {
+  const ahora = new Date();
+  let h = ahora.getHours(), dia = ahora.getDay(), pagadas = 0;
+  for (let i = 0; i < horas; i++) {
+    if (pagaEnHora(p.precioHora, p.gratisInfo, p.horario, h, dia)) pagadas++;
+    if (++h >= 24) { h = 0; dia = (dia + 1) % 7; }
+  }
+  return { total: pagadas * p.precioHora, pagadas, libres: horas - pagadas };
+}
+// Costo acumulado real del auto guardado (recorre minuto a minuto por tramos de hora).
+function costoTranscurrido(a) {
+  if (!a.precioHora) return 0;
+  let restante = (Date.now() - a.inicio) / 60000;   // minutos
+  let cursor = new Date(a.inicio), costo = 0;
+  while (restante > 0.01) {
+    const min = Math.min(restante, 60 - cursor.getMinutes());
+    if (pagaEnHora(a.precioHora, a.gratisInfo, a.horario, cursor.getHours(), cursor.getDay())) {
+      costo += a.precioHora * (min / 60);
+    }
+    restante -= min;
+    cursor = new Date(cursor.getTime() + min * 60000);
+  }
+  return Math.round(costo);
+}
+
+// Etiqueta "Abierto / Cerrado" para la lista.
+const estadoHTML = (p) => p.abierto
+  ? '<span class="estado abierto">● Abierto</span>'
+  : '<span class="estado cerrado-lbl">● Cerrado</span>';
+
 // --- localStorage (datos en el teléfono) ------------------------------------
 const LS = {
   getFavs: () => JSON.parse(localStorage.getItem('estaciona_favs') || '[]'),
@@ -266,7 +324,7 @@ function renderLista() {
         <div class="ic">${p.tipo === 'calle' ? '🛣️' : '🅿️'}</div>
         <div class="info">
           <div class="nm">${p.nombre} ${LS.isFav(p.id) ? '⭐' : ''}</div>
-          <div class="sub">${dispTxt}</div>
+          <div class="sub">${estadoHTML(p)} · ${dispTxt}</div>
           <div class="sub">${Math.round(p.dist)} m · 🚶 ${walkMin(p.dist)} min · 🚗 ${carMin(p.dist)} min${p.gratisInfo ? ' · <span class="' + (esGratisClientes(p) ? 'badge-cli' : 'badge-free') + '">' + p.gratisInfo + '</span>' : ''}</div>
         </div>
         <div class="price">${precio}</div>
@@ -332,6 +390,7 @@ function openDetalle(id) {
           ${[1, 2, 3, 4, 6, 8].map((h) => `<option value="${h}">${h} hora${h > 1 ? 's' : ''}</option>`).join('')}
         </select>
         <div class="total" id="calc-total">${CLP(p.precioHora)}</div>
+        <div class="calc-nota" id="calc-nota"></div>
       </div>` : ''}
       <div class="det-row"><span class="k">👥</span>
         <span>¿Encontraste cupo aquí?</span>
@@ -339,6 +398,7 @@ function openDetalle(id) {
           <button onclick="confirmarCupo('${p.id}',true)" aria-label="Sí, había cupo">👍</button>
           <button onclick="confirmarCupo('${p.id}',false)" aria-label="No había cupo">👎</button>
         </span></div>
+      ${p.votos ? `<div class="votos-info">🗳️ Últimas 3 h: <b>${p.votos.up}</b> dijeron que había cupo · <b>${p.votos.down}</b> que no</div>` : ''}
       <p class="disclaimer">💡 Precio referencial. Confirma la tarifa en el lugar.</p>
     </div>
     <div class="det-actions">
@@ -347,7 +407,15 @@ function openDetalle(id) {
     </div>`;
 
   const sel = $('#calc-horas');
-  if (sel) { const upd = () => { $('#calc-total').textContent = CLP(p.precioHora * Number(sel.value)); }; sel.addEventListener('change', upd); upd(); }
+  if (sel) {
+    const upd = () => {
+      const { total, libres } = costoEstimado(p, Number(sel.value));
+      $('#calc-total').textContent = total === 0 ? 'Gratis' : CLP(total);
+      const nota = $('#calc-nota');
+      if (nota) nota.textContent = libres > 0 ? `Incluye ${libres} h sin cobro (gratis o cerrado).` : '';
+    };
+    sel.addEventListener('change', upd); upd();
+  }
   $('#detalle').classList.add('open');
 }
 window.cerrarDetalle = () => {
@@ -364,7 +432,13 @@ window.cerrarDetalle = () => {
   $('#detalle').classList.remove('open');
 };
 window.toggleFavDetalle = (id) => { LS.toggleFav(id); openDetalle(id); renderLista(); };
-window.confirmarCupo = (id, ok) => toast(ok ? '¡Gracias! Confirmado 👍' : 'Gracias, lo anotamos 👎');
+window.confirmarCupo = (id, ok) => {
+  toast(ok ? '¡Gracias! Confirmado 👍' : 'Gracias, lo anotamos 👎');
+  fetch('/api/voto', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, ok }),
+  }).then(() => cargar()).catch(() => {});   // recarga para reflejar el conteo nuevo
+};
 
 // Actualiza solo la línea de disponibilidad si el detalle está abierto.
 function refrescarDetalle() {
@@ -446,7 +520,7 @@ window.guardarEstacione = () => {
   }
   LS.setAuto({
     id: p.id, nombre: p.nombre, direccion: p.direccion, lat: p.lat, lng: p.lng,
-    precioHora: p.precioHora, inicio: Date.now(),
+    precioHora: p.precioHora, gratisInfo: p.gratisInfo, horario: p.horario, inicio: Date.now(),
     alarmaTs: min > 0 ? Date.now() + min * 60000 : null, alarmaSonó: false,
   });
   // Pedir permiso de notificación SOLO ahora (gesto del usuario, con contexto).
@@ -515,7 +589,7 @@ function actualizarMiAutoVivo() {
   if (!a || !$('#ma-tiempo')) return;
   const mins = Math.floor((Date.now() - a.inicio) / 60000);
   const hh = Math.floor(mins / 60), mm = mins % 60;
-  const costo = a.precioHora * ((Date.now() - a.inicio) / 3600000);
+  const costo = costoTranscurrido(a);
   let alarmaTxt = 'Sin alarma';
   if (a.alarmaTs) {
     const rest = Math.round((a.alarmaTs - Date.now()) / 60000);
@@ -524,7 +598,7 @@ function actualizarMiAutoVivo() {
   const distVuelta = haversine(USER, a);   // ETA caminando de vuelta (~80 m/min)
   const set = (id, txt) => { const e = $(id); if (e) e.textContent = txt; };
   set('#ma-tiempo', `${hh}h ${mm}min`);
-  set('#ma-costo', a.precioHora ? CLP(costo) : 'Gratis');
+  set('#ma-costo', !a.precioHora ? 'Gratis' : costo === 0 ? 'Gratis ahora' : CLP(costo));
   set('#ma-alarma', `⏰ ${alarmaTxt}`);
   set('#ma-eta', `🚶 A ${walkMin(distVuelta)} min caminando (${Math.round(distVuelta)} m)`);
 }

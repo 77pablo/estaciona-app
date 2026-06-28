@@ -392,6 +392,22 @@ main, .view { flex: 1; min-height: 0; }
 }
 .lugar-edit:active { transform: scale(.94); }
 
+/* Etiqueta Abierto / Cerrado en la lista */
+.estado { font-weight: 800; font-size: 11px; }
+.estado.abierto { color: var(--green); }
+.estado.cerrado-lbl { color: var(--red); }
+
+/* Nota de la calculadora (horas sin cobro) */
+.calc-nota { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.calc-nota:empty { display: none; }
+
+/* Conteo de votos de la gente en el detalle */
+.votos-info {
+  font-size: 12px; color: var(--muted); background: var(--card); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 11px; margin-top: 8px;
+}
+.votos-info b { color: var(--text); }
+
 /* Pines: leve realce al pasar el mouse (ayuda cuando se solapan) */
 .pin { cursor: pointer; transition: transform .12s ease; }
 .pin:hover { transform: translateY(-50%) scale(1.08); }

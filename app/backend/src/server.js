@@ -14,6 +14,7 @@ import { dirname, join, normalize, extname } from 'node:path';
 
 import { getEstacionamientos } from './engine.js';
 import { CENTRO } from './data.js';
+import { registrarVoto, tallyReciente } from './votos.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = join(__dirname, '..', '..', 'web');
@@ -53,7 +54,22 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     if (url.pathname === '/api/estacionamientos' && req.method === 'GET') {
-      return sendJSON(res, 200, { centro: CENTRO, estacionamientos: getEstacionamientos() });
+      const lista = getEstacionamientos();
+      const tally = await tallyReciente(3);            // votos de las últimas 3 h
+      for (const e of lista) { if (tally[e.id]) e.votos = tally[e.id]; }
+      return sendJSON(res, 200, { centro: CENTRO, estacionamientos: lista });
+    }
+    if (url.pathname === '/api/voto' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (c) => { body += c; if (body.length > 10000) req.destroy(); });
+      req.on('end', async () => {
+        try {
+          const { id, ok } = JSON.parse(body || '{}');
+          await registrarVoto(id, ok);
+          sendJSON(res, 200, { ok: true });
+        } catch { sendJSON(res, 400, { error: 'json inválido' }); }
+      });
+      return;
     }
     if (url.pathname === '/api/health' && req.method === 'GET') {
       return sendJSON(res, 200, { ok: true });
