@@ -354,6 +354,61 @@ main, .view { flex: 1; min-height: 0; }
 }
 
 /* ============================================================================
+   PULIDO v2: gratis-clientes, elección de ruta, fijar Casa/Trabajo, mapa.
+   ============================================================================ */
+
+/* "Gratis para clientes": píldora ámbar rellena, bien visible (no verde, para
+   no confundir con un gratis público real). */
+.free-cli {
+  display: inline-block; background: var(--amber); color: #3a2a00;
+  font-weight: 800; font-size: 11px; padding: 3px 8px; border-radius: 11px;
+  white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,.15);
+}
+/* Badge ámbar de la línea inferior de la tarjeta (mismo código que badge-free) */
+.badge-cli {
+  background: #fff1d6; color: #92600a; border: 1px solid #f3d28a;
+  font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 10px;
+}
+/* Aviso destacado en el detalle */
+.aviso-cli {
+  background: #fff8e6; border: 1px solid #f3d28a; color: #7a5200;
+  border-radius: 12px; padding: 11px 13px; margin: 10px 0; font-size: 13px; line-height: 1.4;
+}
+.aviso-cli b { color: #92600a; }
+
+/* Campo de texto dentro de modales (fijar dirección) */
+.modal input[type="text"] {
+  width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px;
+  font-size: 15px; background: var(--bg); color: var(--text); outline: none;
+}
+.modal input[type="text"]:focus { border-color: var(--accent); }
+
+/* Fila de Casa/Trabajo con botón de editar */
+.fav-item.lugar { gap: 8px; }
+.lugar-main { display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer; min-width: 0; }
+.lugar-edit {
+  border: 1px solid var(--line); background: var(--bg); border-radius: 10px;
+  padding: 8px 11px; font-size: 16px; cursor: pointer; flex-shrink: 0;
+}
+.lugar-edit:active { transform: scale(.94); }
+
+/* Pines: leve realce al pasar el mouse (ayuda cuando se solapan) */
+.pin { cursor: pointer; transition: transform .12s ease; }
+.pin:hover { transform: translateY(-50%) scale(1.08); }
+
+/* Punto "yo": anillo que late suavemente (locator estilo Maps) */
+.me-dot { position: relative; }
+.me-dot::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(37,99,235,.4); animation: mePulse 2.2s ease-out infinite;
+}
+@keyframes mePulse {
+  0% { box-shadow: 0 0 0 0 rgba(37,99,235,.4); }
+  70% { box-shadow: 0 0 0 12px rgba(37,99,235,0); }
+  100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+}
+
+/* ============================================================================
    MODO OSCURO AUTOMÁTICO (según preferencia del sistema operativo).
    Solo redefine la paleta; el resto del CSS usa estas variables.
    ============================================================================ */
@@ -378,6 +433,9 @@ main, .view { flex: 1; min-height: 0; }
   .det-hero { background: linear-gradient(135deg,#1e3a8a,#2563eb); }
   .disclaimer { background: #2a2410; border-color: #4a3f17; }
   .badge-free { background: #14361f; }
+  .badge-cli { background: #2a2410; color: #fbbf24; border-color: #4a3f17; }
+  .aviso-cli { background: #2a2410; border-color: #4a3f17; color: #f5d98a; }
+  .aviso-cli b { color: #fbbf24; }
   .leaflet-geo-btn:hover { background: #222c38; }
   /* Skeleton: brillo tenue (no un flash blanco) sobre fondo oscuro. */
   .skel { background: linear-gradient(90deg, #222c38 25%, #313d4d 37%, #222c38 63%); background-size: 400% 100%; }

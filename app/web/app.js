@@ -28,11 +28,26 @@ let filtros = {
   ev: false, accesible: false, tipo: 'todos', distMax: 0,
 };
 
-// Lugares fijos para Favoritos (Casa/Trabajo) — demo, sectores de Temuco.
-const LUGARES = {
+// Lugares de Favoritos (Casa/Trabajo). Por defecto son sectores de Temuco, pero
+// el usuario los puede fijar a su dirección real (se guarda solo en el teléfono).
+const LUGARES_DEF = {
   casa: { nombre: 'Casa', lat: -38.7385, lng: -72.6150 },
   trabajo: { nombre: 'Trabajo', lat: -38.7300, lng: -72.5850 },
 };
+function cargarLugares() {
+  try {
+    const g = JSON.parse(localStorage.getItem('estaciona_lugares') || 'null') || {};
+    return {
+      casa: { ...LUGARES_DEF.casa, ...(g.casa || {}) },
+      trabajo: { ...LUGARES_DEF.trabajo, ...(g.trabajo || {}) },
+    };
+  } catch { return { casa: { ...LUGARES_DEF.casa }, trabajo: { ...LUGARES_DEF.trabajo } }; }
+}
+let LUGARES = cargarLugares();
+function guardarLugar(k, lat, lng, etiqueta) {
+  LUGARES[k] = { nombre: LUGARES_DEF[k].nombre, lat, lng, etiqueta: etiqueta || null, set: true };
+  localStorage.setItem('estaciona_lugares', JSON.stringify(LUGARES));
+}
 
 // --- Utilidades -------------------------------------------------------------
 const CLP = (n) => n === 0 ? 'Gratis' : '$' + new Intl.NumberFormat('es-CL').format(Math.round(n));
@@ -46,6 +61,25 @@ function haversine(a, b) {
 const walkMin = (m) => Math.max(1, Math.round(m / 80));
 // Tiempo manejando: aproximación urbana ~25 km/h (sin servicios externos).
 const carMin = (m) => Math.max(1, Math.round(m / 1000 / 25 * 60));
+
+// "Gratis real" (calle pública sin cobro) vs "gratis solo para clientes" (lote
+// de una tienda). Importante para no confundir: que el usuario no maneje a un
+// supermercado creyendo que es estacionamiento público gratis.
+const esGratisClientes = (p) => p.precioHora === 0 && /cliente/i.test(p.gratisInfo || '');
+const esGratisReal = (p) => p.precioHora === 0 && !esGratisClientes(p);
+// Texto corto para el pin del mapa.
+function precioCorto(p) {
+  if (p.gratisAhora || esGratisReal(p)) return 'Gratis';
+  if (esGratisClientes(p)) return 'Clientes';
+  return CLP(p.precioHora);
+}
+// HTML del precio para la lista / favoritos (consciente del tipo de "gratis").
+function precioHTML(p) {
+  if (p.gratisAhora) return '<span class="free">Gratis ahora</span>';
+  if (esGratisReal(p)) return '<span class="free">Gratis</span>';
+  if (esGratisClientes(p)) return '<span class="free-cli">🛒 Solo clientes</span>';
+  return `<b>${CLP(p.precioHora)}</b><small>/hr</small>`;
+}
 
 // --- localStorage (datos en el teléfono) ------------------------------------
 const LS = {
@@ -115,7 +149,7 @@ function iconHtml(p) {
   // El pin seleccionado siempre conserva su precio para no perderlo de vista.
   const zoom = map ? map.getZoom() : 16;
   if (zoom < 14 && !esSel) return `<div class="pin-dot ${nivel}"></div>`;
-  return `<div class="pin ${nivel}${esSel ? ' sel' : ''}">${p.tipo === 'calle' ? '🛣️' : '🅿️'} ${p.gratisAhora ? 'Gratis' : CLP(p.precioHora)}</div>`;
+  return `<div class="pin ${nivel}${esSel ? ' sel' : ''}">${p.tipo === 'calle' ? '🛣️' : '🅿️'} ${precioCorto(p)}</div>`;
 }
 
 // Seleccionar = centrar el mapa en el lugar y resaltar su pin.
@@ -125,10 +159,24 @@ function panselect(p) {
   [prev, p.id].forEach((id) => {
     if (id && markers[id]) {
       const pp = DATA.find((x) => x.id === id);
-      if (pp) markers[id].setIcon(L.divIcon({ className: '', html: iconHtml(pp), iconSize: [0, 0] }));
+      if (pp) {
+        markers[id].setIcon(L.divIcon({ className: '', html: iconHtml(pp), iconSize: [0, 0] }));
+        markers[id].setZIndexOffset(zOffset(pp));
+      }
     }
   });
   map.panTo([p.lat, p.lng]);
+}
+
+// Prioridad visual cuando los pines se solapan (el centro de Temuco es denso):
+// el seleccionado va arriba del todo; luego los gratis; y entre los pagados,
+// el más barato por encima del más caro.
+function zOffset(p) {
+  let z = (p.gratisAhora || p.precioHora === 0)
+    ? 1500
+    : Math.max(0, 1200 - Math.min(p.precioHora, 1200));
+  if (p.id === selectedId) z += 5000;
+  return Math.round(z);
 }
 
 function updateMarkers(lista) {
@@ -143,6 +191,7 @@ function updateMarkers(lista) {
       mk.on('click', () => openDetalle(p.id));
       markers[p.id] = mk;
     }
+    markers[p.id].setZIndexOffset(zOffset(p));
   }
   for (const id of Object.keys(markers)) {
     if (!vistos.has(id)) { map.removeLayer(markers[id]); delete markers[id]; }
@@ -211,16 +260,14 @@ function renderLista() {
     const dispTxt = d.modo === 'envivo'
       ? `<span class="dot ${nivel}"></span>${nivel === 'cerrado' ? 'Cerrado' : d.cuposLibres + ' cupo' + (d.cuposLibres === 1 ? '' : 's') + ' · en vivo'}`
       : `<span class="dot ${nivel}"></span>${d.label} · estimación`;
-    const precio = p.gratisAhora
-      ? '<span class="free">Gratis ahora</span>'
-      : `<b>${CLP(p.precioHora)}</b>${p.precioHora ? '<small>/hr</small>' : ''}`;
+    const precio = precioHTML(p);
     return `
       <div class="card" data-id="${p.id}">
         <div class="ic">${p.tipo === 'calle' ? '🛣️' : '🅿️'}</div>
         <div class="info">
           <div class="nm">${p.nombre} ${LS.isFav(p.id) ? '⭐' : ''}</div>
           <div class="sub">${dispTxt}</div>
-          <div class="sub">${Math.round(p.dist)} m · 🚶 ${walkMin(p.dist)} min · 🚗 ${carMin(p.dist)} min${p.gratisInfo ? ' · <span class="badge-free">' + p.gratisInfo + '</span>' : ''}</div>
+          <div class="sub">${Math.round(p.dist)} m · 🚶 ${walkMin(p.dist)} min · 🚗 ${carMin(p.dist)} min${p.gratisInfo ? ' · <span class="' + (esGratisClientes(p) ? 'badge-cli' : 'badge-free') + '">' + p.gratisInfo + '</span>' : ''}</div>
         </div>
         <div class="price">${precio}</div>
       </div>`;
@@ -253,8 +300,11 @@ function openDetalle(id) {
   if (p.atributos.camaras) attrs.push('📹 Con cámaras');
   if (attrs.length === 0) attrs.push('🅿️ Sin servicios extra');
 
-  const precioLinea = p.precioHora === 0
-    ? 'Gratis' : `${CLP(p.precioHora)} / hora${p.fraccion ? ` (${p.fraccion.min} min ${CLP(p.fraccion.precio)})` : ''}`;
+  const precioLinea = esGratisClientes(p)
+    ? 'Gratis para clientes (con compra)'
+    : p.precioHora === 0
+      ? 'Gratis'
+      : `${CLP(p.precioHora)} / hora${p.fraccion ? ` (${p.fraccion.min} min ${CLP(p.fraccion.precio)})` : ''}`;
   const fav = LS.isFav(p.id);
 
   $('#detalle').innerHTML = `
@@ -268,7 +318,9 @@ function openDetalle(id) {
       <div class="det-hero"><span class="hero-ic">${p.tipo === 'calle' ? '🛣️' : '🅿️'}</span><span class="hero-nm">${p.nombre}</span></div>
       <div class="det-status" id="det-status-line">${lineaDisponibilidad(p)}</div>
       <div class="det-row"><span class="k">💰</span><span>${precioLinea}</span></div>
-      ${p.gratisInfo ? `<div class="det-row"><span class="k">🆓</span><span>${p.gratisInfo}</span></div>` : ''}
+      ${esGratisClientes(p)
+        ? `<div class="aviso-cli">🛒 <b>Gratis solo para clientes</b> — válido con compra en el local, no es estacionamiento público.</div>`
+        : p.gratisInfo ? `<div class="det-row"><span class="k">🆓</span><span>${p.gratisInfo}</span></div>` : ''}
       <div class="det-row"><span class="k">⏰</span><span>${p.horario} · ${p.abierto ? '<b style="color:var(--green)">Abierto ahora</b>' : '<b style="color:var(--red)">Cerrado</b>'}</span></div>
       <div class="det-row"><span class="k">📍</span><span>${p.direccion} · ${Math.round(haversine(USER, p))} m · 🚶 ${walkMin(haversine(USER, p))} min · 🚗 ${carMin(haversine(USER, p))} min</span></div>
       <div class="attrs">${attrs.map((a) => `<span class="attr">${a}</span>`).join('')}</div>
@@ -304,7 +356,10 @@ window.cerrarDetalle = () => {
   const prev = selectedId; selectedId = null;
   if (prev && markers[prev]) {
     const pp = DATA.find((x) => x.id === prev);
-    if (pp) markers[prev].setIcon(L.divIcon({ className: '', html: iconHtml(pp), iconSize: [0, 0] }));
+    if (pp) {
+      markers[prev].setIcon(L.divIcon({ className: '', html: iconHtml(pp), iconSize: [0, 0] }));
+      markers[prev].setZIndexOffset(zOffset(pp));
+    }
   }
   $('#detalle').classList.remove('open');
 };
@@ -320,10 +375,30 @@ function refrescarDetalle() {
 }
 
 // --- Llévame / Compartir ----------------------------------------------------
+let _rutaDest = null;
 window.llevame = (id) => {
-  const p = DATA.find((x) => x.id === id) || LUGARES[id];
+  const auto = LS.getAuto();
+  const p = DATA.find((x) => x.id === id) || LUGARES[id] || (auto && auto.id === id ? auto : null);
   if (!p) return;
-  window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`, '_blank');
+  _rutaDest = p;
+  $('#modal').innerHTML = `
+    <h3>🧭 ¿Con qué app te llevo?</h3>
+    <p>${p.nombre || 'Tu auto'}${p.direccion ? ' · ' + p.direccion : ''}</p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-primary" onclick="irRuta('google')">🗺️ Google Maps</button>
+      <button class="btn btn-second" onclick="irRuta('waze')">🚗 Waze</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
+  abrirModal();
+};
+window.irRuta = (app) => {
+  const p = _rutaDest;
+  if (!p) return;
+  const url = app === 'waze'
+    ? `https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`
+    : `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`;
+  window.open(url, '_blank');
+  cerrarModal();
 };
 window.compartir = (id) => {
   const p = DATA.find((x) => x.id === id);
@@ -460,15 +535,13 @@ function renderFavoritos() {
   const favs = LS.getFavs().map((id) => DATA.find((p) => p.id === id)).filter(Boolean);
   $('#view-favoritos').innerHTML = `<div class="simple">
     <h2>⭐ Favoritos</h2>
-    <div class="fav-item" onclick="irLugar('casa')"><span class="ic">🏠</span>
-      <div><div class="nm">Casa</div><div class="sub">Ver estacionamientos cerca →</div></div></div>
-    <div class="fav-item" onclick="irLugar('trabajo')"><span class="ic">💼</span>
-      <div><div class="nm">Trabajo</div><div class="sub">Ver estacionamientos cerca →</div></div></div>
+    ${filaLugar('casa', '🏠')}
+    ${filaLugar('trabajo', '💼')}
     <h2 style="font-size:14px;color:var(--muted);margin:16px 0 8px">Lugares guardados</h2>
     ${favs.length ? favs.map((p) => `
       <div class="fav-item" data-id="${p.id}"><span class="ic">${p.tipo === 'calle' ? '🛣️' : '🅿️'}</span>
         <div style="flex:1"><div class="nm">${p.nombre}</div>
-        <div class="sub">${p.gratisAhora ? 'Gratis ahora' : CLP(p.precioHora) + '/hr'} · ${p.direccion}</div></div></div>
+        <div class="sub">${precioHTML(p)} · ${p.direccion}</div></div></div>
     `).join('') : '<div class="empty-big" style="padding:24px">Aún no guardas lugares.<br>Toca la ⭐ en un estacionamiento.</div>'}
   </div>`;
   $('#view-favoritos').querySelectorAll('.fav-item[data-id]').forEach((el) =>
@@ -478,8 +551,62 @@ window.irLugar = (k) => {
   const l = LUGARES[k];
   USER = { lat: l.lat, lng: l.lng }; irA('buscar');
   if (map) { map.setView([l.lat, l.lng], 16); meMarker?.setLatLng([l.lat, l.lng]); }
-  renderLista(); toast(`Mostrando cerca de ${l.nombre}`);
+  renderLista(); toast(`Mostrando cerca de ${LUGARES_DEF[k].nombre}`);
 };
+
+// Fila de Casa/Trabajo en Favoritos: tocar el texto = ver cerca; ✏️ = fijarla.
+function filaLugar(k, ic) {
+  const l = LUGARES[k];
+  const sub = l.set
+    ? `${l.etiqueta || 'Ubicación fijada'} · ver cerca →`
+    : 'Sin fijar · toca ✏️ para poner tu dirección';
+  return `<div class="fav-item lugar">
+    <div class="lugar-main" onclick="irLugar('${k}')"><span class="ic">${ic}</span>
+      <div style="min-width:0"><div class="nm">${LUGARES_DEF[k].nombre}</div><div class="sub">${sub}</div></div></div>
+    <button class="lugar-edit" onclick="editarLugar('${k}')" aria-label="Fijar ${LUGARES_DEF[k].nombre}">✏️</button>
+  </div>`;
+}
+
+// Modal para fijar un lugar: por dirección (Nominatim) o por ubicación actual.
+let _lugarEdit = null;
+window.editarLugar = (k) => {
+  _lugarEdit = k;
+  const nom = LUGARES_DEF[k].nombre;
+  $('#modal').innerHTML = `
+    <h3>📍 Fijar ${nom}</h3>
+    <p>¿Dónde queda tu ${nom.toLowerCase()}? Se guarda solo en este teléfono.</p>
+    <input id="lugar-dir" type="text" placeholder="Escribe la dirección o lugar…" autocomplete="off" aria-label="Dirección de ${nom}" />
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="fijarLugarDireccion()">🔎 Buscar esta dirección</button>
+      <button class="btn btn-second" onclick="fijarLugarAqui()">📍 Usar mi ubicación actual</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
+  abrirModal();
+  setTimeout(() => $('#lugar-dir')?.focus(), 60);
+};
+window.fijarLugarAqui = () => {
+  const usar = (lat, lng) => { guardarLugar(_lugarEdit, lat, lng, 'Mi ubicación'); finLugar(); };
+  if (!navigator.geolocation) { usar(USER.lat, USER.lng); return; }
+  toast('Buscando tu ubicación…');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => usar(pos.coords.latitude, pos.coords.longitude),
+    () => usar(USER.lat, USER.lng),
+    { enableHighAccuracy: true, timeout: 8000 });
+};
+window.fijarLugarDireccion = async () => {
+  const q = ($('#lugar-dir')?.value || '').trim();
+  if (!q) { toast('Escribe una dirección'); return; }
+  toast('Buscando dirección…');
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=cl&limit=1&accept-language=es`;
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const arr = await r.json();
+    if (!arr.length) { toast('No encontré esa dirección'); return; }
+    guardarLugar(_lugarEdit, parseFloat(arr[0].lat), parseFloat(arr[0].lon), (arr[0].display_name || q).split(',')[0]);
+    finLugar();
+  } catch { toast('No se pudo buscar la dirección'); }
+};
+function finLugar() { cerrarModal(); renderFavoritos(); toast(`✓ ${LUGARES_DEF[_lugarEdit].nombre} guardada`); }
 
 // --- Geolocalización real ---------------------------------------------------
 function usarMiUbicacion() {
