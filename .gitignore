@@ -25,3 +25,5 @@ desktop.ini
 
 # Clave de moderación local (en Railway: ADMIN_CLAVE)
 admin.key
+# Credenciales de Sightengine para correr en local (en Railway: SIGHTENGINE_USER/SECRET)
+sightengine.key

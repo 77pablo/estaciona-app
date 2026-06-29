@@ -18,6 +18,7 @@ import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte } from './aportes.js';
 import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto } from './fotos.js';
+import { revisarFoto } from './modera-foto.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = join(__dirname, '..', '..', 'web');
@@ -132,6 +133,8 @@ const server = http.createServer(async (req, res) => {
       req.on('end', async () => {
         try {
           const { id, dataUrl } = JSON.parse(body || '{}');
+          const rev = await revisarFoto(dataUrl);     // moderación automática (Sightengine)
+          if (!rev.ok) { sendJSON(res, 422, { ok: false, motivo: rev.motivo }); return; }
           const foto = await guardarFoto(id, dataUrl);
           sendJSON(res, foto ? 200 : 400, { ok: !!foto, url: foto });
         } catch { sendJSON(res, 400, { ok: false }); }

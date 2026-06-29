@@ -902,6 +902,7 @@ window.subirFoto = (id) => {
       const r = await fetch('/api/foto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, dataUrl }) });
       const j = await r.json();
       if (j.ok) { toast('¡Foto subida! Gracias 📷'); cargarFotos(id); }
+      else if (j.motivo) toast('🚫 Foto bloqueada (' + j.motivo + '). No se subió.');
       else toast('No se pudo subir (muy pesada o formato no válido)');
     } catch { toast('Sin conexión'); }
   };
