@@ -8,6 +8,15 @@
 // ============================================================================
 
 import { ESTACIONAMIENTOS } from './data.js';
+import { mapaPreciosReales } from './precios-reales.js';
+
+// Aplica los precios REALES (verificados a mano) encima de los datos base.
+// Esa ficha pasa a verificado:true con su precio/horario/fuente confirmados.
+const OVERRIDES = mapaPreciosReales();
+for (const e of ESTACIONAMIENTOS) {
+  const o = OVERRIDES[e.id];
+  if (o) { Object.assign(e, o); e.verificado = true; }
+}
 
 const TICK_MS = 4000;
 
