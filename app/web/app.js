@@ -33,7 +33,7 @@ let _focoPrevio = null;            // foco previo, para restaurarlo al cerrar un
 let detalleAbiertoId = null;
 let filtros = {
   gratis: false, barato: false, techado: false, abierto: false,
-  ev: false, accesible: false, tipo: 'todos', distMax: 0,
+  ev: false, accesible: false, soloPublicos: false, tipo: 'todos', distMax: 0,
 };
 
 // Lugares de Favoritos (Casa/Trabajo). Por defecto son sectores de Temuco, pero
@@ -135,20 +135,30 @@ function trafHTML() {
 // "Gratis real" (calle pública sin cobro) vs "gratis solo para clientes" (lote
 // de una tienda). Importante para no confundir: que el usuario no maneje a un
 // supermercado creyendo que es estacionamiento público gratis.
+// Categorías "no públicas" (hospital, colegio, etc.): ícono + etiqueta para
+// mostrarlas distinto. Devuelve '' si es estacionamiento público normal.
+const CAT_ICON = { Salud: 'access', Colegio: 'home', Estadio: 'star', Municipal: 'home', Camiones: 'car', Terminal: 'car', Cultura: 'home' };
+function catBadge(p) {
+  if (!p.categoria) return '';
+  const name = CAT_ICON[p.categoria] === 'star' ? 'starOutline' : (CAT_ICON[p.categoria] || 'pin');
+  return `<span class="cat-badge">${ic(name, 12)} ${esc(p.categoria)}</span>`;
+}
 const esGratisClientes = (p) => p.precioHora === 0 && /cliente/i.test(p.gratisInfo || '');
 const esGratisReal = (p) => p.precioHora === 0 && !esGratisClientes(p);
-// Texto corto para el pin del mapa.
+// Texto corto para el pin del mapa. "~" marca precio estimado (no verificado).
 function precioCorto(p) {
   if (p.gratisAhora || esGratisReal(p)) return 'Gratis';
   if (esGratisClientes(p)) return 'Clientes';
-  return CLP(p.precioHora);
+  return (p.verificado ? '' : '~') + CLP(p.precioHora);
 }
 // HTML del precio para la lista / favoritos (consciente del tipo de "gratis").
+// Si NO está verificado, se muestra como estimación ("~$600 aprox.").
 function precioHTML(p) {
   if (p.gratisAhora) return '<span class="free">Gratis ahora</span>';
   if (esGratisReal(p)) return '<span class="free">Gratis</span>';
   if (esGratisClientes(p)) return `<span class="free-cli">${ic('cart', 12)} Solo clientes</span>`;
-  return `<b>${CLP(p.precioHora)}</b><small>/hr</small>`;
+  if (p.verificado) return `<b>${CLP(p.precioHora)}</b><small>/hr</small>`;
+  return `<b>~${CLP(p.precioHora)}</b><small>/hr aprox.</small>`;
 }
 
 // --- Cálculo de costo realista (descuenta horas gratis y cerradas) ----------
@@ -492,6 +502,7 @@ function listaFiltrada() {
       if (filtros.ev && !p.atributos.ev) return false;
       if (filtros.accesible && !p.atributos.accesible) return false;
       if (filtros.abierto && !p.abierto) return false;
+      if (filtros.soloPublicos && p.categoria) return false;   // oculta hospitales/colegios/etc.
       if (filtros.tipo !== 'todos' && p.tipo !== filtros.tipo) return false;
       if (filtros.distMax > 0 && p.dist > filtros.distMax) return false;
       return true;
@@ -510,7 +521,7 @@ function listaFiltrada() {
 // Cuenta filtros activos para el badge del botón ⚙️.
 function contarFiltros() {
   let n = 0;
-  for (const k of ['gratis', 'barato', 'techado', 'abierto', 'ev', 'accesible']) if (filtros[k]) n++;
+  for (const k of ['gratis', 'barato', 'techado', 'abierto', 'ev', 'accesible', 'soloPublicos']) if (filtros[k]) n++;
   if (filtros.tipo !== 'todos') n++;
   if (filtros.distMax > 0) n++;
   return n;
@@ -547,7 +558,7 @@ function renderLista() {
       <div class="card" data-id="${p.id}">
         <div class="ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 22)}</div>
         <div class="info">
-          <div class="nm">${esc(p.nombre)} ${LS.isFav(p.id) ? ic('starFull', 13) : ''}</div>
+          <div class="nm">${esc(p.nombre)} ${LS.isFav(p.id) ? ic('starFull', 13) : ''} ${catBadge(p)}</div>
           <div class="sub">${estadoHTML(p)} · ${dispTxt}</div>
           <div class="sub">${Math.round(p.dist)} m · ${ic('walk', 13)} ${walkMin(p.dist)} · ${ic('car', 13)} ${carMin(p.dist)} min${p.gratisInfo ? ' · <span class="' + (esGratisClientes(p) ? 'badge-cli' : 'badge-free') + '">' + esc(p.gratisInfo) + '</span>' : ''}</div>
         </div>
@@ -586,7 +597,9 @@ function openDetalle(id) {
     ? 'Gratis para clientes (con compra)'
     : p.precioHora === 0
       ? 'Gratis'
-      : `${CLP(p.precioHora)} / hora${p.fraccion ? ` (${p.fraccion.min} min ${CLP(p.fraccion.precio)})` : ''}`;
+      : p.verificado
+        ? `${CLP(p.precioHora)} / hora`
+        : `~${CLP(p.precioHora)} / hora <span class="precio-est">estimado · sin verificar</span>`;
   const fav = LS.isFav(p.id);
 
   $('#detalle').innerHTML = `
@@ -599,6 +612,7 @@ function openDetalle(id) {
     <div class="det-body">
       <div class="det-hero"><span class="hero-ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 30)}</span><span class="hero-nm">${esc(p.nombre)}</span></div>
       <div class="det-status" id="det-status-line">${lineaDisponibilidad(p)}</div>
+      ${p.categoria ? `<div class="aviso-cli">${catBadge(p)} Es un estacionamiento de <b>${esc(p.categoria.toLowerCase())}</b> — puede ser de uso restringido, no público general.</div>` : ''}
       <div class="det-row"><span class="k">${ic('wallet')}</span><span>${precioLinea}</span></div>
       ${esGratisClientes(p)
         ? `<div class="aviso-cli">${ic('cart', 16)} <b>Gratis solo para clientes</b> — válido con compra en el local, no es estacionamiento público.</div>`
@@ -624,7 +638,7 @@ function openDetalle(id) {
           <button class="vote-no" onclick="confirmarCupo('${p.id}',false)" aria-label="No había cupo">${ic('x', 16)} No</button>
         </span></div>
       ${p.votos ? `<div class="votos-info">${ic('users', 14)} Últimas 3 h: <b>${p.votos.up}</b> dijeron que había cupo · <b>${p.votos.down}</b> que no</div>` : ''}
-      <p class="disclaimer">${ic('bulb', 15)} Precio referencial. Confirma la tarifa en el lugar.</p>
+      <p class="disclaimer">${ic('bulb', 15)} ${p.verificado ? 'Precio confirmado.' : '<b>Precio estimado, sin verificar.</b> Es una referencia generada automáticamente — confirma la tarifa real en el lugar.'}</p>
     </div>
     <div class="det-actions">
       <button class="btn btn-primary" onclick="llevame('${p.id}')">${ic('compass', 17)} Llévame</button>
@@ -1009,6 +1023,7 @@ function abrirFiltros() {
       <button data-k="ev" class="${chip(f.ev)}">${ic('zap', 14)} Cargador EV</button>
       <button data-k="accesible" class="${chip(f.accesible)}">${ic('access', 14)} Accesible</button>
       <button data-k="abierto" class="${chip(f.abierto)}">${ic('clock', 14)} Abierto ahora</button>
+      <button data-k="soloPublicos" class="${chip(f.soloPublicos)}">${ic('check', 14)} Solo públicos</button>
     </div>
     <p style="margin:12px 0 6px">Distancia máxima: <b id="f-dist-lbl">${f.distMax ? f.distMax + ' m' : 'sin límite'}</b></p>
     <input id="f-dist" type="range" min="0" max="2000" step="100" value="${f.distMax}" style="width:100%" />
