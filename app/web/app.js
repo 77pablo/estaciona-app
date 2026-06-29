@@ -82,6 +82,7 @@ const ICONS = {
   layers:'<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/>',
   refresh:'<path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M20.5 4v4.3h-4.3"/>',
   car:'<path d="M5 13l1.4-4.2A2 2 0 0 1 8.3 7.4h7.4a2 2 0 0 1 1.9 1.4L19 13"/><path d="M4 13h16v3.5a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1V16H7.5v.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V13Z"/><path d="M7.5 15.6h.01M16.5 15.6h.01"/>',
+  truck:'<path d="M14 17.5V6.5a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h1"/><path d="M14 8.5h3.6a1 1 0 0 1 .8.4l2.4 3.1a1 1 0 0 1 .2.6v4a1 1 0 0 1-1 1h-1"/><path d="M9 18.5h5"/><circle cx="7" cy="18.5" r="1.8"/><circle cx="17" cy="18.5" r="1.8"/>',
   walk:'<circle cx="13" cy="4" r="1.7"/><path d="m9 21 2.2-6.5-1.7-1.5V9.5l3.3-1 1.7 3 2.2 1"/><path d="m12.2 14.5-1 6.5"/>',
   starOutline:'<path d="m12 3.5 2.6 5.3 5.9.8-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8-4.3-4.2 5.9-.8L12 3.5Z"/>',
   starFull:'<path d="m12 3.5 2.6 5.3 5.9.8-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8-4.3-4.2 5.9-.8L12 3.5Z" fill="currentColor"/>',
@@ -157,7 +158,7 @@ async function etaReal(p) {
 // supermercado creyendo que es estacionamiento público gratis.
 // Categorías "no públicas" (hospital, colegio, etc.): ícono + etiqueta para
 // mostrarlas distinto. Devuelve '' si es estacionamiento público normal.
-const CAT_ICON = { Salud: 'access', Colegio: 'home', Estadio: 'star', Municipal: 'home', Camiones: 'car', Terminal: 'car', Cultura: 'home' };
+const CAT_ICON = { Salud: 'access', Colegio: 'home', Estadio: 'star', Municipal: 'home', Camiones: 'truck', Terminal: 'car', Cultura: 'home' };
 function catBadge(p) {
   if (!p.categoria) return '';
   const name = CAT_ICON[p.categoria] === 'star' ? 'starOutline' : (CAT_ICON[p.categoria] || 'pin');
