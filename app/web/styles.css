@@ -190,6 +190,9 @@ main, .view { flex: 1; min-height: 0; }
   display: flex; justify-content: space-between; align-items: baseline; padding: 16px 18px 10px;
   position: sticky; top: 0; background: var(--surface); touch-action: none; cursor: grab; user-select: none;
   border-bottom: 1px solid var(--line);
+  /* Encabezado fijo en su propia capa y por encima de las tarjetas: evita que
+     los íconos de las tarjetas que pasan por debajo dejen "fantasma" al subir. */
+  z-index: 5; transform: translateZ(0);
 }
 .sheet-head:active { cursor: grabbing; }
 .sheet-head::before { content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 34px; height: 4px; background: var(--line-2); border-radius: 3px; }
