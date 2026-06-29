@@ -51,7 +51,34 @@
   .pulse { animation: pin-pulse 2.4s ease-out infinite; }
   /* Medidor circular minimalista (disponibilidad). */
   .gauge { background: conic-gradient(var(--c,#56c98a) calc(var(--p,72) * 1%), rgba(139,143,152,.18) 0); }
-  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+  /* Reveal al entrar en viewport (sutil: sube + aparece). */
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s cubic-bezier(.22,.61,.36,1), transform .7s cubic-bezier(.22,.61,.36,1); will-change: opacity, transform; }
+  .reveal.in { opacity: 1; transform: none; }
+  /* Escalonado opcional para hijos (bento / chips). */
+  .reveal[data-delay="1"] { transition-delay: .08s; }
+  .reveal[data-delay="2"] { transition-delay: .16s; }
+  .reveal[data-delay="3"] { transition-delay: .24s; }
+  .reveal[data-delay="4"] { transition-delay: .32s; }
+  .reveal[data-delay="5"] { transition-delay: .40s; }
+
+  /* Microinteracción: tarjetas del bento se elevan suave al pasar el mouse. */
+  .lift { transition: transform .25s ease, border-color .25s ease, background-color .25s ease; }
+  @media (hover: hover) { .lift:hover { transform: translateY(-3px); border-color: rgba(201,242,78,.35); } }
+
+  /* Brillo del CTA principal al pasar el mouse. */
+  .cta-glow { transition: box-shadow .3s ease, transform .15s ease, filter .2s ease; }
+  .cta-glow:hover { box-shadow: 0 8px 30px -8px rgba(201,242,78,.55); }
+  .cta-glow:active { transform: translateY(1px); }
+
+  /* Sin movimiento si el usuario lo pide: todo visible y estático. */
+  @media (prefers-reduced-motion: reduce) {
+    .pulse { animation: none; }
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .lift, .cta-glow { transition: none; }
+    html { scroll-behavior: auto; }
+  }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
   ::selection { background: #c9f24e; color: #0e0f12; }
 </style>
 </head>
@@ -71,7 +98,7 @@
   <section class="mx-auto grid max-w-6xl items-center gap-10 px-5 pt-8 pb-16 sm:px-8 lg:grid-cols-[1.08fr_0.92fr] lg:gap-14 lg:pt-14">
 
     <!-- Panel de control -->
-    <div>
+    <div class="reveal in">
       <p class="mb-5 inline-flex items-center gap-2 rounded-full border border-bone/15 px-3 py-1 font-mono text-xs text-mute">
         <span class="inline-block h-1.5 w-1.5 rounded-full bg-go"></span>
         EN VIVO · 308 CIUDADES DE CHILE
@@ -92,7 +119,7 @@
         </span>
         <input name="q" type="text" placeholder="Av. Alemania 0671, Mall Mirage…" autocomplete="off" aria-label="Dirección o lugar"
                class="min-w-0 flex-1 bg-transparent py-4 text-[15px] text-bone placeholder:text-mute focus:outline-none" />
-        <button type="submit" class="m-1.5 rounded-md bg-signal px-5 font-bold text-ink transition hover:brightness-95">
+        <button type="submit" class="cta-glow m-1.5 rounded-md bg-signal px-5 font-bold text-ink transition hover:brightness-95">
           Buscar
         </button>
       </form>
@@ -100,7 +127,7 @@
     </div>
 
     <!-- Mapa-mockup minimalista monocromático -->
-    <div class="relative">
+    <div class="reveal relative" data-delay="2">
       <div class="blueprint relative aspect-[4/5] overflow-hidden rounded-xl border border-bone/12 sm:aspect-square">
         <!-- trazos de avenidas (líneas finas, plano urbano) -->
         <svg class="absolute inset-0 h-full w-full text-bone/15" viewBox="0 0 400 440" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="1.4">
@@ -130,14 +157,14 @@
 
   <!-- BENTO GRID asimétrico (funciones reales, tamaños según importancia) -->
   <section class="mx-auto max-w-6xl px-5 pb-16 sm:px-8">
-    <h2 class="mb-6 max-w-lg text-2xl font-black tracking-tight sm:text-3xl">
+    <h2 class="reveal mb-6 max-w-lg text-2xl font-black tracking-tight sm:text-3xl">
       Lo que sí hace<span class="text-mute"> — sin humo.</span>
     </h2>
 
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-5">
 
       <!-- GRANDE: disponibilidad en vivo con medidor -->
-      <article class="col-span-2 row-span-2 flex flex-col justify-between rounded-xl border border-bone/12 bg-ink2 p-6 sm:row-span-2">
+      <article class="reveal lift col-span-2 row-span-2 flex flex-col justify-between rounded-xl border border-bone/12 bg-ink2 p-6 sm:row-span-2" data-delay="1">
         <div>
           <p class="font-mono text-xs uppercase tracking-widest text-mute">Disponibilidad</p>
           <h3 class="mt-2 text-xl font-extrabold sm:text-2xl">¿Hay cupo ahora?</h3>
@@ -161,7 +188,7 @@
       </article>
 
       <!-- MEDIANA: precios claros -->
-      <article class="col-span-2 flex flex-col justify-between rounded-xl border border-bone/12 bg-ink3 p-6">
+      <article class="reveal lift col-span-2 flex flex-col justify-between rounded-xl border border-bone/12 bg-ink3 p-6" data-delay="2">
         <div>
           <p class="font-mono text-xs uppercase tracking-widest text-mute">Precios</p>
           <h3 class="mt-2 text-lg font-extrabold">Claros, sin sorpresas al salir</h3>
@@ -173,27 +200,27 @@
       </article>
 
       <!-- PEQUEÑA: dónde dejé el auto -->
-      <article class="flex flex-col justify-between rounded-xl border border-bone/12 bg-ink2 p-5">
+      <article class="reveal lift flex flex-col justify-between rounded-xl border border-bone/12 bg-ink2 p-5" data-delay="3">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="text-signal" aria-hidden="true"><path d="M12 21s6.5-5.4 6.5-10.5a6.5 6.5 0 1 0-13 0C5.5 15.6 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2.3"/></svg>
         <h3 class="mt-3 text-sm font-bold leading-snug">Dónde dejé<br />el auto</h3>
       </article>
 
       <!-- PEQUEÑA: alarma anti-multa -->
-      <article class="flex flex-col justify-between rounded-xl border border-bone/12 bg-ink2 p-5">
+      <article class="reveal lift flex flex-col justify-between rounded-xl border border-bone/12 bg-ink2 p-5" data-delay="4">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="text-signal" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg>
         <h3 class="mt-3 text-sm font-bold leading-snug">Alarma<br />anti-multa</h3>
       </article>
 
       <!-- ANCHA: cobertura real (números reales) -->
-      <article class="col-span-2 sm:col-span-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-bone/12 bg-ink2 p-6">
+      <article class="reveal lift col-span-2 sm:col-span-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-bone/12 bg-ink2 p-6" data-delay="2">
         <div>
           <p class="font-mono text-xs uppercase tracking-widest text-mute">Cobertura real</p>
           <h3 class="mt-1 text-lg font-extrabold">Datos de verdad, de toda la calle</h3>
         </div>
         <div class="flex flex-wrap gap-x-6 gap-y-3 sm:gap-8">
-          <div><span class="block font-mono text-3xl font-bold">1.463</span><span class="font-mono text-xs text-mute">estacionamientos</span></div>
-          <div><span class="block font-mono text-3xl font-bold">308</span><span class="font-mono text-xs text-mute">ciudades</span></div>
-          <div><span class="block font-mono text-3xl font-bold">16</span><span class="font-mono text-xs text-mute">regiones</span></div>
+          <div><span class="block font-mono text-3xl font-bold" data-count="1463" data-sep="1">1.463</span><span class="font-mono text-xs text-mute">estacionamientos</span></div>
+          <div><span class="block font-mono text-3xl font-bold" data-count="308">308</span><span class="font-mono text-xs text-mute">ciudades</span></div>
+          <div><span class="block font-mono text-3xl font-bold" data-count="16">16</span><span class="font-mono text-xs text-mute">regiones</span></div>
         </div>
       </article>
     </div>
@@ -201,16 +228,16 @@
 
   <!-- CONFIANZA: estacionamientos REALES ya en el mapa (escala de grises, honesto) -->
   <section class="mx-auto max-w-6xl px-5 pb-16 sm:px-8">
-    <p class="mb-5 font-mono text-xs uppercase tracking-widest text-mute">Ya están en el mapa</p>
-    <div class="flex flex-wrap items-center gap-x-8 gap-y-4 text-bone/45">
-      <span class="text-lg font-bold">Portal Temuco</span>
-      <span class="text-lg font-bold">Mall Mirage</span>
-      <span class="text-lg font-bold">Plaza de Armas</span>
-      <span class="text-lg font-bold">Manuel Montt</span>
-      <span class="text-lg font-bold">Estadio Germán Becker</span>
-      <span class="text-lg font-bold">Mall Plaza Oeste</span>
+    <p class="reveal mb-5 font-mono text-xs uppercase tracking-widest text-mute">Ya están en el mapa</p>
+    <div class="reveal flex flex-wrap items-center gap-x-8 gap-y-4 text-bone/45" data-delay="1">
+      <span class="text-lg font-bold transition-colors duration-300 hover:text-bone/80">Portal Temuco</span>
+      <span class="text-lg font-bold transition-colors duration-300 hover:text-bone/80">Mall Mirage</span>
+      <span class="text-lg font-bold transition-colors duration-300 hover:text-bone/80">Plaza de Armas</span>
+      <span class="text-lg font-bold transition-colors duration-300 hover:text-bone/80">Manuel Montt</span>
+      <span class="text-lg font-bold transition-colors duration-300 hover:text-bone/80">Estadio Germán Becker</span>
+      <span class="text-lg font-bold transition-colors duration-300 hover:text-bone/80">Mall Plaza Oeste</span>
     </div>
-    <p class="mt-4 max-w-lg text-sm text-mute">
+    <p class="reveal mt-4 max-w-lg text-sm text-mute" data-delay="2">
       No son convenios ni publicidad: son lugares reales sacados de mapas abiertos.
       Si encuentras un dato equivocado, lo arreglamos.
     </p>
@@ -218,12 +245,12 @@
 
   <!-- CIERRE -->
   <section class="mx-auto max-w-6xl px-5 pb-20 sm:px-8">
-    <div class="flex flex-col items-start gap-5 rounded-2xl border border-bone/12 bg-ink2 p-8 sm:flex-row sm:items-center sm:justify-between sm:p-10">
+    <div class="reveal flex flex-col items-start gap-5 rounded-2xl border border-bone/12 bg-ink2 p-8 sm:flex-row sm:items-center sm:justify-between sm:p-10">
       <div>
         <h2 class="text-2xl font-black tracking-tight sm:text-3xl">Estaciónate rápido.</h2>
         <p class="mt-2 text-mute">Abre el mapa y mira qué hay cerca tuyo ahora.</p>
       </div>
-      <a href="/app" class="rounded-lg bg-signal px-7 py-4 font-bold text-ink transition hover:brightness-95">
+      <a href="/app" class="cta-glow rounded-lg bg-signal px-7 py-4 font-bold text-ink transition hover:brightness-95">
         Abrir Estaciona →
       </a>
     </div>
@@ -238,5 +265,59 @@
   </footer>
 
 </div>
+
+<script>
+(function () {
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var reveals = document.querySelectorAll('.reveal');
+  var counters = document.querySelectorAll('[data-count]');
+
+  // Formato de número estilo Chile (punto como separador de miles).
+  function format(n, sep) {
+    var s = Math.round(n).toString();
+    return sep ? s.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : s;
+  }
+
+  // Anima un contador de 0 al valor real (sutil, easing out).
+  function countUp(el) {
+    var target = parseInt(el.getAttribute('data-count'), 10);
+    var sep = el.getAttribute('data-sep') === '1';
+    if (isNaN(target)) return;
+    var dur = 1100, t0 = null;
+    function step(ts) {
+      if (t0 === null) t0 = ts;
+      var p = Math.min((ts - t0) / dur, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = format(target * eased, sep);
+      if (p < 1) requestAnimationFrame(step);
+      else el.textContent = format(target, sep);
+    }
+    requestAnimationFrame(step);
+  }
+
+  // Sin animaciones: dejamos todo visible y con su valor final.
+  if (reduce || !('IntersectionObserver' in window)) {
+    reveals.forEach(function (el) { el.classList.add('in'); });
+    return; // los contadores ya muestran su valor real en el HTML
+  }
+
+  // Arranca los contadores en 0 para que el conteo se note.
+  counters.forEach(function (el) {
+    var sep = el.getAttribute('data-sep') === '1';
+    el.textContent = format(0, sep);
+  });
+
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entry.isIntersecting) return;
+      entry.target.classList.add('in');
+      entry.target.querySelectorAll('[data-count]').forEach(countUp);
+      io.unobserve(entry.target);
+    });
+  }, { threshold: 0.18, rootMargin: '0px 0px -8% 0px' });
+
+  reveals.forEach(function (el) { io.observe(el); });
+})();
+</script>
 </body>
 </html>
