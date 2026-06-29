@@ -53,7 +53,7 @@ body {
 ::selection { background: var(--accent); color: var(--on-accent); }
 
 /* Datos duros en monoespaciada (estilo reloj digital). */
-.card .price b, .calc .total, .miauto-card .big, .miauto-card .cost, .votos-info b { font-family: var(--font-mono); }
+.card .price b, .calc .total, #ma-tiempo, .miauto-card .cost, .votos-info b { font-family: var(--font-mono); }
 
 /* Marco "app" */
 .phone {
@@ -221,6 +221,10 @@ main, .view { flex: 1; min-height: 0; }
 .calc { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px; margin: 16px 0; box-shadow: var(--shadow-soft); }
 .calc h4 { font-size: 11px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 700; }
 .calc select { font-size: 15px; padding: 7px 10px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--bg); color: var(--text); font-family: var(--font-ui); }
+/* Options legibles en fondo oscuro (Safari/Firefox no heredan al popup). */
+.calc select option, .sheet-head select option, .loc-select option { background: var(--surface-2); color: var(--text); }
+/* Slider de distancia en tema (acento lima en track/thumb). */
+.modal input[type="range"] { width: 100%; accent-color: var(--accent); }
 .calc .total { font-size: 30px; font-weight: 700; color: var(--accent); margin-top: 10px; letter-spacing: -0.02em; }
 .disclaimer { font-size: 12px; color: var(--amber); background: var(--amber-bg); border: 1px solid rgba(224,180,74,.3); border-radius: var(--r); padding: 11px 13px; margin-top: 14px; line-height: 1.45; }
 .det-actions { padding: 0 18px 26px; display: flex; flex-direction: column; gap: 10px; }
@@ -240,7 +244,7 @@ main, .view { flex: 1; min-height: 0; }
 /* Modal */
 .modal-bg { position: absolute; inset: 0; background: rgba(0,0,0,.6); z-index: 60; display: none; align-items: center; justify-content: center; padding: 24px; }
 .modal-bg.open { display: flex; }
-.modal { background: var(--surface-2); border-radius: var(--r-lg); padding: 22px; width: 100%; box-shadow: var(--shadow); border: 1px solid var(--line); }
+.modal { background: var(--surface-2); border-radius: var(--r-lg); padding: 22px; width: 100%; max-width: 420px; box-shadow: var(--shadow); border: 1px solid var(--line); }
 .modal h3 { font-size: 18px; margin-bottom: 8px; font-weight: 800; letter-spacing: -0.02em; }
 .modal p { color: var(--muted); font-size: 13px; margin-bottom: 16px; line-height: 1.45; }
 .opts { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
@@ -319,6 +323,11 @@ main, .view { flex: 1; min-height: 0; }
   .bottomnav .nav.active { background: var(--accent); color: var(--on-accent); }
 
   #banner { left: auto; right: 26px; top: 84px; max-width: 380px; }
+
+  /* "Buscar en esta zona": centrado sobre el MAPA (columna derecha), no sobre
+     toda la ventana. Con el panel plegado, el mapa ocupa todo → centro real. */
+  .zona-btn { left: calc(420px + (100vw - 420px) / 2); }
+  .phone.panel-cerrado .zona-btn { left: 50%; }
 
   #view-buscar.active { transition: grid-template-columns .25s ease; }
   .panel-toggle {

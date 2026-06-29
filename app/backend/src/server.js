@@ -61,8 +61,11 @@ function sendJSON(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+// Rutas "bonitas": la landing es la portada (/), la app vive en /app.
+const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html' };
+
 async function serveStatic(res, urlPath) {
-  const rel = urlPath === '/' ? '/index.html' : urlPath;
+  const rel = ALIAS[urlPath] || urlPath;
   const safe = normalize(rel).replace(/^(\.\.[/\\])+/, '');
   const filePath = join(WEB_DIR, safe);
   if (!filePath.startsWith(WEB_DIR)) { res.writeHead(403); res.end('Prohibido'); return; }
