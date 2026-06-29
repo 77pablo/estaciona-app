@@ -1312,49 +1312,86 @@ async function geocodificar(texto) {
 }
 
 // --- Panel de filtros -------------------------------------------------------
+// Formato del rótulo de distancia: metros bajo 1 km, km (es-CL) sobre 1 km.
+function distLabel(m) {
+  if (!m) return 'sin límite';
+  return m >= 1000 ? (m / 1000).toLocaleString('es-CL') + ' km' : m + ' m';
+}
 function abrirFiltros() {
   const f = filtros;
   const chip = (on) => on ? 'on' : '';
+  const press = (on) => on ? 'true' : 'false';
   $('#modal').innerHTML = `
     <h3>Filtros</h3>
-    <p style="margin-bottom:10px">Tipo de estacionamiento</p>
-    <div class="opts" id="f-tipo">
-      <button data-v="todos" class="${chip(f.tipo === 'todos')}">Todos</button>
-      <button data-v="privado" class="${chip(f.tipo === 'privado')}">Privado</button>
-      <button data-v="calle" class="${chip(f.tipo === 'calle')}">Calle</button>
+    <p>Elige qué estacionamientos ver. El botón ${ic('filters', 13)} muestra cuántos tienes activos.</p>
+
+    <div class="f-group">
+      <p class="f-label" id="f-tipo-lbl">Tipo</p>
+      <div class="opts" id="f-tipo" role="group" aria-labelledby="f-tipo-lbl">
+        <button type="button" data-v="todos" class="${chip(f.tipo === 'todos')}" aria-pressed="${press(f.tipo === 'todos')}">Todos</button>
+        <button type="button" data-v="privado" class="${chip(f.tipo === 'privado')}" aria-pressed="${press(f.tipo === 'privado')}">${ic('parking', 14)} Privado</button>
+        <button type="button" data-v="calle" class="${chip(f.tipo === 'calle')}" aria-pressed="${press(f.tipo === 'calle')}">${ic('road', 14)} En la calle</button>
+      </div>
+      <p class="f-hint">Privado: recinto o edificio. En la calle: cupo o parquímetro en la vía.</p>
     </div>
-    <p style="margin:12px 0 6px">Servicios</p>
-    <div class="opts" id="f-serv">
-      <button data-k="gratis" class="${chip(f.gratis)}">${ic('tag', 14)} Gratis</button>
-      <button data-k="barato" class="${chip(f.barato)}">${ic('wallet', 14)} Barato</button>
-      <button data-k="techado" class="${chip(f.techado)}">${ic('home', 14)} Techado</button>
-      <button data-k="ev" class="${chip(f.ev)}">${ic('zap', 14)} Cargador EV</button>
-      <button data-k="accesible" class="${chip(f.accesible)}">${ic('access', 14)} Accesible</button>
-      <button data-k="abierto" class="${chip(f.abierto)}">${ic('clock', 14)} Abierto ahora</button>
-      <button data-k="soloPublicos" class="${chip(f.soloPublicos)}">${ic('check', 14)} Solo públicos</button>
+
+    <div class="f-group">
+      <p class="f-label" id="f-precio-lbl">Precio</p>
+      <div class="opts" id="f-precio" role="group" aria-labelledby="f-precio-lbl">
+        <button type="button" data-k="gratis" class="${chip(f.gratis)}" aria-pressed="${press(f.gratis)}">${ic('tag', 14)} Gratis</button>
+        <button type="button" data-k="barato" class="${chip(f.barato)}" aria-pressed="${press(f.barato)}">${ic('wallet', 14)} Barato</button>
+      </div>
+      <p class="f-hint">"Barato": menos de $1.000 por hora.</p>
     </div>
-    <p style="margin:12px 0 6px">Distancia máxima: <b id="f-dist-lbl">${f.distMax ? f.distMax + ' m' : 'sin límite'}</b></p>
-    <input id="f-dist" type="range" min="0" max="2000" step="100" value="${f.distMax}" style="width:100%" />
-    <div style="display:flex;gap:8px;margin-top:16px">
+
+    <div class="f-group">
+      <p class="f-label" id="f-serv-lbl">Servicios</p>
+      <div class="opts" id="f-serv" role="group" aria-labelledby="f-serv-lbl">
+        <button type="button" data-k="techado" class="${chip(f.techado)}" aria-pressed="${press(f.techado)}">${ic('home', 14)} Techado</button>
+        <button type="button" data-k="ev" class="${chip(f.ev)}" aria-pressed="${press(f.ev)}">${ic('zap', 14)} Cargador EV</button>
+        <button type="button" data-k="accesible" class="${chip(f.accesible)}" aria-pressed="${press(f.accesible)}">${ic('access', 14)} Accesible</button>
+      </div>
+    </div>
+
+    <div class="f-group">
+      <p class="f-label" id="f-otros-lbl">Otros</p>
+      <div class="opts" id="f-otros" role="group" aria-labelledby="f-otros-lbl">
+        <button type="button" data-k="abierto" class="${chip(f.abierto)}" aria-pressed="${press(f.abierto)}">${ic('clock', 14)} Abierto ahora</button>
+        <button type="button" data-k="soloPublicos" class="${chip(f.soloPublicos)}" aria-pressed="${press(f.soloPublicos)}">${ic('check', 14)} Solo públicos</button>
+      </div>
+      <p class="f-hint">"Solo públicos" oculta hospitales, colegios y otros de uso restringido.</p>
+    </div>
+
+    <div class="f-group">
+      <label class="f-label" for="f-dist">Distancia máxima: <b id="f-dist-lbl">${distLabel(f.distMax)}</b></label>
+      <input id="f-dist" type="range" min="0" max="2000" step="100" value="${f.distMax}"
+             aria-label="Distancia máxima en metros" aria-describedby="f-dist-lbl" />
+      <div class="f-range-ends" aria-hidden="true"><span>Sin límite</span><span>2 km</span></div>
+    </div>
+
+    <div class="f-acciones">
       <button class="btn btn-ghost" style="flex:1" onclick="limpiarFiltros()">Limpiar</button>
       <button class="btn btn-primary" style="flex:2" onclick="aplicarFiltros()">Aplicar</button>
     </div>`;
   $('#f-tipo').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
-    $('#f-tipo').querySelectorAll('button').forEach((x) => x.classList.remove('on'));
-    b.classList.add('on'); filtros.tipo = b.dataset.v;
+    $('#f-tipo').querySelectorAll('button').forEach((x) => { x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); });
+    b.classList.add('on'); b.setAttribute('aria-pressed', 'true'); filtros.tipo = b.dataset.v;
   }));
-  $('#f-serv').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
-    filtros[b.dataset.k] = !filtros[b.dataset.k]; b.classList.toggle('on', filtros[b.dataset.k]);
+  // Toggles de servicios/precio/otros: cualquier botón con data-k en el panel.
+  $('#modal').querySelectorAll('[data-k]').forEach((b) => b.addEventListener('click', () => {
+    filtros[b.dataset.k] = !filtros[b.dataset.k];
+    b.classList.toggle('on', filtros[b.dataset.k]);
+    b.setAttribute('aria-pressed', filtros[b.dataset.k] ? 'true' : 'false');
   }));
   $('#f-dist').addEventListener('input', (e) => {
     filtros.distMax = Number(e.target.value);
-    $('#f-dist-lbl').textContent = filtros.distMax ? filtros.distMax + ' m' : 'sin límite';
+    $('#f-dist-lbl').textContent = distLabel(filtros.distMax);
   });
   abrirModal();
 }
 window.aplicarFiltros = () => { cerrarModal(); syncChips(); actualizarBadgeFiltros(); renderLista(); };
 window.limpiarFiltros = () => {
-  filtros = { gratis: false, barato: false, techado: false, abierto: false, ev: false, accesible: false, tipo: 'todos', distMax: 0 };
+  filtros = { gratis: false, barato: false, techado: false, abierto: false, ev: false, accesible: false, soloPublicos: false, tipo: 'todos', distMax: 0 };
   cerrarModal(); syncChips(); actualizarBadgeFiltros(); renderLista(); toast('Filtros limpiados');
 };
 function syncChips() {
@@ -1504,18 +1541,20 @@ function mostrarBienvenida() {
   if (localStorage.getItem('estaciona_onboarded')) return;
   const o = $('#onboard');
   if (!o) return;
-  o.innerHTML = `<div class="onboard-card" role="dialog" aria-label="Bienvenida">
+  o.innerHTML = `<div class="onboard-card" role="dialog" aria-modal="true" aria-labelledby="onboard-tit">
     <div class="onboard-ic" aria-hidden="true">${ic('parking', 44)}</div>
-    <h3>¡Bienvenido a Estaciona!</h3>
-    <p>Versión <b>piloto</b> para <b>todo Chile</b>: te mostramos dónde estacionar, cuánto cobran y si es gratis. Elige tu ciudad arriba o usa tu ubicación.</p>
+    <h3 id="onboard-tit">¡Bienvenido a Estaciona!</h3>
+    <p>Versión <b>piloto</b> para <b>todo Chile</b>. Te mostramos dónde estacionar, cuánto cobran y si es gratis. Elige tu ciudad arriba o usa tu ubicación.</p>
     <ul class="onboard-list">
-      <li>Funciona <b>sin cuenta</b>: tus favoritos y tu auto se guardan solo en este teléfono.</li>
-      <li>Toca el botón de ubicación para ver lo más cercano a ti.</li>
-      <li>Los precios son referenciales: confirma siempre en el lugar.</li>
+      <li>${ic('locate', 16)} <span>Toca el botón de ubicación para ver lo más cercano a ti.</span></li>
+      <li>${ic('filters', 16)} <span>Usa los filtros para acotar por precio, tipo o servicios.</span></li>
+      <li>${ic('wallet', 16)} <span>Los precios son <b>referenciales</b>: confírmalos siempre en el lugar.</span></li>
+      <li>${ic('starOutline', 16)} <span>Funciona <b>sin cuenta</b>: favoritos y tu auto se guardan solo en este teléfono.</span></li>
     </ul>
     <button class="btn btn-primary" onclick="cerrarBienvenida()">Entendido</button>
   </div>`;
   o.classList.add('show');
+  setTimeout(() => o.querySelector('.btn-primary')?.focus(), 60);   // foco al botón (lector de pantalla)
 }
 window.cerrarBienvenida = () => {
   localStorage.setItem('estaciona_onboarded', '1');
