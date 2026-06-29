@@ -323,6 +323,9 @@ const LS = {
   getAuto: () => { try { return JSON.parse(localStorage.getItem('estaciona_miauto') || 'null'); } catch { return null; } },
   setAuto: (a) => localStorage.setItem('estaciona_miauto', JSON.stringify(a)),
   clearAuto: () => localStorage.removeItem('estaciona_miauto'),
+  // Recordatorios "Avísame": avisos locales para revisar un lugar a cierta hora.
+  getRecs: () => { try { return JSON.parse(localStorage.getItem('estaciona_recs') || '[]'); } catch { return []; } },
+  setRecs: (r) => localStorage.setItem('estaciona_recs', JSON.stringify(r)),
 };
 
 // --- Mapa -------------------------------------------------------------------
@@ -744,8 +747,9 @@ function renderLista() {
           ${featuresHTML(p)}
           <div class="card-actions">
             <button class="btn-reservar" onclick="event.stopPropagation();llevame('${p.id}')">${ic('compass', 16)} Cómo llegar</button>
-            <button class="card-vermas" onclick="event.stopPropagation();openDetalle('${p.id}')">Ver detalle</button>
+            <button class="card-vermas" onclick="event.stopPropagation();avisarme('${p.id}')">${ic('clock', 15)} Avísame</button>
           </div>
+          <button class="card-detalle" onclick="event.stopPropagation();openDetalle('${p.id}')">Ver detalle completo</button>
         </div>
       </div>`;
   }).join('');
@@ -819,7 +823,10 @@ function abrirMapCard(id) {
         <div class="mapcard-meta">${votos}${dist} m · ${tipoTxt}</div>
       </div>
     </div>
-    <button class="btn-reservar" onclick="llevame('${p.id}')">${ic('compass', 16)} Cómo llegar</button>`;
+    <div class="mapcard-actions">
+      <button class="btn-reservar" onclick="llevame('${p.id}')">${ic('compass', 16)} Cómo llegar</button>
+      <button class="card-vermas" onclick="avisarme('${p.id}')">${ic('clock', 15)} Avísame</button>
+    </div>`;
   el.hidden = false;
   requestAnimationFrame(() => el.classList.add('show'));
 }
@@ -918,7 +925,10 @@ function openDetalle(id) {
     </div>
     <div class="det-actions">
       <button class="btn btn-primary" onclick="llevame('${p.id}')">${ic('compass', 17)} Llévame</button>
-      <button class="btn btn-second" onclick="abrirEstacione('${p.id}')">${ic('car', 17)} Estacioné aquí</button>
+      <div class="det-actions-row">
+        <button class="btn btn-second" onclick="avisarme('${p.id}')">${ic('clock', 16)} Avísame</button>
+        <button class="btn btn-second" onclick="abrirEstacione('${p.id}')">${ic('car', 16)} Estacioné aquí</button>
+      </div>
     </div>`;
 
   const sel = $('#calc-horas');
@@ -1762,6 +1772,71 @@ function chequearAlarma() {
   }
 }
 
+// --- "Avísame": recordatorio local para revisar un lugar (sin reserva ni pago) ---
+let _avisoSel = 60;
+window.avisarme = (id) => {
+  const p = DATA.find((x) => x.id === id);
+  if (!p) return;
+  const bloqueada = 'Notification' in window && Notification.permission === 'denied';
+  const honesto = p.disponibilidad?.nivel === 'verde' ? 'a esa hora suele haber cupo (estimado)'
+    : 'la disponibilidad es una estimación, no un lugar apartado';
+  $('#modal').innerHTML = `
+    <h3>${ic('clock', 18)} Avísame</h3>
+    <p>Te recordamos revisar <b>${esc(p.nombre)}</b>. No aparta un lugar — es un aviso para que vayas a ver; ${honesto}.</p>
+    <div class="opts" id="aviso-opts">
+      <button data-min="30">En 30 min</button>
+      <button data-min="60" class="on">En 1 hora</button>
+      <button data-min="120">En 2 horas</button>
+      <button data-min="180">En 3 horas</button>
+    </div>
+    ${bloqueada ? `<p class="alarma-aviso">${ic('bulb', 13)} Tu navegador bloqueó las notificaciones, pero igual te avisaré dentro de la app.</p>` : ''}
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="confirmarAviso('${id}')">Activar aviso</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
+  _avisoSel = 60;
+  abrirModal();
+  $('#aviso-opts').querySelectorAll('button').forEach((b) =>
+    b.addEventListener('click', () => {
+      $('#aviso-opts').querySelectorAll('button').forEach((x) => x.classList.remove('on'));
+      b.classList.add('on'); _avisoSel = Number(b.dataset.min);
+    }));
+};
+window.confirmarAviso = (id) => {
+  const p = DATA.find((x) => x.id === id);
+  if (!p) return;
+  const min = _avisoSel || 60;
+  const recs = LS.getRecs();
+  recs.push({ id, nombre: p.nombre, ts: Date.now() + min * 60000, sono: false });
+  LS.setRecs(recs);
+  cerrarModal();
+  const ok = `Te aviso en ${fmtMin(min)} ✓`;
+  // Permiso de notificación: se pide solo ahora (gesto del usuario).
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().then((perm) => toast(perm === 'granted' ? ok : 'Aviso activado; te avisaré dentro de la app'));
+  } else { toast(ok); }
+};
+// Dispara los recordatorios "Avísame" vencidos (banner + notificación) y limpia los viejos.
+function chequearRecordatorios() {
+  const recs = LS.getRecs();
+  if (!recs.length) return;
+  const ahora = Date.now();
+  let cambió = false;
+  for (const r of recs) {
+    if (!r.sono && ahora >= r.ts) {
+      r.sono = true; cambió = true;
+      const b = $('#banner');
+      b.innerHTML = `<span>${ic('clock', 16)} Revisa ${esc(r.nombre)} — ¿hay cupo ahora?</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
+      b.classList.add('show');
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Estaciona 🅿️', { body: `Revisa ${r.nombre} — ¿encontraste cupo?` });
+      }
+    }
+  }
+  const limpios = recs.filter((r) => !(r.sono && ahora - r.ts > 3600000));   // descarta los que sonaron hace +1 h
+  if (cambió || limpios.length !== recs.length) LS.setRecs(limpios);
+}
+
 // Recordatorio: si dejaste el auto otro día (o hace ≥20 h), avisar una sola vez.
 function chequearRecordatorioAuto() {
   const a = LS.getAuto();
@@ -1971,5 +2046,6 @@ async function init() {
   setInterval(cargar, 6000);
   setInterval(() => { if ($('#view-miauto').classList.contains('active')) actualizarMiAutoVivo(); }, 1000);
   setInterval(chequearAlarma, 1000);
+  setInterval(chequearRecordatorios, 1000);   // avisos "Avísame"
 }
 init();
