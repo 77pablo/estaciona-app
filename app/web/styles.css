@@ -332,6 +332,43 @@ main, .view { flex: 1; min-height: 0; }
 }
 .card-vermas:hover { color: var(--text); border-color: var(--accent); }
 
+/* Card flotante sobre el mapa (al tocar un pin, estilo parkspot) */
+.mapcard {
+  position: absolute; z-index: 60;
+  left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-lg);
+  box-shadow: var(--shadow); padding: 16px 16px 15px;
+  opacity: 0; transform: translateY(12px); pointer-events: none;
+  transition: opacity .22s ease, transform .22s cubic-bezier(.22, 1, .36, 1);
+}
+.mapcard.show { opacity: 1; transform: none; pointer-events: auto; }
+.mapcard[hidden] { display: none; }
+.mapcard-x {
+  position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--surface); border: 1px solid var(--line); color: var(--muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: color .15s, border-color .15s;
+}
+.mapcard-x:hover { color: var(--text); border-color: var(--line-2); }
+.mapcard-nm { font-weight: 800; font-size: 17px; color: var(--text); display: flex; align-items: center; gap: 8px; padding-right: 34px; }
+.mapcard-addr { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.mapcard-body { display: flex; gap: 16px; align-items: flex-start; margin: 14px 0; }
+.mapcard-precio { font-family: var(--font-mono); flex-shrink: 0; line-height: 1.05; }
+.mapcard-precio b { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; color: var(--text); display: block; }
+.mapcard-precio small { font-size: 11px; color: var(--muted); font-family: var(--font-ui); }
+.mapcard-precio .free { color: var(--accent); font-size: 23px; }
+.mapcard-precio .free-cli { color: var(--amber); font-size: 17px; }
+.mapcard-disp { flex: 1; min-width: 0; }
+.mapcard-disp-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--muted); margin-bottom: 7px; }
+.mapcard-disp .disp-bar { margin-top: 0; }
+.mapcard-meta { font-size: 12px; color: var(--muted); font-family: var(--font-mono); margin-top: 8px; }
+.mapcard .btn-reservar { width: 100%; }
+@media (min-width: 860px) {
+  /* Centrada sobre la columna del mapa (igual que "Buscar en esta zona"). */
+  .mapcard { left: calc(420px + (100vw - 420px) / 2); right: auto; width: 420px; bottom: 80px; transform: translateX(-50%) translateY(12px); }
+  .mapcard.show { transform: translateX(-50%); }
+  .phone.panel-cerrado .mapcard { left: 50%; }
+}
+
 /* Navegación inferior */
 .bottomnav { display: flex; background: var(--surface); border-top: 1px solid var(--line); flex-shrink: 0; }
 .bottomnav .nav {

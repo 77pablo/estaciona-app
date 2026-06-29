@@ -612,7 +612,7 @@ function updateMarkers(lista) {
     } else {
       const mk = L.marker([p.lat, p.lng], { icon });
       mk.nivelEstaciona = p.disponibilidad.nivel;
-      mk.on('click', () => openDetalle(p.id));
+      mk.on('click', () => abrirMapCard(p.id));
       markers[p.id] = mk;
       markerLayer.addLayer(mk);                  // al clúster (o al mapa, si no hay lib)
     }
@@ -784,7 +784,49 @@ function seleccionarCard(id, card) {
   card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   const p = DATA.find((x) => x.id === id);
   if (p) panselect(p);   // centra el mapa y resalta el pin
+  cerrarMapCard();       // evita tener la card flotante y la tarjeta expandida a la vez
 }
+
+// --- Card flotante sobre el mapa (al tocar un pin, estilo parkspot) ---------
+// Precio grande para la card flotante (consciente de gratis/estimado/verificado).
+function precioGrande(p) {
+  if (p.gratisAhora || esGratisReal(p)) return `<b class="free">Gratis</b>`;
+  if (esGratisClientes(p)) return `<b class="free-cli">${ic('cart', 13)} Solo clientes</b>`;
+  return `<b>${p.verificado ? '' : '~'}${CLP(p.precioHora)}</b><small>por hora${p.verificado ? '' : ' · est.'}</small>`;
+}
+function abrirMapCard(id) {
+  const p = DATA.find((x) => x.id === id);
+  if (!p) return;
+  panselect(p);                                                  // centra el mapa + resalta el pin
+  $('#lista').querySelectorAll('.card.sel').forEach((c) => c.classList.remove('sel'));  // colapsa la lista
+  const d = p.disponibilidad, nivel = d.nivel;
+  const estadoTxt = nivel === 'cerrado' ? 'Cerrado'
+    : nivel === 'verde' ? 'Disponible' : nivel === 'amarillo' ? 'Casi lleno' : 'Completo';
+  const barPct = nivel === 'verde' ? 82 : nivel === 'amarillo' ? 45 : nivel === 'rojo' ? 15 : 6;
+  const tipoTxt = p.tipo === 'calle' ? 'En la calle' : (p.atributos?.techado ? 'Techado' : 'Privado');
+  const dist = Math.round(haversine(USER, p));   // DATA no trae dist (se calcula en la lista)
+  const votos = p.votos ? `${ic('starFull', 12)} ${p.votos.up} · ` : '';
+  const el = $('#mapcard');
+  el.innerHTML = `
+    <button class="mapcard-x" onclick="cerrarMapCard()" aria-label="Cerrar">${ic('x', 16)}</button>
+    <div class="mapcard-nm"><span class="estado-dot ${nivel}" aria-hidden="true"></span><span class="nm-txt">${esc(p.nombre)}</span></div>
+    <div class="mapcard-addr">${esc(p.direccion || p.ciudad || '')}</div>
+    <div class="mapcard-body">
+      <div class="mapcard-precio">${precioGrande(p)}</div>
+      <div class="mapcard-disp">
+        <div class="mapcard-disp-top"><span>Disponibilidad</span><span class="badge-disp ${nivel}">${estadoTxt}</span></div>
+        <div class="disp-bar"><i class="disp-fill ${nivel}" style="width:${barPct}%"></i></div>
+        <div class="mapcard-meta">${votos}${dist} m · ${tipoTxt}</div>
+      </div>
+    </div>
+    <button class="btn-reservar" onclick="llevame('${p.id}')">${ic('compass', 16)} Cómo llegar</button>`;
+  el.hidden = false;
+  requestAnimationFrame(() => el.classList.add('show'));
+}
+window.cerrarMapCard = function () {
+  const el = $('#mapcard');
+  if (el) { el.classList.remove('show'); el.hidden = true; }
+};
 
 // --- Detalle ----------------------------------------------------------------
 function lineaDisponibilidad(p) {
@@ -1691,6 +1733,7 @@ document.addEventListener('keydown', (e) => {
 
 // --- Navegación entre vistas ------------------------------------------------
 function irA(view) {
+  cerrarMapCard();                              // oculta la card flotante del mapa al cambiar de vista
   if (view !== 'miauto') destruirMiniMapa();   // libera el mini-mapa al salir
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
   $('#view-' + view).classList.add('active');
