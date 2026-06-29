@@ -69,8 +69,26 @@ function haversine(a, b) {
 // Escapa texto para insertarlo seguro en innerHTML (datos de OSM/Nominatim).
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 const walkMin = (m) => Math.max(1, Math.round(m / 80));
-// Tiempo manejando: aproximación urbana ~25 km/h (sin servicios externos).
-const carMin = (m) => Math.max(1, Math.round(m / 1000 / 25 * 60));
+// Tráfico ESTIMADO según la hora local (no es tráfico en vivo). Devuelve la
+// velocidad urbana promedio y una etiqueta honesta. Hora punta = más lento.
+function trafico() {
+  const d = new Date(); const h = d.getHours(); const dia = d.getDay();
+  if (dia === 0) return { kmh: 32, nivel: 'fluido' };                 // domingo
+  if (h < 7 || h >= 22) return { kmh: 35, nivel: 'fluido' };          // noche
+  if ((h >= 8 && h <= 9) || (h >= 13 && h <= 14) || (h >= 18 && h <= 19))
+    return { kmh: 15, nivel: 'pesado' };                              // hora punta
+  if ((h >= 10 && h <= 12) || (h >= 15 && h <= 17) || h === 20 || h === 21)
+    return { kmh: 22, nivel: 'medio' };
+  return { kmh: 28, nivel: 'medio' };
+}
+// Tiempo manejando: distancia ajustada por el tráfico estimado de la hora.
+const carMin = (m) => Math.max(1, Math.round(m / 1000 / trafico().kmh * 60));
+// Etiqueta honesta del nivel de tráfico estimado (color semáforo).
+function trafHTML() {
+  const t = trafico();
+  const c = t.nivel === 'fluido' ? 'var(--green)' : t.nivel === 'medio' ? 'var(--amber)' : 'var(--red)';
+  return `<span style="color:${c};font-weight:700">tráfico est. ${t.nivel}</span>`;
+}
 
 // "Gratis real" (calle pública sin cobro) vs "gratis solo para clientes" (lote
 // de una tienda). Importante para no confundir: que el usuario no maneje a un
@@ -544,7 +562,8 @@ function openDetalle(id) {
         ? `<div class="aviso-cli">🛒 <b>Gratis solo para clientes</b> — válido con compra en el local, no es estacionamiento público.</div>`
         : p.gratisInfo ? `<div class="det-row"><span class="k">🆓</span><span>${esc(p.gratisInfo)}</span></div>` : ''}
       <div class="det-row"><span class="k">⏰</span><span>${esc(p.horario)} · ${p.abierto ? '<b style="color:var(--green)">Abierto ahora</b>' : '<b style="color:var(--red)">Cerrado</b>'}</span></div>
-      <div class="det-row"><span class="k">📍</span><span>${esc(p.direccion)} · ${Math.round(haversine(USER, p))} m · 🚶 ${walkMin(haversine(USER, p))} min · 🚗 ${carMin(haversine(USER, p))} min</span></div>
+      <div class="det-row"><span class="k">📍</span><span>${esc(p.direccion)} · ${Math.round(haversine(USER, p))} m · 🚶 ${walkMin(haversine(USER, p))} min caminando</span></div>
+      <div class="det-row"><span class="k">🚗</span><span>${carMin(haversine(USER, p))} min en auto · ${trafHTML()}</span></div>
       <div class="attrs">${attrs.map((a) => `<span class="attr">${a}</span>`).join('')}</div>
       ${p.precioHora > 0 ? `
       <div class="calc">
