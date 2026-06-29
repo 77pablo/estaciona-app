@@ -1074,12 +1074,39 @@ window.irRuta = (app) => {
   window.open(url, '_blank');
   cerrarModal();
 };
+// Copia texto al portapapeles con fallback para contextos sin Clipboard API.
+// Devuelve una promesa que resuelve true si se logró copiar.
+async function copiarTexto(texto) {
+  try {
+    if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(texto); return true; }
+  } catch (_) { /* sigue al fallback de abajo */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = texto; ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, texto.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch (_) { return false; }
+}
 window.compartir = (id) => {
-  const p = DATA.find((x) => x.id === id);
+  // Mismo criterio que "Llévame": el lugar puede venir de la lista, de Casa/Trabajo o del auto guardado.
+  const auto = LS.getAuto();
+  const p = DATA.find((x) => x.id === id) || LUGARES[id] || (auto && auto.id === id ? auto : null);
   if (!p) return;
-  const texto = `Estoy en ${p.nombre} (${p.direccion}). Ubicación: https://www.google.com/maps?q=${p.lat},${p.lng}`;
-  if (navigator.share) navigator.share({ title: 'Estaciona', text: texto }).catch(() => {});
-  else { navigator.clipboard?.writeText(texto); toast('Enlace copiado 📋'); }
+  const mapsUrl = `https://www.google.com/maps?q=${p.lat},${p.lng}`;
+  const texto = `📍 ${p.nombre || 'Estacionamiento'}${p.direccion ? ' · ' + p.direccion : ''}\nUbicación: ${mapsUrl}`;
+  const copiar = () => copiarTexto(texto).then((ok) =>
+    toast(ok ? 'Enlace copiado 📋' : 'No pude copiar; mantén presionado el link'));
+  if (navigator.share) {
+    navigator.share({ title: 'Estaciona', text: texto, url: mapsUrl }).catch((e) => {
+      if (e && e.name === 'AbortError') return;   // el usuario canceló: no hacemos nada
+      copiar();                                    // cualquier otro fallo: caemos a copiar
+    });
+    return;
+  }
+  copiar();
 };
 
 // --- Estacioné aquí + alarma anti-multa -------------------------------------
@@ -1087,17 +1114,21 @@ let _estacionePend = null, _alarmaSel = null;
 window.abrirEstacione = (id) => {
   const p = DATA.find((x) => x.id === id);
   if (!p) return;
-  _estacionePend = p; _alarmaSel = null;
+  _estacionePend = p; _alarmaSel = 60;   // por defecto: 1 hora (lo más común), editable
+  // Si el navegador ya bloqueó las notificaciones, lo decimos con honestidad.
+  const bloqueada = 'Notification' in window && Notification.permission === 'denied';
   $('#modal').innerHTML = `
     <h3>${ic('car', 18)} Guardar mi estacionamiento</h3>
     <p>${esc(p.nombre)} · ${esc(p.direccion)}</p>
     <p style="margin-bottom:8px"><b>${ic('clock', 15)} Alarma anti-multa</b> — ¿te aviso en…?</p>
     <div class="opts" id="alarma-opts">
       <button data-min="30">30 min</button>
-      <button data-min="60">1 hora</button>
+      <button data-min="60" class="on">1 hora</button>
+      <button data-min="90">1,5 h</button>
       <button data-min="120">2 horas</button>
       <button data-min="0">Sin alarma</button>
     </div>
+    ${bloqueada ? `<p class="alarma-aviso">${ic('bulb', 13)} Tu navegador bloqueó las notificaciones, pero igual te avisaré dentro de la app.</p>` : ''}
     <button class="btn btn-primary" onclick="guardarEstacione()">Listo</button>
     <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>`;
   $('#alarma-opts').querySelectorAll('button').forEach((b) =>
@@ -1123,12 +1154,27 @@ window.guardarEstacione = () => {
     precioHora: p.precioHora, gratisInfo: p.gratisInfo, horario: p.horario, inicio: Date.now(),
     alarmaTs: min > 0 ? Date.now() + min * 60000 : null, alarmaSonó: false,
   });
-  // Pedir permiso de notificación SOLO ahora (gesto del usuario, con contexto).
-  if (min > 0 && 'Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission().catch(() => {});
-  }
-  cerrarModal(); cerrarDetalle(); irA('miauto'); toast('Guardado ✓');
+  cerrarModal(); cerrarDetalle(); irA('miauto');
+  if (min > 0) avisarAlarmaPuesta(min);
+  else toast('Guardado ✓');
 };
+// Formato corto y en es-CL: "30 min", "1 h", "1,5 h", "2 h".
+function fmtMin(min) {
+  if (min < 60) return `${min} min`;
+  const h = min / 60;
+  return `${Number.isInteger(h) ? h : h.toFixed(1).replace('.', ',')} h`;
+}
+// Pide permiso de notificación SOLO ahora (gesto del usuario, con contexto) y
+// confirma con un mensaje honesto según el navegador conceda o no el permiso.
+function avisarAlarmaPuesta(min) {
+  const ok = `Alarma puesta para ${fmtMin(min)} ✓`;
+  if (!('Notification' in window)) { toast(ok); return; }
+  if (Notification.permission === 'granted') { toast(ok); return; }
+  if (Notification.permission === 'denied') { toast('Alarma puesta; te avisaré dentro de la app'); return; }
+  Notification.requestPermission()
+    .then((perm) => toast(perm === 'granted' ? ok : 'Alarma puesta; te avisaré dentro de la app'))
+    .catch(() => toast(ok));
+}
 
 // --- Mi auto ----------------------------------------------------------------
 // Destruye la instancia del mini-mapa (evita duplicados al re-entrar/re-render).
@@ -1209,7 +1255,8 @@ function actualizarMiAutoVivo() {
   let alarmaTxt = 'Sin alarma', alarmaVencida = false;
   if (a.alarmaTs) {
     const rest = Math.round((a.alarmaTs - Date.now()) / 60000);
-    if (rest > 0) alarmaTxt = `Alarma en ${rest} min`;
+    const hora = new Date(a.alarmaTs).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+    if (rest > 0) alarmaTxt = `Alarma en ${rest} min · ${hora}`;
     else { alarmaTxt = 'Alarma cumplida'; alarmaVencida = true; }
   }
   const distVuelta = haversine(USER, a);   // ETA caminando de vuelta (~80 m/min)
