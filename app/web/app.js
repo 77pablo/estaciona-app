@@ -22,6 +22,8 @@ let TOMTOM_KEY = '';               // key de TomTom (del backend); vacío => ETA
 let ciudadActual = 'Temuco';       // ciudad que se está mirando ahora
 let USER = { ...CENTRO };          // "estás aquí" (Temuco por defecto)
 let map = null, markers = {}, meMarker = null;
+let markerLayer = null;             // dónde viven los pines: clúster (si hay lib) o el propio mapa
+let CLUSTER = false;                // true si leaflet.markercluster cargó (agrupa pines)
 let miniMap = null;                 // mini-mapa de la vista "Mi auto"
 let selectedId = null;
 let watchId = null;                 // seguimiento de ubicación (watchPosition)
@@ -422,8 +424,26 @@ function initMap() {
     $('#map').innerHTML = '<div class="nomap">El mapa necesita internet.<br>Igual puedes ver la lista.</div>';
     return;
   }
-  map = L.map('map', { zoomControl: true }).setView([CENTRO.lat, CENTRO.lng], 16);
+  map = L.map('map', { zoomControl: true, zoomSnap: 0.5, wheelPxPerZoomLevel: 90 }).setView([CENTRO.lat, CENTRO.lng], 16);
   setCapaMapa('calle');
+
+  // Capa de pines: si cargó leaflet.markercluster, se agrupan los pines cercanos
+  // (clave en el centro de Temuco, muy denso); si no, caen sueltos sobre el mapa.
+  CLUSTER = typeof L.markerClusterGroup === 'function';
+  if (CLUSTER) {
+    markerLayer = L.markerClusterGroup({
+      maxClusterRadius: 46,            // declustering temprano: la ubicación exacta importa
+      showCoverageOnHover: false,      // sin polígono al pasar el mouse (más limpio)
+      spiderfyOnMaxZoom: true,         // abre en abanico los pines que comparten punto
+      removeOutsideVisibleBounds: true,
+      chunkedLoading: true,
+      iconCreateFunction: clusterIcon,
+    });
+    map.addLayer(markerLayer);
+  } else {
+    markerLayer = map;                 // respaldo: pines directos al mapa (comportamiento previo)
+  }
+
   meMarker = L.marker([USER.lat, USER.lng], {
     icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [16, 16] }),
   }).addTo(map);
@@ -479,7 +499,9 @@ function initMap() {
     options: { position: 'bottomleft' },
     onAdd() {
       const d = L.DomUtil.create('div', 'mapa-leyenda');
-      d.innerHTML = '<span><i class="dot verde"></i>Suele haber</span><span><i class="dot amarillo"></i>Puede costar</span><span><i class="dot rojo"></i>Difícil</span>';
+      d.innerHTML = '<b class="leyenda-tit">Disponibilidad</b><span><i class="dot verde"></i>Suele haber</span><span><i class="dot amarillo"></i>Puede costar</span><span><i class="dot rojo"></i>Difícil</span>';
+      // Plegable en pantallas chicas para no tapar el mapa: toca para abrir/cerrar.
+      d.addEventListener('click', () => d.classList.toggle('plegada'));
       return d;
     },
   });
@@ -498,6 +520,25 @@ function onMapMove() {
   const d = haversine({ lat: c.lat, lng: c.lng }, USER);
   const btn = $('#btn-zona');
   if (btn) btn.classList.toggle('show', d > 400);
+}
+
+// Ícono de un clúster (grupo de pines). Color = mejor disponibilidad del grupo
+// (verde > amarillo > rojo > cerrado): de un vistazo se ve "dónde suele haber".
+const NIVEL_RANK = { verde: 3, amarillo: 2, rojo: 1, cerrado: 0 };
+function clusterIcon(cluster) {
+  let best = 'cerrado';
+  for (const m of cluster.getAllChildMarkers()) {
+    const n = m.nivelEstaciona || 'cerrado';
+    if ((NIVEL_RANK[n] || 0) > (NIVEL_RANK[best] || 0)) best = n;
+  }
+  const n = cluster.getChildCount();
+  const size = n < 10 ? 36 : n < 50 ? 42 : 48;
+  return L.divIcon({
+    className: '',
+    html: `<div class="cluster-est ${best}" style="width:${size}px;height:${size}px">${n}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
 }
 
 // HTML del pin de un estacionamiento (con estado "seleccionado").
@@ -524,7 +565,14 @@ function panselect(p) {
       }
     }
   });
-  map.panTo([p.lat, p.lng]);
+  // Si el pin está escondido dentro de un clúster, acerca para revelarlo (anima
+  // el zoom y centra solo). Si no, basta con un paneo suave hasta el lugar.
+  const mk = markers[p.id];
+  if (CLUSTER && mk && markerLayer.getVisibleParent) {
+    const vis = markerLayer.getVisibleParent(mk);
+    if (vis && vis !== mk) { markerLayer.zoomToShowLayer(mk, () => {}); return; }
+  }
+  map.panTo([p.lat, p.lng], { animate: true, duration: 0.45 });
 }
 
 // Prioridad visual cuando los pines se solapan (el centro de Temuco es denso):
@@ -544,16 +592,20 @@ function updateMarkers(lista) {
   for (const p of lista) {
     vistos.add(p.id);
     const icon = L.divIcon({ className: '', html: iconHtml(p), iconSize: [0, 0] });
-    if (markers[p.id]) markers[p.id].setIcon(icon);
-    else {
-      const mk = L.marker([p.lat, p.lng], { icon }).addTo(map);
+    if (markers[p.id]) {
+      markers[p.id].setIcon(icon);
+      markers[p.id].nivelEstaciona = p.disponibilidad.nivel;   // para colorear el clúster
+    } else {
+      const mk = L.marker([p.lat, p.lng], { icon });
+      mk.nivelEstaciona = p.disponibilidad.nivel;
       mk.on('click', () => openDetalle(p.id));
       markers[p.id] = mk;
+      markerLayer.addLayer(mk);                  // al clúster (o al mapa, si no hay lib)
     }
     markers[p.id].setZIndexOffset(zOffset(p));
   }
   for (const id of Object.keys(markers)) {
-    if (!vistos.has(id)) { map.removeLayer(markers[id]); delete markers[id]; }
+    if (!vistos.has(id)) { markerLayer.removeLayer(markers[id]); delete markers[id]; }
   }
 }
 

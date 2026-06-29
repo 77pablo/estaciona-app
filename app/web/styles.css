@@ -537,7 +537,33 @@ main, .view { flex: 1; min-height: 0; }
 }
 .mapa-leyenda span { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
 .mapa-leyenda i.dot { width: 8px; height: 8px; border-radius: 50%; margin: 0; }
+.mapa-leyenda .leyenda-tit { font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; cursor: pointer; }
+/* Plegada: queda solo el título como "chip" para no tapar el mapa en móvil. */
+.mapa-leyenda.plegada span { display: none; }
 .leaflet-control-attribution { background: rgba(22,24,29,.85) !important; color: var(--muted) !important; }
 .leaflet-control-attribution a { color: var(--accent) !important; }
 .leaflet-bar a { background: var(--surface-2) !important; color: var(--text) !important; border-color: var(--line) !important; }
 .leaflet-bar a:hover { background: var(--surface) !important; }
+/* Controles de zoom (+/−) un poco más legibles y con feedback al pulsar. */
+.leaflet-bar a:active { background: var(--accent) !important; color: var(--on-accent) !important; }
+.leaflet-geo-btn:active { transform: scale(.92); }
+.leaflet-geo-btn { transition: background .15s, border-color .15s, transform .1s; }
+
+/* ── Clúster de pines (agrupado cuando hay muchos) ───────────────────────────
+   Color = mejor disponibilidad del grupo (mismo semáforo que los pines). */
+.cluster-est {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; font-family: var(--font-mono); font-weight: 700; font-size: 13px;
+  color: var(--on-accent); border: 2px solid var(--bg);
+  box-shadow: 0 2px 12px rgba(0,0,0,.55);
+}
+.cluster-est::after {            /* halo fino: despega el clúster del mapa de fondo */
+  content: ""; position: absolute; inset: -4px; border-radius: 50%;
+  border: 1.5px solid rgba(244,242,236,.16);
+}
+.cluster-est.verde { background: var(--green); }
+.cluster-est.amarillo { background: var(--amber); }
+.cluster-est.rojo { background: var(--red); color: #fff; }
+.cluster-est.cerrado { background: #5b606b; color: #fff; }
+/* Las "patas" del abanico (spiderfy) en color de acento, no el azul por defecto. */
+.leaflet-cluster-spider-leg { stroke: var(--accent) !important; stroke-opacity: .55 !important; }
