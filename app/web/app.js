@@ -817,22 +817,40 @@ function openDetalle(id) {
 }
 
 // --- Aportes de la comunidad (precios + comentarios) ------------------------
+// Fecha relativa clara: "recién", "hace 5 min", "hace 3 h", "ayer", "hace 4 días",
+// "hace 2 semanas", "hace 3 meses"… para que cada comentario se sienta vigente.
 function fechaCorta(ts) {
-  const d = (Date.now() - ts) / 86400000;
-  if (d < 1) return 'hoy'; if (d < 2) return 'ayer';
-  return `hace ${Math.floor(d)} días`;
+  const s = (Date.now() - ts) / 1000;
+  if (!Number.isFinite(s) || s < 90) return 'recién';
+  const m = s / 60;        if (m < 60) return `hace ${Math.floor(m)} min`;
+  const h = m / 60;        if (h < 24) return `hace ${Math.floor(h)} h`;
+  const d = h / 24;        if (d < 2) return 'ayer';
+  if (d < 7) return `hace ${Math.floor(d)} días`;
+  const sem = Math.floor(d / 7); if (d < 30) return sem <= 1 ? 'hace 1 semana' : `hace ${sem} semanas`;
+  const mes = Math.floor(d / 30); if (d < 365) return mes <= 1 ? 'hace 1 mes' : `hace ${mes} meses`;
+  const ano = Math.floor(d / 365); return ano <= 1 ? 'hace 1 año' : `hace ${ano} años`;
 }
+// Fecha absoluta legible (es-CL) para el tooltip del comentario.
+function fechaAbs(ts) {
+  try { return new Date(ts).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' }); }
+  catch { return ''; }
+}
+const _comSkel = '<div class="com-skel skel"></div><div class="com-skel skel"></div>';
 async function cargarComentarios(id) {
+  const el = $('#com-lista');
+  if (el && detalleAbiertoId === id) el.innerHTML = _comSkel;   // mientras carga, esqueleto
   try {
     const r = await fetch(`/api/aportes?id=${encodeURIComponent(id)}`);
-    if (!r.ok) return;
-    const j = await r.json();
-    const el = $('#com-lista');
     if (!el || detalleAbiertoId !== id) return;
+    if (!r.ok) { el.innerHTML = '<div class="com-vacio">No pudimos cargar los comentarios.</div>'; return; }
+    const j = await r.json();
+    if (detalleAbiertoId !== id) return;
     el.innerHTML = j.comentarios?.length
-      ? j.comentarios.map((c) => `<div class="com-item"><span>${esc(c.texto)}</span><span class="com-fecha">${fechaCorta(c.ts)}</span></div>`).join('')
-      : '<div class="com-vacio">Aún no hay comentarios. ¡Sé el primero!</div>';
-  } catch { /* sin red: dejamos vacío */ }
+      ? j.comentarios.map((c) => `<div class="com-item"><span class="com-texto">${esc(c.texto)}</span><span class="com-fecha" title="${esc(fechaAbs(c.ts))}">${fechaCorta(c.ts)}</span></div>`).join('')
+      : `<div class="com-vacio">${ic('edit', 16)}<span>Aún no hay comentarios. ¡Sé el primero en contar cómo es!</span></div>`;
+  } catch {
+    if (el && detalleAbiertoId === id) el.innerHTML = '<div class="com-vacio">Sin conexión: no pudimos cargar los comentarios.</div>';
+  }
 }
 window.reportarPrecio = (id) => {
   const p = DATA.find((x) => x.id === id);
@@ -893,17 +911,23 @@ async function enviarAporte(id, body) {
 }
 
 // --- Fotos de la gente ------------------------------------------------------
+const _fotoSkel = '<div class="foto-skel skel"></div><div class="foto-skel skel"></div><div class="foto-skel skel"></div>';
 async function cargarFotos(id) {
+  const el = $('#fotos-galeria');
+  if (el && detalleAbiertoId === id) el.innerHTML = _fotoSkel;   // mientras carga, esqueleto
   try {
     const r = await fetch(`/api/fotos?id=${encodeURIComponent(id)}`);
-    if (!r.ok) return;
-    const { fotos } = await r.json();
-    const el = $('#fotos-galeria');
     if (!el || detalleAbiertoId !== id) return;
+    if (!r.ok) { el.innerHTML = '<div class="fotos-vacio">No pudimos cargar las fotos.</div>'; return; }
+    const { fotos } = await r.json();
+    if (detalleAbiertoId !== id) return;
+    // Las imágenes rotas se ocultan solas (onerror) para no dejar huecos feos.
     el.innerHTML = fotos?.length
-      ? fotos.map((u) => `<a class="foto-thumb" href="${u}" target="_blank" rel="noopener"><img src="${u}" loading="lazy" alt="Foto del estacionamiento" /></a>`).join('')
-      : '<div class="fotos-vacio">Aún no hay fotos. ¡Sube la primera!</div>';
-  } catch { /* sin red */ }
+      ? fotos.map((u, i) => `<a class="foto-thumb" href="${esc(u)}" target="_blank" rel="noopener" aria-label="Ver foto ${i + 1} de ${fotos.length}"><img src="${esc(u)}" loading="lazy" decoding="async" alt="Foto del estacionamiento aportada por la comunidad" onerror="this.closest('.foto-thumb').remove()" /></a>`).join('')
+      : `<div class="fotos-vacio">${ic('camera', 16)}<span>Aún no hay fotos. ¡Sube la primera!</span></div>`;
+  } catch {
+    if (el && detalleAbiertoId === id) el.innerHTML = '<div class="fotos-vacio">Sin conexión: no pudimos cargar las fotos.</div>';
+  }
 }
 // Comprime la imagen en el navegador (máx 1000px, JPEG) para que suba liviana.
 function comprimirImagen(file, max = 1000, q = 0.7) {
@@ -961,27 +985,35 @@ async function fotoInapropiada(dataUrl) {
   } catch { return false; }
 }
 
+let _subiendoFoto = false;          // evita subir dos fotos a la vez
 window.subirFoto = (id) => {
+  if (_subiendoFoto) { toast('Espera, todavía estamos subiendo tu foto…'); return; }
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'image/*';
   inp.onchange = async () => {
     const file = inp.files?.[0];
     if (!file) return;
     if (!/^image\//.test(file.type)) { toast('Eso no es una imagen'); return; }
-    toast('Revisando la foto…');
-    const dataUrl = await comprimirImagen(file).catch(() => null);
-    if (!dataUrl) { toast('No se pudo procesar la imagen'); return; }
-    if (await fotoInapropiada(dataUrl)) {
-      toast('🚫 Esa foto parece contenido para adultos. No se subió.');
-      return;
-    }
+    _subiendoFoto = true;
     try {
+      // Feedback paso a paso: cada toast refresca el aviso para que la revisión NSFW
+      // (que puede tardar al bajar el modelo la 1ª vez) no deje al usuario a ciegas.
+      toast('Preparando la foto…');
+      const dataUrl = await comprimirImagen(file).catch(() => null);
+      if (!dataUrl) { toast('No se pudo procesar la imagen'); return; }
+      toast('Revisando la foto…');
+      if (await fotoInapropiada(dataUrl)) {
+        toast('🚫 Esa foto parece contenido para adultos. No se subió ni salió de tu teléfono.');
+        return;
+      }
+      toast('Subiendo foto…');
       const r = await fetch('/api/foto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, dataUrl }) });
       const j = await r.json();
       if (j.ok) { toast('¡Foto subida! Gracias 📷'); cargarFotos(id); }
       else if (j.motivo) toast('🚫 Foto bloqueada (' + j.motivo + '). No se subió.');
       else toast('No se pudo subir (muy pesada o formato no válido)');
     } catch { toast('Sin conexión'); }
+    finally { _subiendoFoto = false; }
   };
   inp.click();
 };
