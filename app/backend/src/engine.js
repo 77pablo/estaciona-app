@@ -18,6 +18,35 @@ for (const e of ESTACIONAMIENTOS) {
   if (o) { Object.assign(e, o); e.verificado = true; }
 }
 
+// ── Clasificador de "categoría" por nombre (red de seguridad) ───────────────
+// Muchas fichas de OSM NO son parking público general (hospitales, colegios,
+// cuarteles, museos…). El frontend usa `categoria` para el filtro "Solo
+// públicos". El generador marca ~200 fichas, pero deja pasar casos obvios por
+// el nombre. Aquí, de forma CONSERVADORA y SOLO cuando `categoria` está vacía,
+// inferimos la categoría desde el nombre con palabras claras (sin adivinar).
+// Usa exactamente las categorías que conoce el frontend.
+const REGLAS_CATEGORIA = [
+  // [categoria, regex]. Se evalúa en orden; gana la primera que calce.
+  ['Municipal', /\b(carabineros|comisar[ií]a|bomberos|municipalidad|gobernaci[oó]n|intendencia|registro civil|juzgado|tribunal|cuartel)\b/i],
+  ['Salud',     /\b(hospital|cl[ií]nica|cesfam|consultorio|sapu|posta|centro m[eé]dico)\b/i],
+  ['Colegio',   /\b(colegio|liceo|escuela|universidad|instituto|inacap|duoc|aiep|campus|jard[ií]n infantil)\b/i],
+  ['Cultura',   /\b(museo|teatro|biblioteca|catedral|parroquia|capilla|templo|iglesia)\b/i],
+  ['Estadio',   /\b(estadio|gimnasio|polideportivo|complejo deportivo|cancha)\b/i],
+  ['Terminal',  /\b(terminal|rodoviario|aeropuerto|estaci[oó]n de (?:buses|trenes|ferrocarril)|estaci[oó]n de buses)\b/i],
+  ['Camiones',  /\b(cami[oó]n|camiones|truck)\b/i],
+];
+function categoriaPorNombre(nombre) {
+  const n = nombre || '';
+  for (const [cat, re] of REGLAS_CATEGORIA) if (re.test(n)) return cat;
+  return null;
+}
+for (const e of ESTACIONAMIENTOS) {
+  if (e.categoria == null) {
+    const c = categoriaPorNombre(e.nombre);
+    if (c) e.categoria = c;
+  }
+}
+
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 // NOTA: NO simulamos "cupos en vivo" (sería inventar un dato real). La

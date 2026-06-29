@@ -27,7 +27,16 @@ export const PRECIOS_REALES = [
   { id: 'valparaiso-1',   precioMin: 57, fuente: 'autopase.cl (Saba)' }, // Bellavista Saba
 
   // ── Temuco (por confirmar en terreno) ──
-  // Ejemplo: { id: "temuco-1", precioHora: 1200, fuente: "en terreno" },  // Portal Temuco
+  // Ejemplo simple:   { id: "temuco-1", precioHora: 1200, fuente: "en terreno" },  // Portal Temuco
+  // Ejemplo completo (todos los campos opcionales que puedes confirmar):
+  //   {
+  //     id: "temuco-1",
+  //     precioHora: 1200,            // precio por hora en pesos (o usa precioMin)
+  //     horario: "08:00–22:00",      // horario real (usa guion largo "–")
+  //     gratis: "primeros 15 min",   // texto si hay tramo/condición gratis
+  //     capacidad: 350,              // n.º de plazas, si lo sabes
+  //     fuente: "en terreno",        // de dónde salió el dato (web, cartel, etc.)
+  //   },
 ];
 
 // Devuelve un mapa id -> override, con precioHora derivado de precioMin si falta.
