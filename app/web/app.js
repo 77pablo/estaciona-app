@@ -708,6 +708,12 @@ function openDetalle(id) {
       ${p.votos ? `<div class="votos-info">${ic('users', 14)} Últimas 3 h: <b>${p.votos.up}</b> dijeron que había cupo · <b>${p.votos.down}</b> que no</div>` : ''}
       <p class="disclaimer">${ic('bulb', 15)} ${p.verificado ? 'Precio confirmado.' : '<b>Precio estimado, sin verificar.</b> Es una referencia generada automáticamente — confirma la tarifa real en el lugar.'}</p>
 
+      <div class="fotos-sec">
+        <h4>${ic('camera', 15)} Fotos de la gente</h4>
+        <div id="fotos-galeria" class="fotos-galeria"></div>
+        <button class="btn btn-second" onclick="subirFoto('${p.id}')">${ic('camera', 16)} Subir una foto</button>
+      </div>
+
       <div class="comunidad">
         <h4>${ic('users', 15)} La comunidad</h4>
         ${p.comunidad?.precioReportado ? `<div class="com-precio">${ic('wallet', 14)} La gente reporta <b>~${CLP(p.comunidad.precioReportado)}/hr</b> · ${p.comunidad.nPrecios} reporte${p.comunidad.nPrecios > 1 ? 's' : ''}</div>` : ''}
@@ -742,6 +748,7 @@ function openDetalle(id) {
   });
 
   cargarComentarios(p.id);                    // trae los comentarios de la gente
+  cargarFotos(p.id);                          // trae las fotos de la gente
 
   const det = $('#detalle');
   det.classList.add('open');
@@ -807,6 +814,56 @@ async function enviarAporte(id, body) {
     else toast('No se pudo enviar el aporte');
   } catch { toast('Sin conexión'); }
 }
+
+// --- Fotos de la gente ------------------------------------------------------
+async function cargarFotos(id) {
+  try {
+    const r = await fetch(`/api/fotos?id=${encodeURIComponent(id)}`);
+    if (!r.ok) return;
+    const { fotos } = await r.json();
+    const el = $('#fotos-galeria');
+    if (!el || detalleAbiertoId !== id) return;
+    el.innerHTML = fotos?.length
+      ? fotos.map((u) => `<a class="foto-thumb" href="${u}" target="_blank" rel="noopener"><img src="${u}" loading="lazy" alt="Foto del estacionamiento" /></a>`).join('')
+      : '<div class="fotos-vacio">Aún no hay fotos. ¡Sube la primera!</div>';
+  } catch { /* sin red */ }
+}
+// Comprime la imagen en el navegador (máx 1000px, JPEG) para que suba liviana.
+function comprimirImagen(file, max = 1000, q = 0.7) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.width, h = img.height;
+      if (w > max || h > max) { const r = Math.min(max / w, max / h); w = Math.round(w * r); h = Math.round(h * r); }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', q));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+window.subirFoto = (id) => {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = async () => {
+    const file = inp.files?.[0];
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { toast('Eso no es una imagen'); return; }
+    toast('Procesando foto…');
+    const dataUrl = await comprimirImagen(file).catch(() => null);
+    if (!dataUrl) { toast('No se pudo procesar la imagen'); return; }
+    try {
+      const r = await fetch('/api/foto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, dataUrl }) });
+      const j = await r.json();
+      if (j.ok) { toast('¡Foto subida! Gracias 📷'); cargarFotos(id); }
+      else toast('No se pudo subir (muy pesada o formato no válido)');
+    } catch { toast('Sin conexión'); }
+  };
+  inp.click();
+};
 window.cerrarDetalle = () => {
   detalleAbiertoId = null;
   // Limpiar selección y devolver el pin a su estilo normal.

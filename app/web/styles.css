@@ -479,6 +479,15 @@ main, .view { flex: 1; min-height: 0; }
 .votos-info { font-size: 12px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); padding: 9px 12px; margin-top: 8px; }
 .votos-info b { color: var(--text); }
 
+/* Fotos de la gente */
+.fotos-sec { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.fotos-sec h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.fotos-galeria { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 10px; -webkit-overflow-scrolling: touch; }
+.fotos-galeria:empty { display: none; }
+.foto-thumb { flex: 0 0 auto; }
+.foto-thumb img { width: 124px; height: 92px; object-fit: cover; border-radius: var(--r); border: 1px solid var(--line-2); display: block; background: var(--surface-2); }
+.fotos-vacio { font-size: 13px; color: var(--muted); padding: 2px 0; }
+
 /* Comunidad (aportes de la gente: precios + comentarios) */
 .comunidad { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 .comunidad h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }

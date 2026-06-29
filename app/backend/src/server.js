@@ -17,6 +17,7 @@ import { getEstacionamientos } from './engine.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe } from './aportes.js';
+import { guardarFoto, fotosDe, servirFoto } from './fotos.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = join(__dirname, '..', '..', 'web');
@@ -121,6 +122,24 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/aportes' && req.method === 'GET') {
       const id = url.searchParams.get('id') || '';
       return sendJSON(res, 200, await aportesDe(id));
+    }
+    if (url.pathname === '/api/foto' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (c) => { body += c; if (body.length > 3_000_000) req.destroy(); });   // tope ~3MB
+      req.on('end', async () => {
+        try {
+          const { id, dataUrl } = JSON.parse(body || '{}');
+          const foto = await guardarFoto(id, dataUrl);
+          sendJSON(res, foto ? 200 : 400, { ok: !!foto, url: foto });
+        } catch { sendJSON(res, 400, { ok: false }); }
+      });
+      return;
+    }
+    if (url.pathname === '/api/fotos' && req.method === 'GET') {
+      return sendJSON(res, 200, { fotos: await fotosDe(url.searchParams.get('id') || '') });
+    }
+    if (url.pathname.startsWith('/fotos/') && req.method === 'GET') {
+      return await servirFoto(res, url.pathname);
     }
     if (url.pathname === '/api/voto' && req.method === 'POST') {
       let body = '';

@@ -5,9 +5,10 @@ node_modules/
 *.log
 npm-debug.log*
 
-# Datos generados en runtime (votos y aportes de la gente)
+# Datos generados en runtime (votos, aportes y fotos de la gente)
 votos.json
 aportes.json
+fotos/
 
 # Secretos / entorno
 .env
