@@ -27,6 +27,7 @@
   .foto .bar{padding:8px;display:flex;justify-content:space-between;align-items:center;gap:6px}
   .foto .bar small{font-size:10px;color:var(--muted)}
   .vacio{color:var(--muted);font-size:14px;padding:8px 0}
+  .muted{font-weight:400;letter-spacing:0;text-transform:none}
   .err{color:var(--red);font-size:14px}
   #panel{display:none}
 </style>
@@ -44,17 +45,23 @@
   </div>
 
   <div id="panel">
-    <h2>Comentarios recientes</h2>
+    <div class="row">
+      <input id="buscar" type="search" placeholder="Buscar por palabra o por lugar…" autocomplete="off" />
+    </div>
+    <h2>Comentarios <span id="cuentaCom" class="muted"></span></h2>
     <div id="comentarios"></div>
-    <h2>Fotos recientes</h2>
+    <h2>Fotos <span id="cuentaFot" class="muted"></span></h2>
     <div id="fotos" class="grid"></div>
   </div>
 
 <script>
   let CLAVE = '';
+  let DATOS = { comentarios: [], fotos: [] };   // feed completo cargado (se filtra en vivo)
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const fecha = (ts) => new Date(ts).toLocaleString('es-CL', { timeZone: 'America/Santiago' });
+  const norm = (s) => String(s ?? '').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');   // ignora acentos/mayúsculas
 
   async function entrar() {
     CLAVE = $('#clave').value.trim();
@@ -64,24 +71,34 @@
     if (!r.ok) { $('#loginErr').textContent = 'Error al cargar.'; return; }
     $('#login').style.display = 'none';
     $('#panel').style.display = 'block';
-    render(await r.json());
+    DATOS = await r.json();
+    render();
   }
 
-  function render(data) {
+  function render() {
+    const q = norm($('#buscar').value.trim());
+    // Filtra comentarios por texto o por lugar (id); fotos solo por lugar (id).
+    const coms = q ? DATOS.comentarios.filter((c) => norm(c.texto).includes(q) || norm(c.id).includes(q)) : DATOS.comentarios;
+    const fots = q ? DATOS.fotos.filter((f) => norm(f.id).includes(q)) : DATOS.fotos;
+
+    $('#cuentaCom').textContent = q ? `(${coms.length} de ${DATOS.comentarios.length})` : `(${DATOS.comentarios.length})`;
+    $('#cuentaFot').textContent = q ? `(${fots.length} de ${DATOS.fotos.length})` : `(${DATOS.fotos.length})`;
+
     const com = $('#comentarios');
-    com.innerHTML = data.comentarios.length ? data.comentarios.map((c) => `
+    com.innerHTML = coms.length ? coms.map((c) => `
       <div class="item" data-ts="${c.ts}">
         <div><div class="txt">${esc(c.texto)}</div><div class="meta">${esc(c.id)} · ${fecha(c.ts)}</div></div>
         <button class="del" onclick="borrar(this,'comentario','${esc(c.id)}',${c.ts})">Eliminar</button>
-      </div>`).join('') : '<div class="vacio">Sin comentarios.</div>';
+      </div>`).join('') : `<div class="vacio">${q ? 'Nada coincide con la búsqueda.' : 'Sin comentarios.'}</div>`;
 
     const ft = $('#fotos');
-    ft.innerHTML = data.fotos.length ? data.fotos.map((f) => `
+    ft.innerHTML = fots.length ? fots.map((f) => `
       <div class="foto">
         <a href="${f.url}" target="_blank" rel="noopener"><img src="${f.url}" loading="lazy" /></a>
         <div class="bar"><small>${esc(f.id)}</small><button class="del" onclick="borrar(this,'foto','${esc(f.id)}',0,'${esc(f.file)}')">Eliminar</button></div>
-      </div>`).join('') : '<div class="vacio">Sin fotos.</div>';
+      </div>`).join('') : `<div class="vacio">${q ? 'Ninguna foto coincide.' : 'Sin fotos.'}</div>`;
   }
+  $('#buscar').addEventListener('input', render);
 
   async function borrar(btn, tipo, id, ts, file) {
     if (!confirm('¿Eliminar este ' + tipo + '?')) return;
@@ -90,8 +107,11 @@
       body: JSON.stringify({ tipo, id, ts, file }),
     });
     const j = await r.json().catch(() => ({}));
-    if (j.ok) { const card = btn.closest('.item, .foto'); if (card) card.remove(); }
-    else alert('No se pudo eliminar.');
+    if (j.ok) {
+      if (tipo === 'comentario') DATOS.comentarios = DATOS.comentarios.filter((c) => !(c.id === id && c.ts === ts));
+      else DATOS.fotos = DATOS.fotos.filter((f) => !(f.id === id && f.file === file));
+      render();
+    } else alert('No se pudo eliminar.');
   }
   $('#clave').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
 </script>
