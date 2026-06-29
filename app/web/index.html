@@ -38,13 +38,6 @@
     <!-- Encabezado -->
     <header class="appbar">
       <h1 class="brand"><svg class="ic-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M9.5 16.5v-9h3.4a2.7 2.7 0 0 1 0 5.4H9.5"/></svg> <b>Estaciona</b></h1>
-      <label class="loc-select-wrap"><span aria-hidden="true">📍</span>
-        <select class="loc-select" id="ciudad-select" aria-label="Elegir ciudad"></select>
-      </label>
-    </header>
-
-    <!-- VISTA: BUSCAR -->
-    <section class="view active" id="view-buscar">
       <div class="searchbar">
         <svg class="ic-svg" style="color:var(--muted)" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.1-4.1"/></svg>
         <input id="search" type="text" placeholder="Buscar nombre, calle o dirección…" autocomplete="off" enterkeyhint="search" aria-label="Buscar estacionamiento por nombre, calle o dirección" aria-describedby="search-hint" />
@@ -53,6 +46,16 @@
         <button id="search-clear" class="search-clear" type="button" hidden title="Limpiar búsqueda" aria-label="Limpiar búsqueda"><svg class="ic-svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
         <button id="btn-filtros" class="has-badge" title="Filtros" aria-label="Filtros"><svg class="ic-svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="10" cy="7" r="2.3" fill="currentColor"/><circle cx="15" cy="12" r="2.3" fill="currentColor"/><circle cx="8" cy="17" r="2.3" fill="currentColor"/></svg><span class="badge" id="filtros-badge" hidden></span></button>
       </div>
+      <div class="appbar-right">
+        <span class="fecha-pill" title="Fecha de hoy"><svg class="ic-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg> <b id="fecha-hoy">Hoy</b></span>
+        <label class="loc-select-wrap"><span aria-hidden="true">📍</span>
+          <select class="loc-select" id="ciudad-select" aria-label="Elegir ciudad"></select>
+        </label>
+      </div>
+    </header>
+
+    <!-- VISTA: BUSCAR -->
+    <section class="view active" id="view-buscar">
       <div class="chips" id="chips">
         <button class="chip" data-f="gratis"><svg class="ic-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3.5h7L21 14.5l-6.5 6.5L3.5 10.5V3.5Z"/><circle cx="7.3" cy="7.3" r="1.3"/></svg> Gratis</button>
         <button class="chip" data-f="barato"><svg class="ic-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><circle cx="16.5" cy="14.5" r="1.1" fill="currentColor"/></svg> Barato</button>
@@ -105,5 +108,7 @@
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
           integrity="sha256-Hk4dIpcqOSb0hZjgyvFOP+cEmDXUKKNE/tT542ZbNQg=" crossorigin=""></script>
   <script src="/app.js"></script>
+  <!-- Píldora de fecha del header: muestra el día de hoy (informativo). -->
+  <script>(function(){var e=document.getElementById('fecha-hoy');if(e){var d=new Date().toLocaleDateString('es-CL',{weekday:'short',day:'numeric',month:'short'});e.textContent='Hoy · '+d;}})();</script>
 </body>
 </html>

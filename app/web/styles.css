@@ -98,10 +98,20 @@ body {
 
 /* Appbar */
 .appbar {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 15px 18px; background: var(--surface); color: var(--text); flex-shrink: 0;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 18px; background: var(--surface); color: var(--text); flex-shrink: 0;
   border-bottom: 1px solid var(--line);
 }
+/* Móvil: el buscador baja a una fila completa debajo del logo + controles. */
+.appbar .searchbar { flex: 1 1 100%; order: 5; margin: 0; }
+.appbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.fecha-pill {
+  display: none; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px;
+  padding: 7px 13px; white-space: nowrap; font-family: var(--font-ui);
+}
+.fecha-pill b { color: var(--text); font-weight: 600; }
+.fecha-pill .ic-svg { opacity: .85; }
 .appbar .brand { font-size: 19px; font-weight: 800; letter-spacing: -0.03em; display: flex; align-items: center; gap: 10px; }
 .appbar .brand b { font-weight: 800; }
 /* Logo en badge teal redondeado (estilo parkspot). */
@@ -295,6 +305,33 @@ main, .view { flex: 1; min-height: 0; }
 .dot.rojo { background: var(--red); } .dot.cerrado { background: #5b606b; }
 .badge-free { background: var(--green-bg); color: var(--accent); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: var(--r); }
 
+/* Tarjeta expandida (al seleccionar): features + acciones (estilo parkspot) */
+.card-expand { display: none; }
+.card.sel .card-expand { display: block; margin-top: 14px; animation: cardExpand .22s ease; }
+@keyframes cardExpand { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+.feat-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 13px; }
+.feat-chip {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600;
+  color: var(--muted); background: var(--surface); border: 1px solid var(--line);
+  padding: 5px 11px; border-radius: 999px;
+}
+.feat-chip .ic-svg { opacity: .85; vertical-align: -2px; }
+.card-actions { display: flex; gap: 10px; }
+.btn-reservar {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--r-lg);
+  padding: 13px; font-family: var(--font-ui); font-weight: 800; font-size: 14px; cursor: pointer;
+  transition: filter .15s, transform .08s;
+}
+.btn-reservar:hover { filter: brightness(1.07); }
+.btn-reservar:active { transform: scale(.985); }
+.card-vermas {
+  flex-shrink: 0; background: transparent; color: var(--muted); border: 1px solid var(--line-2);
+  border-radius: var(--r-lg); padding: 13px 16px; font-family: var(--font-ui); font-weight: 700;
+  font-size: 13px; cursor: pointer; transition: color .15s, border-color .15s;
+}
+.card-vermas:hover { color: var(--text); border-color: var(--accent); }
+
 /* Navegación inferior */
 .bottomnav { display: flex; background: var(--surface); border-top: 1px solid var(--line); flex-shrink: 0; }
 .bottomnav .nav {
@@ -487,20 +524,21 @@ main, .view { flex: 1; min-height: 0; }
    LAYOUT DE ESCRITORIO (PC): lista a la izquierda + mapa grande a la derecha.
    ============================================================================ */
 @media (min-width: 860px) {
-  .appbar { padding: 13px 30px; }
+  .appbar { padding: 13px 26px; flex-wrap: nowrap; }
   .appbar .brand { font-size: 21px; }
+  /* Buscador centrado en la barra superior (estilo parkspot). */
+  .appbar .searchbar { flex: 1 1 auto; order: 0; max-width: 620px; margin: 0 auto; }
+  .fecha-pill { display: inline-flex; }
 
   #view-buscar.active {
     display: grid;
     grid-template-columns: 420px 1fr;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto 1fr;
     grid-template-areas:
-      "search map"
-      "chips  map"
-      "sheet  map";
+      "chips map"
+      "sheet map";
   }
-  #view-buscar .searchbar { grid-area: search; margin: 14px 20px 10px; }
-  #view-buscar .chips { grid-area: chips; padding: 0 20px 14px; flex-wrap: wrap; }
+  #view-buscar .chips { grid-area: chips; padding: 16px 20px 14px; flex-wrap: wrap; }
   #view-buscar #map { grid-area: map; height: 100%; min-height: 0; }
   #view-buscar .sheet {
     grid-area: sheet; max-height: none; height: 100%; margin-top: 0;

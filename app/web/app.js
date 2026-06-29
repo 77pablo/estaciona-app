@@ -740,17 +740,50 @@ function renderLista() {
           <span class="badge-disp ${nivel}">${estadoTxt}</span>
         </div>
         <div class="disp-bar" aria-hidden="true"><i class="disp-fill ${nivel}" style="width:${barPct}%"></i></div>
+        <div class="card-expand">
+          ${featuresHTML(p)}
+          <div class="card-actions">
+            <button class="btn-reservar" onclick="event.stopPropagation();llevame('${p.id}')">${ic('compass', 16)} Cómo llegar</button>
+            <button class="card-vermas" onclick="event.stopPropagation();openDetalle('${p.id}')">Ver detalle</button>
+          </div>
+        </div>
       </div>`;
   }).join('');
 
   $('#lista').querySelectorAll('.card').forEach((c) => {
-    c.addEventListener('click', () => openDetalle(c.dataset.id));
-    // Las tarjetas son botones a efectos de teclado: Enter/Espacio las activan.
+    const sel = () => seleccionarCard(c.dataset.id, c);
+    c.addEventListener('click', sel);
+    // Las tarjetas son botones a efectos de teclado: Enter/Espacio las expanden.
     c.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetalle(c.dataset.id); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sel(); }
     });
   });
   if (sheet) sheet.scrollTop = sc;          // restaurar scroll
+}
+
+// Chips de servicios REALES del lugar (para la tarjeta expandida).
+function featuresHTML(p) {
+  const a = p.atributos || {};
+  const f = [];
+  if (/24h|libre/i.test(p.horario || '')) f.push('24/7');
+  if (a.techado) f.push(`${ic('home', 13)} Techado`);
+  if (a.ev) f.push(`${ic('zap', 13)} Carga EV`);
+  if (a.accesible) f.push(`${ic('access', 13)} Accesible`);
+  if (a.camaras) f.push(`${ic('camera', 13)} Cámaras`);
+  return f.length ? `<div class="feat-chips">${f.map((x) => `<span class="feat-chip">${x}</span>`).join('')}</div>` : '';
+}
+
+// Tocar una tarjeta la expande (estilo parkspot): muestra features + acciones y
+// resalta su pin en el mapa. Tocarla de nuevo la colapsa. El detalle completo
+// (votos, fotos, comunidad) sigue disponible con el botón "Ver detalle".
+function seleccionarCard(id, card) {
+  const yaSel = card.classList.contains('sel');
+  $('#lista').querySelectorAll('.card.sel').forEach((c) => c.classList.remove('sel'));
+  if (yaSel) return;
+  card.classList.add('sel');
+  card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const p = DATA.find((x) => x.id === id);
+  if (p) panselect(p);   // centra el mapa y resalta el pin
 }
 
 // --- Detalle ----------------------------------------------------------------
