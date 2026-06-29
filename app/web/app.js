@@ -671,6 +671,9 @@ function renderLista() {
     $('#lista').innerHTML = '<div class="empty-big" style="padding:30px">Sin resultados con esos filtros.</div>';
     return;
   }
+  // Tráfico estimado de la hora (uno solo para toda la lista): colorea el tiempo en auto.
+  const traf = trafico();
+  const trafColor = traf.nivel === 'fluido' ? 'var(--green)' : traf.nivel === 'medio' ? 'var(--amber)' : 'var(--red)';
   $('#lista').innerHTML = lista.map((p) => {
     const d = p.disponibilidad, nivel = d.nivel;
     // Disponibilidad = estimación honesta (sin número falso de "cupos en vivo").
@@ -681,7 +684,7 @@ function renderLista() {
         <div class="info">
           <div class="nm">${esc(p.nombre)} ${LS.isFav(p.id) ? ic('starFull', 13) : ''} ${catBadge(p)}</div>
           <div class="sub">${estadoHTML(p)}${disp}</div>
-          <div class="meta">${Math.round(p.dist)} m · ${ic('walk', 12)} ${walkMin(p.dist)} min</div>
+          <div class="meta">${ic('walk', 12)} ${walkMin(p.dist)} min · <span class="car-eta" style="color:${trafColor}" title="En auto con tráfico estimado ${traf.nivel}">${ic('car', 12)} ${carMin(p.dist)} min</span> · ${Math.round(p.dist)} m</div>
         </div>
         <div class="price">${precioHTML(p)}</div>
       </div>`;
