@@ -18,9 +18,9 @@
   <div class="phone">
     <!-- Encabezado -->
     <header class="appbar">
-      <div class="brand">🅿️ <b>Estaciona</b></div>
-      <label class="loc-select-wrap" aria-label="Ciudad">📍
-        <select class="loc-select" id="ciudad-select"></select>
+      <h1 class="brand">🅿️ <b>Estaciona</b></h1>
+      <label class="loc-select-wrap"><span aria-hidden="true">📍</span>
+        <select class="loc-select" id="ciudad-select" aria-label="Elegir ciudad"></select>
       </label>
     </header>
 
@@ -37,7 +37,7 @@
         <button class="chip" data-f="techado">🏠 Techado</button>
         <button class="chip" data-f="abierto">⏰ Abierto</button>
       </div>
-      <div id="map"></div>
+      <div id="map" role="application" aria-label="Mapa de estacionamientos"></div>
       <button id="btn-zona" class="zona-btn">🔄 Buscar en esta zona</button>
       <div class="sheet">
         <div class="sheet-head">
@@ -69,8 +69,8 @@
     </nav>
 
     <!-- Overlays -->
-    <div class="overlay" id="detalle"></div>
-    <div class="modal-bg" id="modal-bg"><div class="modal" id="modal"></div></div>
+    <div class="overlay" id="detalle" role="dialog" aria-modal="true" aria-label="Detalle del estacionamiento"></div>
+    <div class="modal-bg" id="modal-bg"><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
     <div class="onboard" id="onboard"></div>
     <div id="banner"></div>
     <div id="toast"></div>

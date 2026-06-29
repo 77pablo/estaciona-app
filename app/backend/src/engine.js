@@ -66,6 +66,9 @@ function abiertoAhora(e, hora) {
 // (robusto: no depende de un horario exacto escrito a mano) + "domingos" + "siempre".
 function gratisAhora(e, hora, dia) {
   if (!e.gratis) return false;
+  // "Gratis para clientes" NO es gratis libre (solo con compra). El frontend lo
+  // rotula "🛒 Solo clientes", así que aquí nunca lo marcamos como gratis ahora.
+  if (/cliente/i.test(e.gratis)) return false;
   if (/siempre/i.test(e.gratis)) return true;
   if (/domingo/i.test(e.gratis) && dia === 0) return true;
   const m = e.gratis.match(/(\d{1,2}):\d{2}\D+(\d{1,2}):\d{2}/);

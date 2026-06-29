@@ -9,7 +9,7 @@
 // la app de la iglesia con DB_PATH).
 // ============================================================================
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rename } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -17,15 +17,22 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const FILE = process.env.VOTOS_PATH || join(__dirname, '..', 'votos.json');
 
 let votos = [];
-let cargado = false;
+let cargaPromise = null;
 
-async function cargar() {
-  if (cargado) return;
-  cargado = true;
-  try { votos = JSON.parse(await readFile(FILE, 'utf8')) || []; } catch { votos = []; }
+// Carga idempotente: se cachea la promesa, así dos votos casi simultáneos en el
+// primer arranque comparten la MISMA carga (sin ventana de carrera que pierda votos).
+function cargar() {
+  return cargaPromise ??= readFile(FILE, 'utf8')
+    .then((txt) => { votos = JSON.parse(txt) || []; })
+    .catch(() => { votos = []; });
 }
 async function guardar() {
-  try { await writeFile(FILE, JSON.stringify(votos)); } catch { /* disco no escribible: seguimos en memoria */ }
+  // Escritura atómica: escribe a un .tmp y renombra (rename es atómico en el
+  // mismo disco). Evita que un corte a mitad de escritura deje el JSON corrupto
+  // y borre todos los votos.
+  const tmp = FILE + '.tmp';
+  try { await writeFile(tmp, JSON.stringify(votos)); await rename(tmp, FILE); }
+  catch { /* disco no escribible: seguimos en memoria */ }
 }
 
 // Registra un voto (ok = true → "había cupo"; false → "no había").

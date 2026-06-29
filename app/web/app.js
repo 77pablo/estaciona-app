@@ -14,6 +14,7 @@ const API = '/api/estacionamientos';
 // Estado en memoria.
 let DATA = [];
 let CENTRO = { lat: -38.7359, lng: -72.5905, nombre: 'Temuco' };
+const CENTRO_DEFAULT = { ...CENTRO };   // copia inmutable de Temuco (ciudad casa); CENTRO sí se sobrescribe por ciudad
 let ZONAS = [];                    // ciudades con datos (del backend)
 let REGIONES = [];                 // 16 regiones de Chile, orden norte→sur (del backend)
 let MAPTILER_KEY = '';             // key de MapTiler (del backend); vacío => tiles OSM
@@ -26,6 +27,9 @@ let watchId = null;                 // seguimiento de ubicación (watchPosition)
 let query = '';
 let orden = 'cercania';            // orden de la lista: 'cercania' | 'precio'
 let cargado = false;
+let cargaSeq = 0;                  // contador de cargas: descarta respuestas viejas (carrera)
+let sinConexionAvisado = false;    // evita spamear el toast "Sin conexión" cada 6s
+let _focoPrevio = null;            // foco previo, para restaurarlo al cerrar un diálogo
 let detalleAbiertoId = null;
 let filtros = {
   gratis: false, barato: false, techado: false, abierto: false,
@@ -62,6 +66,8 @@ function haversine(a, b) {
   const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(s));
 }
+// Escapa texto para insertarlo seguro en innerHTML (datos de OSM/Nominatim).
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 const walkMin = (m) => Math.max(1, Math.round(m / 80));
 // Tiempo manejando: aproximación urbana ~25 km/h (sin servicios externos).
 const carMin = (m) => Math.max(1, Math.round(m / 1000 / 25 * 60));
@@ -164,9 +170,9 @@ function poblarSelectorCiudades() {
   const orden = REGIONES.length ? REGIONES : Object.keys(porRegion);
   const regiones = [...orden, ...Object.keys(porRegion).filter((r) => !orden.includes(r))]
     .filter((r) => porRegion[r]);
-  const opt = (z) => `<option value="${z.nombre}">${z.nombre} (${z.cantidad})</option>`;
+  const opt = (z) => `<option value="${esc(z.nombre)}">${esc(z.nombre)} (${z.cantidad})</option>`;
   sel.innerHTML = regiones
-    .map((r) => `<optgroup label="${r}">${porRegion[r].map(opt).join('')}</optgroup>`)
+    .map((r) => `<optgroup label="${esc(r)}">${porRegion[r].map(opt).join('')}</optgroup>`)
     .join('');
   sel.value = ciudadActual;
 }
@@ -212,7 +218,7 @@ const LS = {
     localStorage.setItem('estaciona_favs', JSON.stringify(f));
     return f.some((x) => (x.id || x) === id);
   },
-  getAuto: () => JSON.parse(localStorage.getItem('estaciona_miauto') || 'null'),
+  getAuto: () => { try { return JSON.parse(localStorage.getItem('estaciona_miauto') || 'null'); } catch { return null; } },
   setAuto: (a) => localStorage.setItem('estaciona_miauto', JSON.stringify(a)),
   clearAuto: () => localStorage.removeItem('estaciona_miauto'),
 };
@@ -365,7 +371,8 @@ function listaFiltrada() {
       // Regional: por defecto solo la ciudad elegida (salvo que se busque por texto).
       if (!q && p.ciudad !== ciudadActual) return false;
       if (q && !(norm(p.nombre).includes(q) || norm(p.direccion).includes(q) || norm(p.ciudad).includes(q))) return false;
-      if (filtros.gratis && !(p.precioHora === 0 || p.gratisAhora)) return false;
+      // "Gratis" = gratis de verdad (no los "🛒 solo clientes", que solo lo son con compra).
+      if (filtros.gratis && !(esGratisReal(p) || p.gratisAhora)) return false;
       if (filtros.barato && !(p.precioHora < 1000)) return false;
       if (filtros.techado && !p.atributos.techado) return false;
       if (filtros.ev && !p.atributos.ev) return false;
@@ -426,9 +433,9 @@ function renderLista() {
       <div class="card" data-id="${p.id}">
         <div class="ic">${p.tipo === 'calle' ? '🛣️' : '🅿️'}</div>
         <div class="info">
-          <div class="nm">${p.nombre} ${LS.isFav(p.id) ? '⭐' : ''}</div>
+          <div class="nm">${esc(p.nombre)} ${LS.isFav(p.id) ? '⭐' : ''}</div>
           <div class="sub">${estadoHTML(p)} · ${dispTxt}</div>
-          <div class="sub">${Math.round(p.dist)} m · 🚶 ${walkMin(p.dist)} min · 🚗 ${carMin(p.dist)} min${p.gratisInfo ? ' · <span class="' + (esGratisClientes(p) ? 'badge-cli' : 'badge-free') + '">' + p.gratisInfo + '</span>' : ''}</div>
+          <div class="sub">${Math.round(p.dist)} m · 🚶 ${walkMin(p.dist)} min · 🚗 ${carMin(p.dist)} min${p.gratisInfo ? ' · <span class="' + (esGratisClientes(p) ? 'badge-cli' : 'badge-free') + '">' + esc(p.gratisInfo) + '</span>' : ''}</div>
         </div>
         <div class="price">${precio}</div>
       </div>`;
@@ -471,19 +478,19 @@ function openDetalle(id) {
   $('#detalle').innerHTML = `
     <div class="det-top">
       <button onclick="cerrarDetalle()" title="Volver" aria-label="Volver">←</button>
-      <div class="t">${p.nombre}</div>
+      <div class="t">${esc(p.nombre)}</div>
       <button onclick="toggleFavDetalle('${p.id}')" title="Guardar" aria-label="${fav ? 'Quitar de favoritos' : 'Guardar en favoritos'}">${fav ? '⭐' : '☆'}</button>
       <button onclick="compartir('${p.id}')" title="Compartir" aria-label="Compartir">↗</button>
     </div>
     <div class="det-body">
-      <div class="det-hero"><span class="hero-ic">${p.tipo === 'calle' ? '🛣️' : '🅿️'}</span><span class="hero-nm">${p.nombre}</span></div>
+      <div class="det-hero"><span class="hero-ic">${p.tipo === 'calle' ? '🛣️' : '🅿️'}</span><span class="hero-nm">${esc(p.nombre)}</span></div>
       <div class="det-status" id="det-status-line">${lineaDisponibilidad(p)}</div>
       <div class="det-row"><span class="k">💰</span><span>${precioLinea}</span></div>
       ${esGratisClientes(p)
         ? `<div class="aviso-cli">🛒 <b>Gratis solo para clientes</b> — válido con compra en el local, no es estacionamiento público.</div>`
-        : p.gratisInfo ? `<div class="det-row"><span class="k">🆓</span><span>${p.gratisInfo}</span></div>` : ''}
-      <div class="det-row"><span class="k">⏰</span><span>${p.horario} · ${p.abierto ? '<b style="color:var(--green)">Abierto ahora</b>' : '<b style="color:var(--red)">Cerrado</b>'}</span></div>
-      <div class="det-row"><span class="k">📍</span><span>${p.direccion} · ${Math.round(haversine(USER, p))} m · 🚶 ${walkMin(haversine(USER, p))} min · 🚗 ${carMin(haversine(USER, p))} min</span></div>
+        : p.gratisInfo ? `<div class="det-row"><span class="k">🆓</span><span>${esc(p.gratisInfo)}</span></div>` : ''}
+      <div class="det-row"><span class="k">⏰</span><span>${esc(p.horario)} · ${p.abierto ? '<b style="color:var(--green)">Abierto ahora</b>' : '<b style="color:var(--red)">Cerrado</b>'}</span></div>
+      <div class="det-row"><span class="k">📍</span><span>${esc(p.direccion)} · ${Math.round(haversine(USER, p))} m · 🚶 ${walkMin(haversine(USER, p))} min · 🚗 ${carMin(haversine(USER, p))} min</span></div>
       <div class="attrs">${attrs.map((a) => `<span class="attr">${a}</span>`).join('')}</div>
       ${p.precioHora > 0 ? `
       <div class="calc">
@@ -519,7 +526,10 @@ function openDetalle(id) {
     };
     sel.addEventListener('change', upd); upd();
   }
-  $('#detalle').classList.add('open');
+  const det = $('#detalle');
+  det.classList.add('open');
+  _focoPrevio = document.activeElement;       // recuerda dónde estaba el foco
+  det.setAttribute('tabindex', '-1'); det.focus();   // mueve el foco al diálogo (lector de pantalla)
 }
 window.cerrarDetalle = () => {
   detalleAbiertoId = null;
@@ -533,6 +543,7 @@ window.cerrarDetalle = () => {
     }
   }
   $('#detalle').classList.remove('open');
+  if (_focoPrevio?.focus) _focoPrevio.focus();    // devuelve el foco a donde estaba
 };
 window.toggleFavDetalle = (id) => { const p = DATA.find((x) => x.id === id); if (p) LS.toggleFav(p); openDetalle(id); renderLista(); };
 window.confirmarCupo = (id, ok) => {
@@ -560,7 +571,7 @@ window.llevame = (id) => {
   _rutaDest = p;
   $('#modal').innerHTML = `
     <h3>🧭 ¿Con qué app te llevo?</h3>
-    <p>${p.nombre || 'Tu auto'}${p.direccion ? ' · ' + p.direccion : ''}</p>
+    <p>${esc(p.nombre || 'Tu auto')}${p.direccion ? ' · ' + esc(p.direccion) : ''}</p>
     <div style="display:flex;flex-direction:column;gap:10px">
       <button class="btn btn-primary" onclick="irRuta('google')">🗺️ Google Maps</button>
       <button class="btn btn-second" onclick="irRuta('waze')">🚗 Waze</button>
@@ -593,7 +604,7 @@ window.abrirEstacione = (id) => {
   _estacionePend = p; _alarmaSel = null;
   $('#modal').innerHTML = `
     <h3>🚗 Guardar mi estacionamiento</h3>
-    <p>${p.nombre} · ${p.direccion}</p>
+    <p>${esc(p.nombre)} · ${esc(p.direccion)}</p>
     <p style="margin-bottom:8px"><b>⏰ Alarma anti-multa</b> — ¿te aviso en…?</p>
     <div class="opts" id="alarma-opts">
       <button data-min="30">30 min</button>
@@ -666,8 +677,8 @@ function renderMiAuto() {
     <h2>🚗 Mi auto</h2>
     <div class="miauto-card">
       <div class="lbl">Está en</div>
-      <div class="big" style="font-size:20px">${a.nombre}</div>
-      <div class="lbl" style="margin-bottom:10px">${a.direccion}</div>
+      <div class="big" style="font-size:20px">${esc(a.nombre)}</div>
+      <div class="lbl" style="margin-bottom:10px">${esc(a.direccion)}</div>
       <div class="lbl">Llevas</div>
       <div class="big" id="ma-tiempo">—</div>
       <div class="cost" id="ma-costo">—</div>
@@ -716,8 +727,8 @@ function renderFavoritos() {
     <h2 style="font-size:14px;color:var(--muted);margin:16px 0 8px">Lugares guardados</h2>
     ${favs.length ? favs.map((p) => `
       <div class="fav-item" data-id="${p.id}"><span class="ic">${p.tipo === 'calle' ? '🛣️' : '🅿️'}</span>
-        <div style="flex:1"><div class="nm">${p.nombre}</div>
-        <div class="sub">${precioHTML(p)}${p.ciudad ? ' · ' + p.ciudad : ''} · ${p.direccion}</div></div></div>
+        <div style="flex:1"><div class="nm">${esc(p.nombre)}</div>
+        <div class="sub">${precioHTML(p)}${p.ciudad ? ' · ' + esc(p.ciudad) : ''} · ${esc(p.direccion)}</div></div></div>
     `).join('') : '<div class="empty-big" style="padding:24px">Aún no guardas lugares.<br>Toca la ⭐ en un estacionamiento.</div>'}
   </div>`;
   $('#view-favoritos').querySelectorAll('.fav-item[data-id]').forEach((el) =>
@@ -748,7 +759,7 @@ window.irLugar = (k) => {
 function filaLugar(k, ic) {
   const l = LUGARES[k];
   const sub = l.set
-    ? `${l.etiqueta || 'Ubicación fijada'} · ver cerca →`
+    ? `${esc(l.etiqueta || 'Ubicación fijada')} · ver cerca →`
     : 'Sin fijar · toca ✏️ para poner tu dirección';
   return `<div class="fav-item lugar">
     <div class="lugar-main" onclick="irLugar('${k}')"><span class="ic">${ic}</span>
@@ -807,8 +818,8 @@ function usarMiUbicacion() {
       const me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       const { zona, dist } = zonaMasCercana(me);
       if (!zona || dist > 30000) {       // a >30 km de cualquier ciudad con datos
-        toast(`Aún no cubrimos bien tu zona — te muestro ${CENTRO.nombre}`);
-        cambiarCiudad(CENTRO.nombre, true);
+        toast(`Aún no cubrimos bien tu zona — te muestro ${CENTRO_DEFAULT.nombre}`);
+        cambiarCiudad(CENTRO_DEFAULT.nombre, true);
         return;
       }
       USER = me;
@@ -912,8 +923,22 @@ function syncChips() {
 }
 
 // --- Modales ----------------------------------------------------------------
-function abrirModal() { $('#modal-bg').classList.add('open'); }
-window.cerrarModal = () => $('#modal-bg').classList.remove('open');
+function abrirModal() {
+  _focoPrevio = document.activeElement;
+  $('#modal-bg').classList.add('open');
+  const m = $('#modal'); m.setAttribute('tabindex', '-1'); m.focus();
+}
+window.cerrarModal = () => {
+  $('#modal-bg').classList.remove('open');
+  if (_focoPrevio?.focus) _focoPrevio.focus();
+};
+
+// Cerrar diálogos con la tecla Escape (modal primero, luego detalle).
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if ($('#modal-bg').classList.contains('open')) window.cerrarModal();
+  else if ($('#detalle').classList.contains('open')) window.cerrarDetalle();
+});
 
 // --- Navegación entre vistas ------------------------------------------------
 function irA(view) {
@@ -937,7 +962,7 @@ function chequearAlarma() {
   if (a && a.alarmaTs && !a.alarmaSonó && Date.now() >= a.alarmaTs) {
     a.alarmaSonó = true; LS.setAuto(a);
     const b = $('#banner');
-    b.innerHTML = `<span>⏰ ¡Revisa tu estacionamiento! (${a.nombre})</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
+    b.innerHTML = `<span>⏰ ¡Revisa tu estacionamiento! (${esc(a.nombre)})</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
     b.classList.add('show');
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification('Estaciona ⏰', { body: `Revisa tu estacionamiento en ${a.nombre}` });
@@ -956,7 +981,7 @@ function chequearRecordatorioAuto() {
   a.recordado = true; LS.setAuto(a);
   const fecha = inicio.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' });
   const b = $('#banner');
-  b.innerHTML = `<span>🚗 ¿Sigues con tu auto en ${a.nombre}? Lo guardaste el ${fecha}</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
+  b.innerHTML = `<span>🚗 ¿Sigues con tu auto en ${esc(a.nombre)}? Lo guardaste el ${fecha}</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
   b.classList.add('show');
 }
 
@@ -1006,25 +1031,30 @@ function initSheetDrag() {
 
 // --- Ciclo de datos (con estados de carga / error) --------------------------
 async function cargar() {
+  const seq = ++cargaSeq;            // marca esta carga; si llega otra más nueva, se descarta
   try {
     const r = await fetch(`${API}?ciudad=${encodeURIComponent(ciudadActual)}`);
     if (!r.ok) throw new Error('http ' + r.status);
     const j = await r.json();
+    if (seq !== cargaSeq) return;     // llegó una carga más reciente: ignora esta respuesta vieja
     DATA = j.estacionamientos;
     if (j.centro) CENTRO = j.centro;
     if (j.regiones && j.regiones.length) REGIONES = j.regiones;
     if (j.zonas && j.zonas.length && !ZONAS.length) { ZONAS = j.zonas; poblarSelectorCiudades(); }
     cargado = true;
+    sinConexionAvisado = false;       // volvió la conexión: permite avisar de nuevo si se corta
     renderLista();
     refrescarDetalle();
   } catch {
+    if (seq !== cargaSeq) return;     // carga vieja que falló: no toques nada ya reemplazado
     if (!cargado) {
       $('#sheet-count').textContent = 'Error de conexión';
       $('#lista').innerHTML = `<div class="empty-big">
         <span class="em">📡</span>No pudimos cargar los estacionamientos.<br>
         <button class="btn btn-primary" style="margin-top:14px" onclick="cargar()">Reintentar</button></div>`;
-    } else {
-      toast('Sin conexión, reintentando…');
+    } else if (!sinConexionAvisado) {
+      toast('Sin conexión, reintentando…');   // una sola vez por racha de errores
+      sinConexionAvisado = true;
     }
   }
 }
