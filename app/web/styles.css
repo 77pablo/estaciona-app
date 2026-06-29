@@ -66,6 +66,13 @@ body {
 
 /* ── Fluidez tipo iPhone: inercia de scroll, resortes suaves, frosted glass ── */
 .sheet, .overlay, .simple, #lista, .modal { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+/* Scrollbar fina y oscura (saca las flechas ▲▼ nativas de Windows y la pinta acorde al tema) */
+.sheet, .overlay, .simple, .modal, #lista, .chips { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.sheet::-webkit-scrollbar, .overlay::-webkit-scrollbar, .simple::-webkit-scrollbar, .modal::-webkit-scrollbar, #lista::-webkit-scrollbar { width: 9px; height: 9px; }
+.sheet::-webkit-scrollbar-track, .overlay::-webkit-scrollbar-track, .simple::-webkit-scrollbar-track, .modal::-webkit-scrollbar-track, #lista::-webkit-scrollbar-track { background: transparent; }
+.sheet::-webkit-scrollbar-thumb, .overlay::-webkit-scrollbar-thumb, .simple::-webkit-scrollbar-thumb, .modal::-webkit-scrollbar-thumb, #lista::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; border: 2px solid var(--surface); }
+.sheet::-webkit-scrollbar-thumb:hover, .overlay::-webkit-scrollbar-thumb:hover, .simple::-webkit-scrollbar-thumb:hover, .modal::-webkit-scrollbar-thumb:hover, #lista::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.sheet::-webkit-scrollbar-button, .overlay::-webkit-scrollbar-button, .simple::-webkit-scrollbar-button, .modal::-webkit-scrollbar-button, #lista::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
 .modal-bg, .onboard { backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); }
 .overlay { transition: transform .42s cubic-bezier(.22, 1, .36, 1); }   /* abrir/cerrar con resorte suave */
 .btn, .chip, .fav-item, .thumbs button, .opts button, .leaflet-geo-btn, .cat-badge {
@@ -194,9 +201,13 @@ main, .view { flex: 1; min-height: 0; }
 .card:active { transform: scale(.995); }
 .card .ic { font-size: 22px; opacity: .9; }
 .card .info { flex: 1; min-width: 0; }
-.card .nm { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
-.card .sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
-.card .price { text-align: right; }
+.card .nm { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Estado/disponibilidad (línea 1) y distancia/tiempo (línea 2): nunca parten
+   palabras sueltas; si no caben, se recortan con "…". */
+.card .sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .meta .ic-svg { vertical-align: -2px; opacity: .85; }
+.card .price { text-align: right; flex-shrink: 0; padding-left: 4px; }
 .card .price b { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
 /* Precio estimado: discreto (no grita un número que no es real). */
 .card .price .precio-est-num { font-size: 14px; font-weight: 600; color: var(--muted); }
@@ -319,7 +330,7 @@ main, .view { flex: 1; min-height: 0; }
    LAYOUT DE ESCRITORIO (PC): lista a la izquierda + mapa grande a la derecha.
    ============================================================================ */
 @media (min-width: 860px) {
-  .appbar { padding: 17px 30px; }
+  .appbar { padding: 13px 30px; }
   .appbar .brand { font-size: 21px; }
 
   #view-buscar.active {
@@ -331,8 +342,8 @@ main, .view { flex: 1; min-height: 0; }
       "chips  map"
       "sheet  map";
   }
-  #view-buscar .searchbar { grid-area: search; margin: 20px; }
-  #view-buscar .chips { grid-area: chips; padding: 0 20px 16px; flex-wrap: wrap; }
+  #view-buscar .searchbar { grid-area: search; margin: 14px 20px 10px; }
+  #view-buscar .chips { grid-area: chips; padding: 0 20px 14px; flex-wrap: wrap; }
   #view-buscar #map { grid-area: map; height: 100%; min-height: 0; }
   #view-buscar .sheet {
     grid-area: sheet; max-height: none; height: 100%; margin-top: 0;

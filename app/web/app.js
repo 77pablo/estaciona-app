@@ -680,7 +680,8 @@ function renderLista() {
         <div class="ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 22)}</div>
         <div class="info">
           <div class="nm">${esc(p.nombre)} ${LS.isFav(p.id) ? ic('starFull', 13) : ''} ${catBadge(p)}</div>
-          <div class="sub">${estadoHTML(p)}${disp} · ${Math.round(p.dist)} m · ${ic('walk', 12)} ${walkMin(p.dist)} min</div>
+          <div class="sub">${estadoHTML(p)}${disp}</div>
+          <div class="meta">${Math.round(p.dist)} m · ${ic('walk', 12)} ${walkMin(p.dist)} min</div>
         </div>
         <div class="price">${precioHTML(p)}</div>
       </div>`;
