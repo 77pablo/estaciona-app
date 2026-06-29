@@ -116,8 +116,7 @@ const ICONS = {
   edit:'<path d="M12.5 20H21"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z"/>',
   cart:'<circle cx="9.5" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2.5 4H5l2.2 11.5h10L19 7.5H6"/>',
   bulb:'<path d="M9.5 18h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.2 11.1c.5.3.7.8.7 1.4V16h5v-.5c0-.6.2-1.1.7-1.4A6 6 0 0 0 12 3Z"/>',
-  thumbUp:'<path d="M7 10.5V20H4.6a.6.6 0 0 1-.6-.6v-8.3a.6.6 0 0 1 .6-.6H7Z"/><path d="M7 10.5 11 3a2 2 0 0 1 2 2v3.5h5.4a2 2 0 0 1 2 2.4l-1.1 6A2 2 0 0 1 17.3 20H7"/>',
-  thumbDown:'<path d="M17 13.5V4h2.4a.6.6 0 0 1 .6.6v8.3a.6.6 0 0 1-.6.6H17Z"/><path d="M17 13.5 13 21a2 2 0 0 1-2-2v-3.5H5.6a2 2 0 0 1-2-2.4l1.1-6A2 2 0 0 1 6.7 4H17"/>',
+  traffic:'<rect x="8" y="2.5" width="8" height="19" rx="3"/><circle cx="12" cy="7" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="17" r="1.5"/>',
   x:'<path d="M18 6 6 18M6 6l12 12"/>',
   users:'<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.3a3 3 0 0 1 0 5.7"/><path d="M15.4 20a5.5 5.5 0 0 0-1.5-3.8"/>',
 };
@@ -169,7 +168,7 @@ async function etaReal(p) {
 // supermercado creyendo que es estacionamiento público gratis.
 // Categorías "no públicas" (hospital, colegio, etc.): ícono + etiqueta para
 // mostrarlas distinto. Devuelve '' si es estacionamiento público normal.
-const CAT_ICON = { Salud: 'access', Colegio: 'home', Estadio: 'star', Municipal: 'home', Camiones: 'truck', Terminal: 'car', Cultura: 'home' };
+const CAT_ICON = { Salud: 'access', Colegio: 'home', Estadio: 'starOutline', Municipal: 'home', Camiones: 'truck', Terminal: 'car', Cultura: 'home' };
 function catBadge(p) {
   if (!p.categoria) return '';
   const name = CAT_ICON[p.categoria] === 'star' ? 'starOutline' : (CAT_ICON[p.categoria] || 'pin');
@@ -497,7 +496,7 @@ function initMap() {
       options: { position: 'topright' },
       onAdd() {
         const b = L.DomUtil.create('button', 'leaflet-geo-btn leaflet-traffic-btn');
-        b.type = 'button'; b.innerHTML = '🚦'; b.title = 'Tráfico en vivo';
+        b.type = 'button'; b.innerHTML = ic('traffic', 20); b.title = 'Tráfico en vivo';
         b.setAttribute('aria-label', 'Mostrar tráfico en vivo');
         L.DomEvent.disableClickPropagation(b);
         L.DomEvent.on(b, 'click', () => toggleTrafico());
@@ -767,7 +766,7 @@ function openDetalle(id) {
       ? 'Gratis'
       : p.verificado
         ? (p.precioMin
-            ? `${CLP(p.precioMin)} / min · ~${CLP(p.precioHora)} / hora${p.fuente ? ` <span class="precio-fuente">fuente: ${esc(p.fuente)}</span>` : ''}`
+            ? `${CLP(p.precioMin)} / min · equivale a ≈${CLP(p.precioHora)}/hora${p.fuente ? ` <span class="precio-fuente">fuente: ${esc(p.fuente)}</span>` : ''}`
             : `${CLP(p.precioHora)} / hora`)
         : `~${CLP(p.precioHora)} / hora <span class="precio-est">estimado · sin verificar</span>`;
   const fav = LS.isFav(p.id);
@@ -897,7 +896,7 @@ async function cargarComentarios(id) {
 window.reportarPrecio = (id) => {
   const p = DATA.find((x) => x.id === id);
   // Contexto honesto: lo que estimamos hoy y lo que ya reportó la gente.
-  const ctx = p && !p.gratisAhora && p.precioHora > 0
+  const ctx = p && !p.gratisAhora && p.precioHora > 0 && !p.verificado
     ? `<p class="ap-ctx">Hoy estimamos <b>~${CLP(p.precioHora)}/hr</b>${p.comunidad?.precioReportado ? ` · la gente reporta <b>~${CLP(p.comunidad.precioReportado)}/hr</b>` : ''}. Tu dato real ayuda a afinarlo.</p>`
     : '';
   $('#modal').innerHTML = `
