@@ -603,6 +603,15 @@ main, .view { flex: 1; min-height: 0; }
 .modal input[type="number"] { width: 100%; border: 1px solid var(--line-2); border-radius: var(--r); padding: 12px; font-size: 16px; background: var(--bg); color: var(--text); outline: none; font-family: var(--font-mono); }
 .modal input[type="number"]:focus { border-color: var(--accent); }
 
+/* Reportar precio: campo "$ ___ / hora" y caja de contexto honesto */
+.ap-ctx { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; font-size: 12.5px; color: var(--muted); line-height: 1.45; margin-bottom: 14px; }
+.ap-ctx b { color: var(--text); font-family: var(--font-mono); }
+.precio-field { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line-2); border-radius: var(--r); padding: 2px 14px; background: var(--bg); transition: border-color .15s; }
+.precio-field:focus-within { border-color: var(--accent); }
+.modal .precio-field input[type="number"] { flex: 1; border: none; background: transparent; padding: 12px 0; font-size: 20px; }
+.precio-field .precio-pesos { color: var(--muted); font-family: var(--font-mono); font-size: 20px; }
+.precio-field .precio-hora { color: var(--muted); font-size: 13px; white-space: nowrap; }
+
 .pin { cursor: pointer; transition: transform .12s ease; }
 .pin:hover { transform: translateY(-50%) scale(1.08); }
 

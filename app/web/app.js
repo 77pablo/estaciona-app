@@ -835,19 +835,32 @@ async function cargarComentarios(id) {
   } catch { /* sin red: dejamos vacío */ }
 }
 window.reportarPrecio = (id) => {
+  const p = DATA.find((x) => x.id === id);
+  // Contexto honesto: lo que estimamos hoy y lo que ya reportó la gente.
+  const ctx = p && !p.gratisAhora && p.precioHora > 0
+    ? `<p class="ap-ctx">Hoy estimamos <b>~${CLP(p.precioHora)}/hr</b>${p.comunidad?.precioReportado ? ` · la gente reporta <b>~${CLP(p.comunidad.precioReportado)}/hr</b>` : ''}. Tu dato real ayuda a afinarlo.</p>`
+    : '';
   $('#modal').innerHTML = `
     <h3>${ic('wallet', 18)} Reportar precio real</h3>
-    <p>¿Cuánto cobran por hora aquí? Ayuda al resto con el dato real.</p>
-    <input id="ap-precio" type="number" inputmode="numeric" placeholder="Ej: 1000" />
+    <p>¿Cuánto cobran por hora aquí?</p>
+    ${ctx}
+    <div class="precio-field"><span class="precio-pesos">$</span>
+      <input id="ap-precio" type="number" inputmode="numeric" min="1" max="20000" placeholder="1000" aria-label="Precio por hora en pesos" />
+      <span class="precio-hora">/ hora</span></div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
       <button class="btn btn-primary" onclick="enviarPrecio('${id}')">Enviar precio</button>
       <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
     </div>`;
-  abrirModal(); setTimeout(() => $('#ap-precio')?.focus(), 60);
+  abrirModal();
+  setTimeout(() => {
+    const i = $('#ap-precio');
+    if (i) { i.focus(); i.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviarPrecio(id); }); }
+  }, 60);
 };
 window.enviarPrecio = (id) => {
-  const v = Number($('#ap-precio')?.value);
+  const v = Math.round(Number($('#ap-precio')?.value));
   if (!Number.isFinite(v) || v <= 0) { toast('Pon un precio válido'); return; }
+  if (v > 20000) { toast('Ese precio parece muy alto (máx $20.000/hr)'); return; }
   enviarAporte(id, { precio: v });
 };
 window.comentar = (id) => {
@@ -859,7 +872,11 @@ window.comentar = (id) => {
       <button class="btn btn-primary" onclick="enviarComentario('${id}')">Publicar</button>
       <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
     </div>`;
-  abrirModal(); setTimeout(() => $('#ap-texto')?.focus(), 60);
+  abrirModal();
+  setTimeout(() => {
+    const i = $('#ap-texto');
+    if (i) { i.focus(); i.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviarComentario(id); }); }
+  }, 60);
 };
 window.enviarComentario = (id) => {
   const t = ($('#ap-texto')?.value || '').trim();
