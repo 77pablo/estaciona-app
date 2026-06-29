@@ -845,6 +845,45 @@ function comprimirImagen(file, max = 1000, q = 0.7) {
     img.src = url;
   });
 }
+// --- Moderación automática de imágenes (en el navegador) --------------------
+// Antes de subir, una IA liviana (nsfwjs sobre TensorFlow.js) revisa la foto EN
+// EL CELULAR. Si parece contenido para adultos (desnudos/porno), se bloquea y NO
+// se sube: la imagen nunca sale del teléfono. La librería trae el modelo
+// incrustado (~2.7MB) y se baja una sola vez (queda en caché) la 1ª vez que
+// alguien sube una foto, para no penalizar la carga normal de la app.
+const TFJS_URL = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js';
+const NSFW_URL = 'https://cdn.jsdelivr.net/npm/nsfwjs@4.3.0/dist/browser/nsfwjs.min.js';
+let _modeloNSFW = null;            // promesa cacheada del modelo
+
+function cargarScript(src) {
+  return new Promise((ok, fail) => {
+    const s = document.createElement('script');
+    s.src = src; s.async = true;
+    s.onload = ok; s.onerror = () => fail(new Error('no cargó ' + src));
+    document.head.appendChild(s);
+  });
+}
+function modeloNSFW() {
+  return _modeloNSFW ??= (async () => {
+    if (!window.tf) await cargarScript(TFJS_URL);
+    if (!window.nsfwjs) await cargarScript(NSFW_URL);
+    return window.nsfwjs.load();      // usa el modelo incrustado en la librería
+  })();
+}
+// true si la imagen parece contenido para adultos. Si la IA no carga (sin red o
+// CDN bloqueado), devuelve false: preferimos dejar subir antes que romper la
+// función para todos (el caso normal — fotos de estacionamientos — pasa igual).
+async function fotoInapropiada(dataUrl) {
+  try {
+    const modelo = await modeloNSFW();
+    const img = new Image();
+    await new Promise((ok, fail) => { img.onload = ok; img.onerror = fail; img.src = dataUrl; });
+    const pred = await modelo.classify(img);
+    const prob = (clase) => pred.find((p) => p.className === clase)?.probability || 0;
+    return (prob('Porn') + prob('Hentai') > 0.55) || prob('Sexy') > 0.8;
+  } catch { return false; }
+}
+
 window.subirFoto = (id) => {
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'image/*';
@@ -852,9 +891,13 @@ window.subirFoto = (id) => {
     const file = inp.files?.[0];
     if (!file) return;
     if (!/^image\//.test(file.type)) { toast('Eso no es una imagen'); return; }
-    toast('Procesando foto…');
+    toast('Revisando la foto…');
     const dataUrl = await comprimirImagen(file).catch(() => null);
     if (!dataUrl) { toast('No se pudo procesar la imagen'); return; }
+    if (await fotoInapropiada(dataUrl)) {
+      toast('🚫 Esa foto parece contenido para adultos. No se subió.');
+      return;
+    }
     try {
       const r = await fetch('/api/foto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, dataUrl }) });
       const j = await r.json();
