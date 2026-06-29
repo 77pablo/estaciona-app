@@ -561,7 +561,9 @@ function iconHtml(p) {
   // El pin seleccionado siempre conserva su precio para no perderlo de vista.
   const zoom = map ? map.getZoom() : 16;
   if (zoom < 15 && !esSel) return `<div class="pin-dot ${nivel}"></div>`;
-  return `<div class="pin ${nivel}${esSel ? ' sel' : ''}">${ic(p.tipo === 'calle' ? 'road' : 'parking', 13)} ${precioCorto(p)}</div>`;
+  // Pin "P" circular (estilo parkspot); el seleccionado muestra el precio arriba.
+  const precio = esSel ? `<span class="pin-precio">${precioCorto(p)}</span>` : '';
+  return `<div class="pin-p ${nivel}${esSel ? ' sel' : ''}">${precio}P</div>`;
 }
 
 // Seleccionar = centrar el mapa en el lugar y resaltar su pin.
@@ -714,16 +716,30 @@ function renderLista() {
   $('#lista').innerHTML = lista.map((p) => {
     const d = p.disponibilidad, nivel = d.nivel;
     // Disponibilidad = estimación honesta (sin número falso de "cupos en vivo").
-    const disp = nivel === 'cerrado' ? '' : ` · <span class="dot ${nivel}"></span>${d.label}`;
+    const estadoTxt = nivel === 'cerrado' ? 'Cerrado'
+      : nivel === 'verde' ? 'Disponible'
+      : nivel === 'amarillo' ? 'Casi lleno' : 'Completo';
+    // La barra es un VISUAL del semáforo (no un conteo inventado de cupos).
+    const barPct = nivel === 'verde' ? 82 : nivel === 'amarillo' ? 45 : nivel === 'rojo' ? 15 : 6;
+    // "Rating" solo si hay datos REALES de la comunidad (votos de las últimas 3 h).
+    const votos = p.votos ? `<span class="card-rate" title="Votos de la comunidad">${ic('starFull', 12)} ${p.votos.up}</span>` : '';
     return `
-      <div class="card" data-id="${p.id}" role="button" tabindex="0" aria-label="${esc(p.nombre)}, ver detalle">
-        <div class="ic" aria-hidden="true">${ic(p.tipo === 'calle' ? 'road' : 'parking', 22)}</div>
-        <div class="info">
-          <div class="nm">${esc(p.nombre)} ${LS.isFav(p.id) ? ic('starFull', 13) : ''} ${catBadge(p)}</div>
-          <div class="sub">${estadoHTML(p)}${disp}</div>
-          <div class="meta">${ic('walk', 12)} ${walkMin(p.dist)} min · <span class="car-eta" style="color:${trafColor}" title="En auto con tráfico estimado ${traf.nivel}">${ic('car', 12)} ${carMin(p.dist)} min</span> · ${Math.round(p.dist)} m</div>
+      <div class="card ${nivel}${p.id === selectedId ? ' sel' : ''}" data-id="${p.id}" role="button" tabindex="0" aria-label="${esc(p.nombre)}, ver detalle">
+        <div class="card-main">
+          <div class="card-info">
+            <div class="nm"><span class="estado-dot ${nivel}" aria-hidden="true"></span><span class="nm-txt">${esc(p.nombre)}</span>${LS.isFav(p.id) ? ic('starFull', 12) : ''}${catBadge(p)}</div>
+            <div class="addr">${esc(p.direccion || p.ciudad || '')}</div>
+          </div>
+          <div class="price">${precioHTML(p)}</div>
         </div>
-        <div class="price">${precioHTML(p)}</div>
+        <div class="card-meta">
+          <span>${ic('walk', 12)} ${walkMin(p.dist)} min</span>
+          <span class="car-eta" style="color:${trafColor}" title="En auto · tráfico ${traf.nivel}">${ic('car', 12)} ${carMin(p.dist)} min</span>
+          <span>${Math.round(p.dist)} m</span>
+          ${votos}
+          <span class="badge-disp ${nivel}">${estadoTxt}</span>
+        </div>
+        <div class="disp-bar" aria-hidden="true"><i class="disp-fill ${nivel}" style="width:${barPct}%"></i></div>
       </div>`;
   }).join('');
 
