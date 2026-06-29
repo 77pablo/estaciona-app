@@ -16,6 +16,7 @@ import { dirname, join, normalize, extname } from 'node:path';
 import { getEstacionamientos } from './engine.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente } from './votos.js';
+import { registrarAporte, resumenAportes, aportesDe } from './aportes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = join(__dirname, '..', '..', 'web');
@@ -98,8 +99,28 @@ const server = http.createServer(async (req, res) => {
       const ciudad = url.searchParams.get('ciudad') || CENTRO.nombre;
       const lista = getEstacionamientos().filter((e) => e.ciudad === ciudad);
       const tally = await tallyReciente(3);            // votos de las últimas 3 h
-      for (const e of lista) { if (tally[e.id]) e.votos = tally[e.id]; }
+      const com = await resumenAportes();              // precios/comentarios de la gente
+      for (const e of lista) {
+        if (tally[e.id]) e.votos = tally[e.id];
+        if (com[e.id]) e.comunidad = com[e.id];
+      }
       return sendJSON(res, 200, { centro: CENTRO, zonas: ZONAS, regiones: REGIONES, estacionamientos: lista });
+    }
+    if (url.pathname === '/api/aporte' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (c) => { body += c; if (body.length > 20000) req.destroy(); });
+      req.on('end', async () => {
+        try {
+          const { id, precio, texto } = JSON.parse(body || '{}');
+          const ok = await registrarAporte(id, precio, texto);
+          sendJSON(res, ok ? 200 : 400, { ok });
+        } catch { sendJSON(res, 400, { error: 'json inválido' }); }
+      });
+      return;
+    }
+    if (url.pathname === '/api/aportes' && req.method === 'GET') {
+      const id = url.searchParams.get('id') || '';
+      return sendJSON(res, 200, await aportesDe(id));
     }
     if (url.pathname === '/api/voto' && req.method === 'POST') {
       let body = '';

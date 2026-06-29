@@ -701,6 +701,16 @@ function openDetalle(id) {
         </span></div>
       ${p.votos ? `<div class="votos-info">${ic('users', 14)} Últimas 3 h: <b>${p.votos.up}</b> dijeron que había cupo · <b>${p.votos.down}</b> que no</div>` : ''}
       <p class="disclaimer">${ic('bulb', 15)} ${p.verificado ? 'Precio confirmado.' : '<b>Precio estimado, sin verificar.</b> Es una referencia generada automáticamente — confirma la tarifa real en el lugar.'}</p>
+
+      <div class="comunidad">
+        <h4>${ic('users', 15)} La comunidad</h4>
+        ${p.comunidad?.precioReportado ? `<div class="com-precio">${ic('wallet', 14)} La gente reporta <b>~${CLP(p.comunidad.precioReportado)}/hr</b> · ${p.comunidad.nPrecios} reporte${p.comunidad.nPrecios > 1 ? 's' : ''}</div>` : ''}
+        <div id="com-lista" class="com-lista"></div>
+        <div class="com-acciones">
+          <button class="btn btn-second" onclick="reportarPrecio('${p.id}')">${ic('wallet', 16)} Reportar precio</button>
+          <button class="btn btn-second" onclick="comentar('${p.id}')">${ic('edit', 16)} Comentar</button>
+        </div>
+      </div>
     </div>
     <div class="det-actions">
       <button class="btn btn-primary" onclick="llevame('${p.id}')">${ic('compass', 17)} Llévame</button>
@@ -725,10 +735,71 @@ function openDetalle(id) {
     }
   });
 
+  cargarComentarios(p.id);                    // trae los comentarios de la gente
+
   const det = $('#detalle');
   det.classList.add('open');
   _focoPrevio = document.activeElement;       // recuerda dónde estaba el foco
   det.setAttribute('tabindex', '-1'); det.focus();   // mueve el foco al diálogo (lector de pantalla)
+}
+
+// --- Aportes de la comunidad (precios + comentarios) ------------------------
+function fechaCorta(ts) {
+  const d = (Date.now() - ts) / 86400000;
+  if (d < 1) return 'hoy'; if (d < 2) return 'ayer';
+  return `hace ${Math.floor(d)} días`;
+}
+async function cargarComentarios(id) {
+  try {
+    const r = await fetch(`/api/aportes?id=${encodeURIComponent(id)}`);
+    if (!r.ok) return;
+    const j = await r.json();
+    const el = $('#com-lista');
+    if (!el || detalleAbiertoId !== id) return;
+    el.innerHTML = j.comentarios?.length
+      ? j.comentarios.map((c) => `<div class="com-item"><span>${esc(c.texto)}</span><span class="com-fecha">${fechaCorta(c.ts)}</span></div>`).join('')
+      : '<div class="com-vacio">Aún no hay comentarios. ¡Sé el primero!</div>';
+  } catch { /* sin red: dejamos vacío */ }
+}
+window.reportarPrecio = (id) => {
+  $('#modal').innerHTML = `
+    <h3>${ic('wallet', 18)} Reportar precio real</h3>
+    <p>¿Cuánto cobran por hora aquí? Ayuda al resto con el dato real.</p>
+    <input id="ap-precio" type="number" inputmode="numeric" placeholder="Ej: 1000" />
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="enviarPrecio('${id}')">Enviar precio</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
+  abrirModal(); setTimeout(() => $('#ap-precio')?.focus(), 60);
+};
+window.enviarPrecio = (id) => {
+  const v = Number($('#ap-precio')?.value);
+  if (!Number.isFinite(v) || v <= 0) { toast('Pon un precio válido'); return; }
+  enviarAporte(id, { precio: v });
+};
+window.comentar = (id) => {
+  $('#modal').innerHTML = `
+    <h3>${ic('edit', 18)} Agregar comentario</h3>
+    <p>Cuenta cómo es: acceso, seguridad, el servicio…</p>
+    <input id="ap-texto" type="text" maxlength="280" placeholder="Ej: amplio, seguro, fácil de entrar" />
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="enviarComentario('${id}')">Publicar</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
+  abrirModal(); setTimeout(() => $('#ap-texto')?.focus(), 60);
+};
+window.enviarComentario = (id) => {
+  const t = ($('#ap-texto')?.value || '').trim();
+  if (!t) { toast('Escribe algo'); return; }
+  enviarAporte(id, { texto: t });
+};
+async function enviarAporte(id, body) {
+  try {
+    const r = await fetch('/api/aporte', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) });
+    const j = await r.json();
+    if (j.ok) { cerrarModal(); toast('¡Gracias por tu aporte!'); cargar(); if (detalleAbiertoId === id) openDetalle(id); }
+    else toast('No se pudo enviar el aporte');
+  } catch { toast('Sin conexión'); }
 }
 window.cerrarDetalle = () => {
   detalleAbiertoId = null;
