@@ -45,6 +45,30 @@ export async function fotosDe(id) {
   } catch { return []; }
 }
 
+// --- Moderación ---
+// Fotos recientes de TODO el país (para el panel admin). Máx n.
+export async function fotosRecientes(n = 80) {
+  const out = [];
+  try {
+    const dirs = await readdir(FOTOS_DIR);
+    for (const sid of dirs) {
+      const files = await readdir(join(FOTOS_DIR, sid)).catch(() => []);
+      for (const f of files) {
+        if (!/\.(jpg|png|webp)$/i.test(f)) continue;
+        out.push({ id: sid, url: `/fotos/${sid}/${f}`, file: f, ts: parseInt(f, 10) || 0 });
+      }
+    }
+  } catch { /* sin carpeta aún */ }
+  return out.sort((a, b) => b.ts - a.ts).slice(0, n);
+}
+// Borra una foto (id del lugar + archivo). Devuelve true si la borró.
+export async function eliminarFoto(id, file) {
+  const sid = slugId(id);
+  const f = String(file || '').replace(/[^a-z0-9._-]/gi, '');
+  if (!sid || !/\.(jpg|png|webp)$/i.test(f)) return false;
+  try { await rm(join(FOTOS_DIR, sid, f)); return true; } catch { return false; }
+}
+
 // Sirve el archivo de una foto (ruta /fotos/<id>/<archivo>), seguro contra traversal.
 export async function servirFoto(res, urlPath) {
   const partes = urlPath.replace(/^\/fotos\//, '').split('/');

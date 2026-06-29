@@ -16,8 +16,8 @@ import { dirname, join, normalize, extname } from 'node:path';
 import { getEstacionamientos } from './engine.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente } from './votos.js';
-import { registrarAporte, resumenAportes, aportesDe } from './aportes.js';
-import { guardarFoto, fotosDe, servirFoto } from './fotos.js';
+import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte } from './aportes.js';
+import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto } from './fotos.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = join(__dirname, '..', '..', 'web');
@@ -40,6 +40,9 @@ const TOMTOM_KEY = leerKey('TOMTOM_KEY', 'tomtom.key');   // tráfico en vivo + 
 // (ej. en local), la app queda abierta sin fricción. Para abrirla al público:
 // borrar la variable ACCESO_CLAVE en Railway.
 const ACCESO_CLAVE = (process.env.ACCESO_CLAVE || '').trim();
+// Clave de MODERACIÓN (solo Abel). Para borrar comentarios/fotos en /admin.
+const ADMIN_CLAVE = leerKey('ADMIN_CLAVE', 'admin.key');
+const esAdmin = (url) => !!ADMIN_CLAVE && url.searchParams.get('clave') === ADMIN_CLAVE;
 function autorizado(req) {
   if (!ACCESO_CLAVE) return true;                 // sin clave configurada => app pública
   const m = (req.headers.authorization || '').match(/^Basic\s+(.+)$/i);
@@ -65,7 +68,7 @@ function sendJSON(res, status, data) {
 }
 
 // Rutas "bonitas": la landing es la portada (/), la app vive en /app.
-const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html' };
+const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html' };
 
 async function serveStatic(res, urlPath) {
   const rel = ALIAS[urlPath] || urlPath;
@@ -140,6 +143,25 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname.startsWith('/fotos/') && req.method === 'GET') {
       return await servirFoto(res, url.pathname);
+    }
+    if (url.pathname === '/api/mod/feed' && req.method === 'GET') {
+      if (!esAdmin(url)) return sendJSON(res, 403, { error: 'no autorizado' });
+      return sendJSON(res, 200, { comentarios: await comentariosRecientes(), fotos: await fotosRecientes() });
+    }
+    if (url.pathname === '/api/mod/borrar' && req.method === 'POST') {
+      if (!esAdmin(url)) return sendJSON(res, 403, { error: 'no autorizado' });
+      let body = '';
+      req.on('data', (c) => { body += c; if (body.length > 10000) req.destroy(); });
+      req.on('end', async () => {
+        try {
+          const { tipo, id, ts, file } = JSON.parse(body || '{}');
+          let ok = false;
+          if (tipo === 'comentario') ok = (await eliminarAporte(id, ts)) > 0;
+          else if (tipo === 'foto') ok = await eliminarFoto(id, file);
+          sendJSON(res, ok ? 200 : 400, { ok });
+        } catch { sendJSON(res, 400, { ok: false }); }
+      });
+      return;
     }
     if (url.pathname === '/api/voto' && req.method === 'POST') {
       let body = '';

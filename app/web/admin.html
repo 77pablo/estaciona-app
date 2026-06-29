@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>Estaciona — Moderación</title>
+<style>
+  :root{ --bg:#0e0f12; --surface:#16181d; --surface2:#1d2026; --text:#f4f2ec; --muted:#8b8f98; --line:rgba(244,242,236,.14); --accent:#c9f24e; --red:#e2675a; }
+  *{box-sizing:border-box;margin:0;padding:0;font-family:"Inter",system-ui,sans-serif}
+  body{background:var(--bg);color:var(--text);padding:20px;max-width:760px;margin:0 auto;-webkit-font-smoothing:antialiased}
+  h1{font-size:22px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+  .row{display:flex;gap:8px;margin-bottom:18px}
+  input{flex:1;background:var(--surface2);border:1px solid var(--line);border-radius:7px;padding:12px;color:var(--text);font-size:15px;outline:none}
+  input:focus{border-color:var(--accent)}
+  button{border:none;border-radius:7px;padding:12px 16px;font-weight:700;cursor:pointer;font-size:14px}
+  .btn{background:var(--accent);color:#0e0f12}
+  .del{background:transparent;border:1px solid var(--red);color:var(--red);padding:7px 12px;font-size:13px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:22px 0 10px}
+  .item{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;justify-content:space-between}
+  .item .meta{font-size:11px;color:var(--muted);margin-top:3px}
+  .item .txt{font-size:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+  .foto{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .foto img{width:100%;height:110px;object-fit:cover;display:block}
+  .foto .bar{padding:8px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+  .foto .bar small{font-size:10px;color:var(--muted)}
+  .vacio{color:var(--muted);font-size:14px;padding:8px 0}
+  .err{color:var(--red);font-size:14px}
+  #panel{display:none}
+</style>
+</head>
+<body>
+  <h1>🛡️ Moderación · Estaciona</h1>
+  <p class="sub">Revisa y elimina comentarios o fotos inapropiados aportados por la gente.</p>
+
+  <div id="login">
+    <div class="row">
+      <input id="clave" type="password" placeholder="Clave de moderación" autocomplete="off" />
+      <button class="btn" onclick="entrar()">Entrar</button>
+    </div>
+    <p id="loginErr" class="err"></p>
+  </div>
+
+  <div id="panel">
+    <h2>Comentarios recientes</h2>
+    <div id="comentarios"></div>
+    <h2>Fotos recientes</h2>
+    <div id="fotos" class="grid"></div>
+  </div>
+
+<script>
+  let CLAVE = '';
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const fecha = (ts) => new Date(ts).toLocaleString('es-CL', { timeZone: 'America/Santiago' });
+
+  async function entrar() {
+    CLAVE = $('#clave').value.trim();
+    if (!CLAVE) return;
+    const r = await fetch('/api/mod/feed?clave=' + encodeURIComponent(CLAVE));
+    if (r.status === 403) { $('#loginErr').textContent = 'Clave incorrecta.'; return; }
+    if (!r.ok) { $('#loginErr').textContent = 'Error al cargar.'; return; }
+    $('#login').style.display = 'none';
+    $('#panel').style.display = 'block';
+    render(await r.json());
+  }
+
+  function render(data) {
+    const com = $('#comentarios');
+    com.innerHTML = data.comentarios.length ? data.comentarios.map((c) => `
+      <div class="item" data-ts="${c.ts}">
+        <div><div class="txt">${esc(c.texto)}</div><div class="meta">${esc(c.id)} · ${fecha(c.ts)}</div></div>
+        <button class="del" onclick="borrar(this,'comentario','${esc(c.id)}',${c.ts})">Eliminar</button>
+      </div>`).join('') : '<div class="vacio">Sin comentarios.</div>';
+
+    const ft = $('#fotos');
+    ft.innerHTML = data.fotos.length ? data.fotos.map((f) => `
+      <div class="foto">
+        <a href="${f.url}" target="_blank" rel="noopener"><img src="${f.url}" loading="lazy" /></a>
+        <div class="bar"><small>${esc(f.id)}</small><button class="del" onclick="borrar(this,'foto','${esc(f.id)}',0,'${esc(f.file)}')">Eliminar</button></div>
+      </div>`).join('') : '<div class="vacio">Sin fotos.</div>';
+  }
+
+  async function borrar(btn, tipo, id, ts, file) {
+    if (!confirm('¿Eliminar este ' + tipo + '?')) return;
+    const r = await fetch('/api/mod/borrar?clave=' + encodeURIComponent(CLAVE), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo, id, ts, file }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (j.ok) { const card = btn.closest('.item, .foto'); if (card) card.remove(); }
+    else alert('No se pudo eliminar.');
+  }
+  $('#clave').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
+</script>
+</body>
+</html>

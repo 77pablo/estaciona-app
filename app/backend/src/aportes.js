@@ -67,6 +67,22 @@ export async function resumenAportes() {
   return out;
 }
 
+// --- Moderación ---
+// Comentarios recientes de TODO el país (para el panel admin). Máx n.
+export async function comentariosRecientes(n = 80) {
+  await cargar();
+  return aportes.filter((a) => a.texto).sort((a, b) => b.ts - a.ts).slice(0, n)
+    .map((a) => ({ id: a.id, texto: a.texto, ts: a.ts }));
+}
+// Borra un aporte por (id del lugar + ts). Devuelve cuántos borró.
+export async function eliminarAporte(id, ts) {
+  await cargar();
+  const antes = aportes.length;
+  aportes = aportes.filter((a) => !(a.id === id && a.ts === ts));
+  if (aportes.length !== antes) await guardar();
+  return antes - aportes.length;
+}
+
 // Detalle completo de un lugar: comentarios recientes (máx 30).
 export async function aportesDe(id) {
   await cargar();

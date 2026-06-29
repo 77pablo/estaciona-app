@@ -22,3 +22,6 @@ tomtom.key
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Clave de moderación local (en Railway: ADMIN_CLAVE)
+admin.key
