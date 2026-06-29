@@ -13,7 +13,9 @@ const API = '/api/estacionamientos';
 
 // Estado en memoria.
 let DATA = [];
-let CENTRO = { lat: -38.7395, lng: -72.5970, nombre: 'Temuco Centro' };
+let CENTRO = { lat: -38.7359, lng: -72.5905, nombre: 'Temuco' };
+let ZONAS = [];                    // ciudades de la región con datos (del backend)
+let ciudadActual = 'Temuco';       // ciudad que se está mirando ahora
 let USER = { ...CENTRO };          // "estás aquí" (Temuco por defecto)
 let map = null, markers = {}, meMarker = null;
 let miniMap = null;                 // mini-mapa de la vista "Mi auto"
@@ -139,6 +141,49 @@ const estadoHTML = (p) => p.abierto
   ? '<span class="estado abierto">● Abierto</span>'
   : '<span class="estado cerrado-lbl">● Cerrado</span>';
 
+// --- Zonas / ciudades de la región ------------------------------------------
+// Ciudad de la región más cercana a un punto (para detectar dónde estás).
+function zonaMasCercana(pt) {
+  let best = null, bd = Infinity;
+  for (const z of ZONAS) {
+    const d = haversine(pt, z);
+    if (d < bd) { bd = d; best = z; }
+  }
+  return { zona: best, dist: bd };
+}
+// Llena el selector del header con las ciudades (nombre + cantidad).
+function poblarSelectorCiudades() {
+  const sel = $('#ciudad-select');
+  if (!sel || !ZONAS.length) return;
+  sel.innerHTML = ZONAS.map((z) => `<option value="${z.nombre}">${z.nombre} (${z.cantidad})</option>`).join('');
+  sel.value = ciudadActual;
+}
+// Ajusta la ciudad actual a la más cercana a un punto (sin mover el mapa).
+// Devuelve true si la cambió (el punto está dentro de la región cubierta).
+function ciudadPorPunto(pt, maxDist = 40000) {
+  const { zona, dist } = zonaMasCercana(pt);
+  if (zona && dist < maxDist) {
+    ciudadActual = zona.nombre;
+    const sel = $('#ciudad-select');
+    if (sel) sel.value = zona.nombre;
+    return true;
+  }
+  return false;
+}
+// Cambia la ciudad que se está mirando: centra el mapa y filtra la lista.
+function cambiarCiudad(nombre, mover = true) {
+  const z = ZONAS.find((x) => x.nombre === nombre);
+  if (!z) return;
+  ciudadActual = nombre;
+  const sel = $('#ciudad-select');
+  if (sel) sel.value = nombre;
+  if (mover) {
+    USER = { lat: z.lat, lng: z.lng };
+    if (map) { map.setView([z.lat, z.lng], 15); meMarker?.setLatLng([z.lat, z.lng]); }
+  }
+  renderLista();
+}
+
 // --- localStorage (datos en el teléfono) ------------------------------------
 const LS = {
   getFavs: () => JSON.parse(localStorage.getItem('estaciona_favs') || '[]'),
@@ -262,7 +307,9 @@ function listaFiltrada() {
   return DATA
     .map((p) => ({ ...p, dist: haversine(USER, p) }))
     .filter((p) => {
-      if (q && !(norm(p.nombre).includes(q) || norm(p.direccion).includes(q))) return false;
+      // Regional: por defecto solo la ciudad elegida (salvo que se busque por texto).
+      if (!q && p.ciudad !== ciudadActual) return false;
+      if (q && !(norm(p.nombre).includes(q) || norm(p.direccion).includes(q) || norm(p.ciudad).includes(q))) return false;
       if (filtros.gratis && !(p.precioHora === 0 || p.gratisAhora)) return false;
       if (filtros.barato && !(p.precioHora < 1000)) return false;
       if (filtros.techado && !p.atributos.techado) return false;
@@ -304,7 +351,8 @@ function actualizarBadgeFiltros() {
 function renderLista() {
   const lista = listaFiltrada();
   updateMarkers(lista);
-  $('#sheet-count').textContent = `${lista.length} estacionamiento${lista.length === 1 ? '' : 's'} cerca`;
+  const dondeTxt = query ? 'en tu búsqueda' : `en ${ciudadActual}`;
+  $('#sheet-count').textContent = `${lista.length} estacionamiento${lista.length === 1 ? '' : 's'} ${dondeTxt}`;
 
   const sheet = document.querySelector('.sheet');
   const sc = sheet ? sheet.scrollTop : 0;   // preservar scroll (no "saltar")
@@ -624,7 +672,8 @@ function renderFavoritos() {
 window.irLugar = (k) => {
   const l = LUGARES[k];
   USER = { lat: l.lat, lng: l.lng }; irA('buscar');
-  if (map) { map.setView([l.lat, l.lng], 16); meMarker?.setLatLng([l.lat, l.lng]); }
+  ciudadPorPunto(USER);                 // ajusta la ciudad a la del lugar guardado
+  if (map) { map.setView([l.lat, l.lng], 15); meMarker?.setLatLng([l.lat, l.lng]); }
   renderLista(); toast(`Mostrando cerca de ${LUGARES_DEF[k].nombre}`);
 };
 
@@ -689,17 +738,17 @@ function usarMiUbicacion() {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       const me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      const lejos = haversine(me, CENTRO) > 30000; // >30 km de la zona piloto
-      if (lejos) {
-        toast('Aún no cubrimos tu zona — te muestro Temuco');
-        USER = { ...CENTRO };
-        if (map) { map.setView([CENTRO.lat, CENTRO.lng], 16); meMarker?.setLatLng([CENTRO.lat, CENTRO.lng]); }
-      } else {
-        USER = me;
-        if (map) { map.setView([me.lat, me.lng], 16); meMarker?.setLatLng([me.lat, me.lng]); }
-        toast('Usando tu ubicación 📍');
-        iniciarSeguimiento();   // el punto azul te sigue mientras te mueves
+      const { zona, dist } = zonaMasCercana(me);
+      if (!zona || dist > 30000) {       // a >30 km de cualquier ciudad con datos
+        toast(`Aún no cubrimos bien tu zona — te muestro ${CENTRO.nombre}`);
+        cambiarCiudad(CENTRO.nombre, true);
+        return;
       }
+      USER = me;
+      ciudadPorPunto(me);                 // ciudad = la más cercana
+      if (map) { map.setView([me.lat, me.lng], 15); meMarker?.setLatLng([me.lat, me.lng]); }
+      toast(`📍 Estás en ${zona.nombre}`);
+      iniciarSeguimiento();               // el punto azul te sigue mientras te mueves
       renderLista();
     },
     () => toast('No pudimos obtener tu ubicación'),
@@ -713,7 +762,7 @@ function iniciarSeguimiento() {
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
       const me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      if (haversine(me, CENTRO) > 30000) return;   // fuera de zona piloto: ignora
+      if (zonaMasCercana(me).dist > 80000) return;  // claramente fuera de la región
       USER = me;
       meMarker?.setLatLng([me.lat, me.lng]);        // mueve el punto, sin recentrar
     },
@@ -734,7 +783,9 @@ async function geocodificar(texto) {
     if (!arr.length) { toast('No encontré ese lugar — filtro la lista'); renderLista(); return; }
     const lat = parseFloat(arr[0].lat), lng = parseFloat(arr[0].lon);
     USER = { lat, lng };
-    if (map) { map.setView([lat, lng], 16); meMarker?.setLatLng([lat, lng]); }
+    ciudadPorPunto(USER);                 // salta a la ciudad de la región más cercana
+    query = ''; $('#search').value = '';  // limpia la búsqueda para ver esa ciudad
+    if (map) { map.setView([lat, lng], 15); meMarker?.setLatLng([lat, lng]); }
     renderLista();
     toast('📍 ' + (arr[0].display_name || q).split(',')[0]);
   } catch {
@@ -893,7 +944,8 @@ async function cargar() {
     if (!r.ok) throw new Error('http ' + r.status);
     const j = await r.json();
     DATA = j.estacionamientos;
-    if (j.centro) { CENTRO = j.centro; $('#loc-label').textContent = CENTRO.nombre; }
+    if (j.centro) CENTRO = j.centro;
+    if (j.zonas && j.zonas.length && !ZONAS.length) { ZONAS = j.zonas; poblarSelectorCiudades(); }
     cargado = true;
     renderLista();
     refrescarDetalle();
@@ -918,7 +970,7 @@ function mostrarBienvenida() {
   o.innerHTML = `<div class="onboard-card" role="dialog" aria-label="Bienvenida">
     <div class="onboard-ic" aria-hidden="true">🅿️</div>
     <h3>¡Bienvenido a Estaciona!</h3>
-    <p>Es una <b>demo</b> de la zona del Centro de Temuco: te mostramos dónde estacionar, cuánto cobran y si es gratis.</p>
+    <p>Versión <b>piloto</b> para la <b>Región de La Araucanía</b>: te mostramos dónde estacionar, cuánto cobran y si es gratis, ciudad por ciudad.</p>
     <ul class="onboard-list">
       <li>🔓 Funciona <b>sin cuenta</b>: tus favoritos y tu auto se guardan solo en este teléfono.</li>
       <li>📍 Toca el botón de ubicación para ver lo más cercano a ti.</li>
@@ -955,6 +1007,8 @@ function init() {
   actualizarBadgeFiltros();
   // Selector de orden de la lista (cercanía / precio).
   $('#sheet-order').addEventListener('change', (e) => { orden = e.target.value; renderLista(); });
+  // Selector de ciudad (header): cambia la zona que se está mirando.
+  $('#ciudad-select').addEventListener('change', (e) => cambiarCiudad(e.target.value, true));
   // Buscador: filtra la lista en vivo; con Enter, geocodifica la dirección/lugar.
   $('#search').addEventListener('input', (e) => { query = e.target.value; renderLista(); });
   $('#search').addEventListener('keydown', (e) => { if (e.key === 'Enter') geocodificar(e.target.value); });
@@ -964,6 +1018,7 @@ function init() {
     const c = map.getCenter();
     USER = { lat: c.lat, lng: c.lng };
     meMarker?.setLatLng([c.lat, c.lng]);
+    ciudadPorPunto(USER);                 // si el centro quedó en otra ciudad, cámbiala
     $('#btn-zona').classList.remove('show');
     renderLista();
     toast('Buscando en esta zona 🔄');

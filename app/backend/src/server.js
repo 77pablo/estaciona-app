@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
 import { getEstacionamientos } from './engine.js';
-import { CENTRO } from './data.js';
+import { CENTRO, ZONAS } from './data.js';
 import { registrarVoto, tallyReciente } from './votos.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -57,7 +57,7 @@ const server = http.createServer(async (req, res) => {
       const lista = getEstacionamientos();
       const tally = await tallyReciente(3);            // votos de las últimas 3 h
       for (const e of lista) { if (tally[e.id]) e.votos = tally[e.id]; }
-      return sendJSON(res, 200, { centro: CENTRO, estacionamientos: lista });
+      return sendJSON(res, 200, { centro: CENTRO, zonas: ZONAS, estacionamientos: lista });
     }
     if (url.pathname === '/api/voto' && req.method === 'POST') {
       let body = '';

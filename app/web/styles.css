@@ -43,6 +43,13 @@ body {
 }
 .appbar .brand { font-size: 18px; }
 .appbar .loc { font-size: 13px; opacity: .9; }
+/* Selector de ciudad en el header */
+.loc-select-wrap { display: flex; align-items: center; gap: 4px; color: #fff; font-size: 13px; }
+.loc-select {
+  background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.4);
+  border-radius: 10px; padding: 5px 8px; font-size: 13px; font-weight: 700; cursor: pointer; max-width: 180px;
+}
+.loc-select option { color: var(--text); background: var(--card); }
 
 /* Vistas */
 main, .view { flex: 1; min-height: 0; }
