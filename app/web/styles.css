@@ -107,11 +107,11 @@ body {
 .appbar .loc { font-size: 13px; opacity: .9; }
 .loc-select-wrap { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
 .loc-select {
-  background: transparent; color: var(--text); border: 1px solid var(--line-2); border-radius: var(--r);
-  padding: 7px 10px; font-size: 12px; font-weight: 600; cursor: pointer; max-width: 190px;
-  font-family: var(--font-ui); transition: border-color .15s;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--line-2); border-radius: var(--r);
+  padding: 7px 11px; font-size: 13px; font-weight: 700; cursor: pointer; max-width: 210px;
+  font-family: var(--font-ui); transition: border-color .15s, background .15s;
 }
-.loc-select:hover { border-color: var(--accent); }
+.loc-select:hover, .loc-select:focus-visible { border-color: var(--accent); background: var(--surface); }
 .loc-select option { color: var(--text); background: var(--surface-2); }
 .loc-select optgroup { color: var(--muted); font-style: normal; font-weight: 700; }
 
@@ -127,9 +127,34 @@ main, .view { flex: 1; min-height: 0; }
   box-shadow: var(--shadow-soft); flex-shrink: 0; transition: border-color .15s;
 }
 .searchbar:focus-within { border-color: var(--accent); }
-.searchbar input { flex: 1; border: none; outline: none; font-size: 15px; background: transparent; color: var(--text); font-family: var(--font-ui); }
+.searchbar input { flex: 1; min-width: 0; border: none; outline: none; font-size: 15px; background: transparent; color: var(--text); font-family: var(--font-ui); }
 .searchbar input::placeholder { color: var(--muted); }
 .searchbar button { border: none; background: transparent; font-size: 18px; cursor: pointer; line-height: 1; color: var(--text); }
+
+/* Botón "X" para limpiar la búsqueda (aparece solo si hay texto). */
+.search-clear {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%; color: var(--muted);
+  flex-shrink: 0; transition: background .15s, color .15s;
+}
+.search-clear:hover, .search-clear:focus-visible { background: var(--line-2); color: var(--text); }
+.search-clear[hidden] { display: none; }
+
+/* Spinner mientras se busca la dirección (geocodificación). */
+.search-spin {
+  width: 17px; height: 17px; flex-shrink: 0; border-radius: 50%;
+  border: 2px solid var(--line-2); border-top-color: var(--accent);
+  animation: searchSpin .7s linear infinite;
+}
+.search-spin[hidden] { display: none; }
+@keyframes searchSpin { to { transform: rotate(360deg); } }
+.searchbar.is-searching { border-color: var(--accent); }
+
+/* Solo para lectores de pantalla (no afecta el layout). */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 
 .chips { display: flex; gap: 8px; padding: 0 14px 12px; overflow-x: auto; flex-shrink: 0; }
 .chip {

@@ -266,6 +266,7 @@ function poblarSelectorCiudades() {
     .map((r) => `<optgroup label="${esc(r)}">${porRegion[r].map(opt).join('')}</optgroup>`)
     .join('');
   sel.value = ciudadActual;
+  sel.title = `Ciudad: ${ciudadActual}`;   // tooltip con la ciudad completa (por si se trunca)
 }
 // Ajusta la ciudad actual a la más cercana a un punto (sin mover el mapa).
 // Devuelve true si la cambió (el punto está dentro de la región cubierta).
@@ -274,7 +275,7 @@ function ciudadPorPunto(pt, maxDist = 40000) {
   if (zona && dist < maxDist) {
     ciudadActual = zona.nombre;
     const sel = $('#ciudad-select');
-    if (sel) sel.value = zona.nombre;
+    if (sel) { sel.value = zona.nombre; sel.title = `Ciudad: ${zona.nombre}`; }
     return true;
   }
   return false;
@@ -285,7 +286,7 @@ function cambiarCiudad(nombre, mover = true) {
   if (!z) return;
   ciudadActual = nombre;
   const sel = $('#ciudad-select');
-  if (sel) sel.value = nombre;
+  if (sel) { sel.value = nombre; sel.title = `Ciudad: ${nombre}`; }
   if (mover) {
     USER = { lat: z.lat, lng: z.lng };
     if (map) { map.setView([z.lat, z.lng], 15); meMarker?.setLatLng([z.lat, z.lng]); }
@@ -671,22 +672,28 @@ function renderLista() {
   if (lista.length === 0) {
     const hayFiltros = contarFiltros() > 0;
     const hayQuery = !!query.trim();
-    // Distinción honesta: ¿la ciudad no tiene datos, o los filtros/búsqueda no
-    // dejaron pasar nada? El mensaje y la salida cambian según el caso.
-    if (!hayFiltros && !hayQuery) {
+    // Tres casos honestos: (1) búsqueda activa sin match → ofrecer buscarla como
+    // dirección en el mapa; (2) filtros sin resultado → limpiar filtros; (3) la
+    // ciudad simplemente no tiene datos cargados todavía.
+    if (hayQuery) {
+      $('#lista').innerHTML = `<div class="empty-big">
+        <span class="em">${ic('search', 44)}</span>
+        <div class="empty-tit">Sin coincidencias para “${esc(query)}”</div>
+        <p>¿Es una dirección o lugar? Búscalo directamente en el mapa.</p>
+        <button class="btn btn-primary" style="margin-top:14px" onclick="buscarComoDireccion()">${ic('pin', 16)} Buscar “${esc(query)}” en el mapa</button>
+      </div>`;
+    } else if (hayFiltros) {
+      $('#lista').innerHTML = `<div class="empty-big">
+        <span class="em">${ic('search', 44)}</span>
+        <div class="empty-tit">Sin resultados con esos filtros</div>
+        <p>Ningún estacionamiento cumple los filtros activos. Prueba aflojando alguno.</p>
+        <button class="btn btn-primary" style="margin-top:14px" onclick="limpiarFiltros()">${ic('filters', 16)} Limpiar filtros</button>
+      </div>`;
+    } else {
       $('#lista').innerHTML = `<div class="empty-big">
         <span class="em">${ic('pin', 44)}</span>
         <div class="empty-tit">Aún no tenemos datos de ${esc(ciudadActual)}</div>
         <p>Todavía no cargamos estacionamientos en esta ciudad. Vamos sumando zonas de a poco — prueba con otra ciudad desde el selector de arriba.</p>
-      </div>`;
-    } else {
-      $('#lista').innerHTML = `<div class="empty-big">
-        <span class="em">${ic('search', 44)}</span>
-        <div class="empty-tit">Sin resultados ${hayQuery ? 'para tu búsqueda' : 'con esos filtros'}</div>
-        <p>${hayQuery
-          ? 'No encontramos estacionamientos que coincidan. Prueba con otra palabra o revisa los filtros.'
-          : 'Ningún estacionamiento cumple los filtros activos. Prueba aflojando alguno.'}</p>
-        ${hayFiltros ? `<button class="btn btn-primary" style="margin-top:14px" onclick="limpiarFiltros()">${ic('filters', 16)} Limpiar filtros</button>` : ''}
       </div>`;
     }
     return;
@@ -1429,10 +1436,39 @@ function iniciarSeguimiento() {
   );
 }
 
+// --- Estado visible del buscador (X para limpiar + spinner "buscando…") ------
+// Muestra/oculta la "X" de limpiar según haya texto (y nunca durante una búsqueda).
+function actualizarBotonLimpiar() {
+  const btn = $('#search-clear'), inp = $('#search');
+  if (!btn || !inp) return;
+  btn.hidden = buscando || !inp.value;
+}
+// Limpia el buscador y vuelve a mostrar la ciudad actual.
+function limpiarBusqueda() {
+  const inp = $('#search');
+  query = '';
+  if (inp) { inp.value = ''; inp.focus(); }
+  actualizarBotonLimpiar();
+  renderLista();
+}
+// Pone/quita el estado "buscando…": spinner girando en vez de la X.
+let buscando = false;
+function setBuscando(on) {
+  buscando = on;
+  const bar = document.querySelector('.searchbar');
+  const spin = $('#search-spin'), inp = $('#search');
+  if (bar) bar.classList.toggle('is-searching', on);
+  if (spin) spin.hidden = !on;
+  if (inp) inp.setAttribute('aria-busy', on ? 'true' : 'false');
+  actualizarBotonLimpiar();
+}
+
 // --- Buscar dirección/lugar (geocodificación con Nominatim de OpenStreetMap) -
 async function geocodificar(texto) {
   const q = texto.trim();
   if (!q) { renderLista(); return; }
+  setBuscando(true);
+  toast('Buscando “' + q + '”…');
   try {
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=cl&limit=1&accept-language=es`;
     const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
@@ -1450,8 +1486,11 @@ async function geocodificar(texto) {
     // Degrada con gracia: si no hay internet/falla, queda el filtro de lista.
     toast('No se pudo buscar la dirección — filtro la lista');
     renderLista();
+  } finally {
+    setBuscando(false);                   // quita el spinner y recalcula la "X"
   }
 }
+window.buscarComoDireccion = () => geocodificar($('#search')?.value || query);
 
 // --- Panel de filtros -------------------------------------------------------
 // Formato del rótulo de distancia: metros bajo 1 km, km (es-CL) sobre 1 km.
@@ -1749,8 +1788,10 @@ async function init() {
   // Selector de ciudad (header): cambia la zona que se está mirando.
   $('#ciudad-select').addEventListener('change', (e) => cambiarCiudad(e.target.value, true));
   // Buscador: filtra la lista en vivo; con Enter, geocodifica la dirección/lugar.
-  $('#search').addEventListener('input', (e) => { query = e.target.value; renderLista(); });
+  $('#search').addEventListener('input', (e) => { query = e.target.value; actualizarBotonLimpiar(); renderLista(); });
   $('#search').addEventListener('keydown', (e) => { if (e.key === 'Enter') geocodificar(e.target.value); });
+  // Botón "X": limpia la búsqueda y vuelve a la ciudad actual.
+  $('#search-clear').addEventListener('click', limpiarBusqueda);
   // Botón "Buscar en esta zona": fija el usuario al centro del mapa y recarga.
   $('#btn-zona').addEventListener('click', () => {
     if (!map) return;
@@ -1784,6 +1825,7 @@ async function init() {
   if (qInicial) {
     const s = $('#search'); if (s) s.value = qInicial;
     query = qInicial;
+    actualizarBotonLimpiar();
     setTimeout(() => geocodificar(qInicial), 400);   // deja cargar el mapa primero
   }
   chequearRecordatorioAuto();   // aviso "¿sigues con tu auto?" si quedó de otro día

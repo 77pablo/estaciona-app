@@ -36,7 +36,10 @@
     <section class="view active" id="view-buscar">
       <div class="searchbar">
         <svg class="ic-svg" style="color:var(--muted)" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.1-4.1"/></svg>
-        <input id="search" type="text" placeholder="Buscar nombre, calle o dirección…" autocomplete="off" aria-label="Buscar estacionamiento por nombre, calle o dirección" />
+        <input id="search" type="text" placeholder="Buscar nombre, calle o dirección…" autocomplete="off" enterkeyhint="search" aria-label="Buscar estacionamiento por nombre, calle o dirección" aria-describedby="search-hint" />
+        <span id="search-hint" class="sr-only">Presiona Enter para buscar una dirección o lugar en el mapa.</span>
+        <span id="search-spin" class="search-spin" hidden aria-hidden="true"></span>
+        <button id="search-clear" class="search-clear" type="button" hidden title="Limpiar búsqueda" aria-label="Limpiar búsqueda"><svg class="ic-svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
         <button id="btn-filtros" class="has-badge" title="Filtros" aria-label="Filtros"><svg class="ic-svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="10" cy="7" r="2.3" fill="currentColor"/><circle cx="15" cy="12" r="2.3" fill="currentColor"/><circle cx="8" cy="17" r="2.3" fill="currentColor"/></svg><span class="badge" id="filtros-badge" hidden></span></button>
       </div>
       <div class="chips" id="chips">
