@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Estaciona — dónde dejar el auto, sin dar vueltas</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🅿️</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ink:    '#0e0f12',   // base oscura profunda (warm-black)
+          ink2:   '#16181d',   // superficie elevada
+          ink3:   '#1d2026',   // tarjeta
+          bone:   '#f4f2ec',   // texto hueso
+          mute:   '#8b8f98',   // gris oxford (texto secundario)
+          signal: '#c9f24e',   // verde/lima eléctrico satinado (acción)
+          go:     '#56c98a',   // semáforo: hay cupo
+          mid:    '#e0b44a',   // semáforo: puede costar
+          stop:   '#e2675a',   // semáforo: difícil
+        },
+        fontFamily: {
+          sans: ['Inter', 'system-ui', 'sans-serif'],
+          mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  /* Grano sutil sobre el fondo oscuro (plano urbano, no plantilla industrial). */
+  .grain::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  /* Líneas de "plano urbano": rejilla fina gris oxford de fondo del mapa-mockup. */
+  .blueprint {
+    background-color: #0a0b0e;
+    background-image:
+      linear-gradient(rgba(139,143,152,.10) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(139,143,152,.10) 1px, transparent 1px);
+    background-size: 34px 34px;
+  }
+  /* Pulso de pin disponible (sutil, no aparatoso). */
+  @keyframes pin-pulse { 0% { box-shadow: 0 0 0 0 rgba(201,242,78,.5); } 70% { box-shadow: 0 0 0 14px rgba(201,242,78,0); } 100% { box-shadow: 0 0 0 0 rgba(201,242,78,0); } }
+  .pulse { animation: pin-pulse 2.4s ease-out infinite; }
+  /* Medidor circular minimalista (disponibilidad). */
+  .gauge { background: conic-gradient(var(--c,#56c98a) calc(var(--p,72) * 1%), rgba(139,143,152,.18) 0); }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+  ::selection { background: #c9f24e; color: #0e0f12; }
+</style>
+</head>
+
+<body class="grain bg-ink text-bone font-sans antialiased selection:bg-signal">
+<div class="relative z-10">
+
+  <!-- NAV minimalista -->
+  <header class="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
+    <span class="text-lg font-extrabold tracking-tight">🅿️ Estaciona</span>
+    <a href="/" class="rounded-md border border-bone/15 px-4 py-2 text-sm font-semibold transition hover:border-signal hover:text-signal">
+      Abrir la app
+    </a>
+  </header>
+
+  <!-- HERO: grilla asimétrica. Izq = propuesta + buscador protagonista. Der = mapa-mockup. -->
+  <section class="mx-auto grid max-w-6xl items-center gap-10 px-5 pt-8 pb-16 sm:px-8 lg:grid-cols-[1.08fr_0.92fr] lg:gap-14 lg:pt-14">
+
+    <!-- Panel de control -->
+    <div>
+      <p class="mb-5 inline-flex items-center gap-2 rounded-full border border-bone/15 px-3 py-1 font-mono text-xs text-mute">
+        <span class="inline-block h-1.5 w-1.5 rounded-full bg-go"></span>
+        EN VIVO · TEMUCO Y +307 CIUDADES
+      </p>
+      <h1 class="text-[2.7rem] font-black leading-[0.98] tracking-tight sm:text-6xl">
+        ¿Dónde dejo<br />el auto?
+      </h1>
+      <p class="mt-5 max-w-md text-[15px] leading-relaxed text-mute">
+        Escribe una dirección o un lugar conocido. Te decimos dónde hay
+        estacionamiento y cuánto cuesta — ahora mismo, sin dar vueltas a la manzana.
+      </p>
+
+      <!-- Buscador protagonista -->
+      <form action="/" method="get" class="group mt-7 flex items-stretch overflow-hidden rounded-lg border border-bone/20 bg-ink2 transition focus-within:border-signal">
+        <span class="grid w-12 place-items-center text-mute" aria-hidden="true">
+          <!-- ícono de "pin" dibujado a línea, no de librería -->
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4"/></svg>
+        </span>
+        <input name="q" type="text" placeholder="Av. Alemania 0671, Mall Mirage…" autocomplete="off"
+               class="min-w-0 flex-1 bg-transparent py-4 text-[15px] text-bone placeholder:text-mute/70 focus:outline-none" />
+        <button type="submit" class="m-1.5 rounded-md bg-signal px-5 font-bold text-ink transition hover:brightness-95">
+          Buscar
+        </button>
+      </form>
+      <p class="mt-3 font-mono text-xs text-mute">Sin cuenta. Sin descargar nada. Gratis.</p>
+    </div>
+
+    <!-- Mapa-mockup minimalista monocromático -->
+    <div class="relative">
+      <div class="blueprint relative aspect-[4/5] overflow-hidden rounded-xl border border-bone/12 sm:aspect-square">
+        <!-- trazos de avenidas (líneas finas, plano urbano) -->
+        <svg class="absolute inset-0 h-full w-full text-bone/15" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M-20 120 L420 60" /><path d="M-20 240 L420 300" />
+          <path d="M120 -20 L60 440" /><path d="M280 -20 L340 440" />
+          <path d="M-20 360 L440 380" />
+        </svg>
+        <!-- pin seleccionado (con etiqueta de precio, mono) -->
+        <div class="absolute left-[46%] top-[40%]">
+          <div class="pulse flex items-center gap-1 rounded-full bg-signal px-2.5 py-1 font-mono text-xs font-bold text-ink shadow-lg">$900</div>
+        </div>
+        <!-- pines disponibles -->
+        <span class="absolute left-[24%] top-[58%] h-3 w-3 rounded-full border-2 border-ink bg-go"></span>
+        <span class="absolute left-[68%] top-[30%] h-3 w-3 rounded-full border-2 border-ink bg-go"></span>
+        <span class="absolute left-[60%] top-[66%] h-3 w-3 rounded-full border-2 border-ink bg-mid"></span>
+        <span class="absolute left-[36%] top-[24%] h-3 w-3 rounded-full border-2 border-ink bg-stop"></span>
+        <!-- "tú estás aquí" -->
+        <span class="absolute left-[50%] top-[54%] h-3.5 w-3.5 rounded-full border-2 border-ink bg-signal pulse"></span>
+        <!-- etiqueta inferior tipo HUD -->
+        <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between rounded-lg border border-bone/12 bg-ink/70 px-3 py-2 backdrop-blur">
+          <span class="font-mono text-[11px] text-mute">CENTRO DE TEMUCO</span>
+          <span class="font-mono text-[11px] text-go">8 con cupo</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BENTO GRID asimétrico (funciones reales, tamaños según importancia) -->
+  <section class="mx-auto max-w-6xl px-5 pb-16 sm:px-8">
+    <h2 class="mb-6 max-w-lg text-2xl font-black tracking-tight sm:text-3xl">
+      Lo que sí hace<span class="text-mute"> — sin humo.</span>
+    </h2>
+
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-5">
+
+      <!-- GRANDE: disponibilidad en vivo con medidor -->
+      <article class="col-span-2 row-span-2 flex flex-col justify-between rounded-xl border border-bone/12 bg-ink2 p-6 sm:row-span-2">
+        <div>
+          <p class="font-mono text-xs uppercase tracking-widest text-mute">Disponibilidad</p>
+          <h3 class="mt-2 text-xl font-extrabold sm:text-2xl">¿Hay cupo ahora?</h3>
+          <p class="mt-2 max-w-xs text-sm text-mute">
+            Verde, amarillo o rojo. En estacionamientos privados es dato real; en la
+            calle, una estimación honesta — nunca te mentimos con falsa exactitud.
+          </p>
+        </div>
+        <div class="mt-6 flex items-center gap-5">
+          <div class="gauge grid h-24 w-24 place-items-center rounded-full" style="--p:74;--c:#56c98a">
+            <div class="grid h-[4.6rem] w-[4.6rem] place-items-center rounded-full bg-ink2">
+              <span class="font-mono text-xl font-bold text-go">74%</span>
+            </div>
+          </div>
+          <ul class="space-y-2 text-sm">
+            <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-go"></span> Suele haber cupo</li>
+            <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-mid"></span> Puede costar</li>
+            <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-stop"></span> Difícil ahora</li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- MEDIANA: precios claros -->
+      <article class="col-span-2 flex flex-col justify-between rounded-xl border border-bone/12 bg-ink3 p-6">
+        <div>
+          <p class="font-mono text-xs uppercase tracking-widest text-mute">Precios</p>
+          <h3 class="mt-2 text-lg font-extrabold">Claros, sin sorpresas al salir</h3>
+        </div>
+        <div class="mt-4 flex items-end gap-4">
+          <span class="font-mono text-3xl font-bold text-signal">$900<span class="text-base text-mute">/hr</span></span>
+          <span class="mb-1 rounded-md border border-go/30 bg-go/10 px-2 py-0.5 font-mono text-xs text-go">GRATIS dom.</span>
+        </div>
+      </article>
+
+      <!-- PEQUEÑA: dónde dejé el auto -->
+      <article class="flex flex-col justify-between rounded-xl border border-bone/12 bg-ink2 p-5">
+        <span class="text-2xl" aria-hidden="true">📌</span>
+        <h3 class="mt-3 text-sm font-bold leading-snug">Dónde dejé<br />el auto</h3>
+      </article>
+
+      <!-- PEQUEÑA: alarma anti-multa -->
+      <article class="flex flex-col justify-between rounded-xl border border-bone/12 bg-ink2 p-5">
+        <span class="text-2xl" aria-hidden="true">⏰</span>
+        <h3 class="mt-3 text-sm font-bold leading-snug">Alarma<br />anti-multa</h3>
+      </article>
+
+      <!-- ANCHA: cobertura real (números reales) -->
+      <article class="col-span-2 sm:col-span-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-bone/12 bg-ink2 p-6">
+        <div>
+          <p class="font-mono text-xs uppercase tracking-widest text-mute">Cobertura real</p>
+          <h3 class="mt-1 text-lg font-extrabold">Datos de verdad, de toda la calle</h3>
+        </div>
+        <div class="flex gap-8">
+          <div><span class="block font-mono text-3xl font-bold">1.463</span><span class="font-mono text-xs text-mute">estacionamientos</span></div>
+          <div><span class="block font-mono text-3xl font-bold">308</span><span class="font-mono text-xs text-mute">ciudades</span></div>
+          <div><span class="block font-mono text-3xl font-bold">16</span><span class="font-mono text-xs text-mute">regiones</span></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- CONFIANZA: estacionamientos REALES ya en el mapa (escala de grises, honesto) -->
+  <section class="mx-auto max-w-6xl px-5 pb-16 sm:px-8">
+    <p class="mb-5 font-mono text-xs uppercase tracking-widest text-mute">Ya están en el mapa</p>
+    <div class="flex flex-wrap items-center gap-x-8 gap-y-4 text-bone/35">
+      <span class="text-lg font-bold">Portal Temuco</span>
+      <span class="text-lg font-bold">Mall Mirage</span>
+      <span class="text-lg font-bold">Plaza de Armas</span>
+      <span class="text-lg font-bold">Manuel Montt</span>
+      <span class="text-lg font-bold">Estadio Germán Becker</span>
+      <span class="text-lg font-bold">Mall Plaza Oeste</span>
+    </div>
+    <p class="mt-4 max-w-lg text-sm text-mute">
+      No son convenios ni publicidad: son lugares reales sacados de mapas abiertos.
+      Si encuentras un dato equivocado, lo arreglamos.
+    </p>
+  </section>
+
+  <!-- CIERRE -->
+  <section class="mx-auto max-w-6xl px-5 pb-20 sm:px-8">
+    <div class="flex flex-col items-start gap-5 rounded-2xl border border-bone/12 bg-ink2 p-8 sm:flex-row sm:items-center sm:justify-between sm:p-10">
+      <div>
+        <h2 class="text-2xl font-black tracking-tight sm:text-3xl">Estaciónate rápido.</h2>
+        <p class="mt-2 text-mute">Abre el mapa y mira qué hay cerca tuyo ahora.</p>
+      </div>
+      <a href="/" class="rounded-lg bg-signal px-7 py-4 font-bold text-ink transition hover:brightness-95">
+        Abrir Estaciona →
+      </a>
+    </div>
+  </section>
+
+  <!-- FOOTER honesto -->
+  <footer class="mx-auto max-w-6xl px-5 pb-10 sm:px-8">
+    <div class="flex flex-col gap-2 border-t border-bone/10 pt-6 font-mono text-xs text-mute sm:flex-row sm:justify-between">
+      <span>Hecho en Temuco 🇨🇱 · Datos de OpenStreetMap</span>
+      <span>Precios referenciales — confirma siempre en el lugar.</span>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
