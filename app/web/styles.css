@@ -228,6 +228,9 @@ main, .view { flex: 1; min-height: 0; }
   display: flex; gap: 13px; align-items: center; padding: 14px 15px; margin: 9px 12px; cursor: pointer;
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg);
   box-shadow: var(--shadow-soft); transition: border-color .14s, transform .08s, box-shadow .14s;
+  /* Listas largas: el navegador se salta el layout/paint de las tarjetas fuera
+     de pantalla. El tamaño estimado evita saltos de scroll mientras se rinden. */
+  content-visibility: auto; contain-intrinsic-size: auto 84px;
 }
 .card:active { transform: scale(.995); }
 .card .ic { font-size: 22px; opacity: .9; }

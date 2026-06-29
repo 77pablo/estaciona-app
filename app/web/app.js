@@ -11,6 +11,17 @@
 const $ = (s) => document.querySelector(s);
 const API = '/api/estacionamientos';
 
+// Antirrebote: agrupa ráfagas de llamadas (p. ej. teclear en el buscador) en una
+// sola tras `ms` de calma. Evita re-filtrar la lista y redibujar los pines del
+// mapa en cada pulsación. Devuelve la función envuelta (misma firma).
+function debounce(fn, ms) {
+  let t = null;
+  return function (...args) {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, args), ms);
+  };
+}
+
 // Estado en memoria.
 let DATA = [];
 let CENTRO = { lat: -38.7359, lng: -72.5905, nombre: 'Temuco' };
@@ -706,8 +717,8 @@ function renderLista() {
     // Disponibilidad = estimación honesta (sin número falso de "cupos en vivo").
     const disp = nivel === 'cerrado' ? '' : ` · <span class="dot ${nivel}"></span>${d.label}`;
     return `
-      <div class="card" data-id="${p.id}">
-        <div class="ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 22)}</div>
+      <div class="card" data-id="${p.id}" role="button" tabindex="0" aria-label="${esc(p.nombre)}, ver detalle">
+        <div class="ic" aria-hidden="true">${ic(p.tipo === 'calle' ? 'road' : 'parking', 22)}</div>
         <div class="info">
           <div class="nm">${esc(p.nombre)} ${LS.isFav(p.id) ? ic('starFull', 13) : ''} ${catBadge(p)}</div>
           <div class="sub">${estadoHTML(p)}${disp}</div>
@@ -717,8 +728,13 @@ function renderLista() {
       </div>`;
   }).join('');
 
-  $('#lista').querySelectorAll('.card').forEach((c) =>
-    c.addEventListener('click', () => openDetalle(c.dataset.id)));
+  $('#lista').querySelectorAll('.card').forEach((c) => {
+    c.addEventListener('click', () => openDetalle(c.dataset.id));
+    // Las tarjetas son botones a efectos de teclado: Enter/Espacio las activan.
+    c.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetalle(c.dataset.id); }
+    });
+  });
   if (sheet) sheet.scrollTop = sc;          // restaurar scroll
 }
 
@@ -1590,11 +1606,39 @@ window.cerrarModal = () => {
   if (_focoPrevio?.focus) _focoPrevio.focus();
 };
 
-// Cerrar diálogos con la tecla Escape (modal primero, luego detalle).
+// Diálogo abierto en este momento (modal de filtros/aportes tiene prioridad
+// sobre el overlay de detalle). Devuelve el contenedor o null.
+function dialogoAbierto() {
+  if ($('#modal-bg').classList.contains('open')) return $('#modal');
+  if ($('#detalle').classList.contains('open')) return $('#detalle');
+  return null;
+}
+// Elementos enfocables y visibles dentro de un contenedor.
+function enfocables(c) {
+  const sel = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  return [...c.querySelectorAll(sel)].filter((el) => el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement);
+}
+
+// Teclado en diálogos: Escape cierra; Tab queda atrapado dentro del diálogo
+// (no se escapa al fondo) para que el lector de pantalla y el teclado no se
+// pierdan detrás del overlay.
 document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape') return;
-  if ($('#modal-bg').classList.contains('open')) window.cerrarModal();
-  else if ($('#detalle').classList.contains('open')) window.cerrarDetalle();
+  if (e.key === 'Escape') {
+    if ($('#modal-bg').classList.contains('open')) window.cerrarModal();
+    else if ($('#detalle').classList.contains('open')) window.cerrarDetalle();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const cont = dialogoAbierto();
+  if (!cont) return;
+  const f = enfocables(cont);
+  if (!f.length) { e.preventDefault(); cont.focus(); return; }
+  const primero = f[0], ultimo = f[f.length - 1];
+  const act = document.activeElement;
+  // Si el foco salió del diálogo (o está en el contenedor) lo traemos de vuelta.
+  if (!cont.contains(act)) { e.preventDefault(); primero.focus(); return; }
+  if (e.shiftKey && act === primero) { e.preventDefault(); ultimo.focus(); }
+  else if (!e.shiftKey && act === ultimo) { e.preventDefault(); primero.focus(); }
 });
 
 // --- Navegación entre vistas ------------------------------------------------
@@ -1788,7 +1832,11 @@ async function init() {
   // Selector de ciudad (header): cambia la zona que se está mirando.
   $('#ciudad-select').addEventListener('change', (e) => cambiarCiudad(e.target.value, true));
   // Buscador: filtra la lista en vivo; con Enter, geocodifica la dirección/lugar.
-  $('#search').addEventListener('input', (e) => { query = e.target.value; actualizarBotonLimpiar(); renderLista(); });
+  // El botón "X" se actualiza al instante (respuesta inmediata al teclear); el
+  // re-filtrado de la lista + redibujo de pines se antirrebota ~160 ms para no
+  // recalcular en cada pulsación. El filtrado es local, no se nota la latencia.
+  const renderListaDeb = debounce(renderLista, 160);
+  $('#search').addEventListener('input', (e) => { query = e.target.value; actualizarBotonLimpiar(); renderListaDeb(); });
   $('#search').addEventListener('keydown', (e) => { if (e.key === 'Enter') geocodificar(e.target.value); });
   // Botón "X": limpia la búsqueda y vuelve a la ciudad actual.
   $('#search-clear').addEventListener('click', limpiarBusqueda);
