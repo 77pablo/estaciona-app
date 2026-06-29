@@ -31,6 +31,21 @@ function leerMaptilerKey() {
 }
 const MAPTILER_KEY = leerMaptilerKey();
 
+// Clave de acceso (modo privado mientras se pule la app). Si la variable de
+// entorno ACCESO_CLAVE está puesta (en Railway), la app pide usuario/clave al
+// entrar (HTTP Basic Auth) y solo deja pasar a quien la sepa. Si está vacía
+// (ej. en local), la app queda abierta sin fricción. Para abrirla al público:
+// borrar la variable ACCESO_CLAVE en Railway.
+const ACCESO_CLAVE = (process.env.ACCESO_CLAVE || '').trim();
+function autorizado(req) {
+  if (!ACCESO_CLAVE) return true;                 // sin clave configurada => app pública
+  const m = (req.headers.authorization || '').match(/^Basic\s+(.+)$/i);
+  if (!m) return false;
+  const dec = Buffer.from(m[1], 'base64').toString('utf8');   // "usuario:clave"
+  const clave = dec.slice(dec.indexOf(':') + 1);              // ignora el usuario, compara la clave
+  return clave === ACCESO_CLAVE;
+}
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -64,6 +79,15 @@ async function serveStatic(res, urlPath) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
+    // Modo privado: si hay clave configurada, exige autenticación antes de TODO.
+    if (!autorizado(req)) {
+      res.writeHead(401, {
+        'WWW-Authenticate': 'Basic realm="Estaciona (privado)", charset="UTF-8"',
+        'Content-Type': 'text/plain; charset=utf-8',
+      });
+      res.end('Acceso privado — ingresa la clave (el usuario puede ir en blanco).');
+      return;
+    }
     if (url.pathname === '/api/estacionamientos' && req.method === 'GET') {
       // Nacional: se devuelve SOLO la ciudad pedida (o Temuco por defecto), para
       // no enviar miles de registros. Las zonas (ligeras) van siempre.
