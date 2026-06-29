@@ -699,8 +699,11 @@ function renderLista() {
 // --- Detalle ----------------------------------------------------------------
 function lineaDisponibilidad(p) {
   const d = p.disponibilidad, nivel = d.nivel;
-  const txt = nivel === 'cerrado' ? 'Cerrado ahora' : `${d.label} <small>· disponibilidad estimada</small>`;
-  return `<span class="dot ${nivel}"></span>${txt}`;
+  const etiqueta = nivel === 'cerrado' ? 'Cerrado ahora' : d.label;
+  // La etiqueta va en una píldora con el color del semáforo (lectura de un vistazo);
+  // el "· disponibilidad estimada" queda como caption honesto, fuera de la píldora.
+  const sub = nivel === 'cerrado' ? '' : ' <small>· disponibilidad estimada</small>';
+  return `<span class="disp-pill ${nivel}"><span class="dot ${nivel}"></span>${etiqueta}</span>${sub}`;
 }
 
 function openDetalle(id) {
@@ -731,14 +734,14 @@ function openDetalle(id) {
     <div class="det-top">
       <button onclick="cerrarDetalle()" title="Volver" aria-label="Volver">${ic('arrowLeft', 20)}</button>
       <div class="t">${esc(p.nombre)}</div>
-      <button onclick="toggleFavDetalle('${p.id}')" title="Guardar" aria-label="${fav ? 'Quitar de favoritos' : 'Guardar en favoritos'}">${fav ? ic('starFull', 20) : ic('starOutline', 20)}</button>
+      <button class="det-fav${fav ? ' on' : ''}" onclick="toggleFavDetalle('${p.id}')" title="Guardar" aria-label="${fav ? 'Quitar de favoritos' : 'Guardar en favoritos'}">${fav ? ic('starFull', 20) : ic('starOutline', 20)}</button>
       <button onclick="compartir('${p.id}')" title="Compartir" aria-label="Compartir">${ic('share', 19)}</button>
     </div>
     <div class="det-body">
       <div class="det-hero"><span class="hero-ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 30)}</span><span class="hero-nm">${esc(p.nombre)}</span></div>
       <div class="det-status" id="det-status-line">${lineaDisponibilidad(p)}</div>
       ${p.categoria ? `<div class="aviso-cli">${catBadge(p)} Es un estacionamiento de <b>${esc(p.categoria.toLowerCase())}</b> — puede ser de uso restringido, no público general.</div>` : ''}
-      <div class="det-row"><span class="k">${ic('wallet')}</span><span>${precioLinea}</span></div>
+      <div class="det-row precio-row"><span class="k">${ic('wallet')}</span><span class="precio-val">${precioLinea}</span></div>
       ${esGratisClientes(p)
         ? `<div class="aviso-cli">${ic('cart', 16)} <b>Gratis solo para clientes</b> — válido con compra en el local, no es estacionamiento público.</div>`
         : p.gratisInfo ? `<div class="det-row"><span class="k">${ic('tag')}</span><span>${esc(p.gratisInfo)}</span></div>` : ''}

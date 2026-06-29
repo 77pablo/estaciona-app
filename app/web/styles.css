@@ -244,7 +244,14 @@ main, .view { flex: 1; min-height: 0; }
 }
 .overlay.open { transform: translateY(0); }
 .det-top { display: flex; align-items: center; gap: 12px; padding: 15px 16px; background: var(--surface); color: var(--text); position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--line); }
-.det-top button { background: transparent; border: none; color: var(--text); font-size: 20px; cursor: pointer; }
+.det-top button {
+  background: transparent; border: none; color: var(--text); font-size: 20px; cursor: pointer; flex: 0 0 auto;
+  width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s, transform .08s;
+}
+.det-top button:hover { background: var(--surface-2); }
+.det-top button:active { transform: scale(.92); }
+.det-top .det-fav.on { color: var(--accent); }   /* estrella lima cuando es favorito */
 .det-top .t { flex: 1; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
 .det-body { padding: 18px; }
 /* Hero del detalle: panel surface, nombre gigante Inter, sin degradado */
@@ -256,10 +263,20 @@ main, .view { flex: 1; min-height: 0; }
 }
 .det-hero .hero-ic { font-size: 28px; opacity: .85; }
 .det-hero .hero-nm { font-size: 26px; line-height: 1.04; font-weight: 800; text-align: left; letter-spacing: -0.03em; }
-.det-status { font-size: 17px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.02em; }
-.det-status small { font-weight: 500; color: var(--muted); }
+.det-status { font-size: 17px; font-weight: 800; margin-bottom: 10px; letter-spacing: -0.02em; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 9px; }
+.det-status small { font-weight: 500; color: var(--muted); font-size: 12px; }
+/* Píldora del semáforo: el estado se lee de un vistazo con su color de fondo. */
+.disp-pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px 6px 11px; border-radius: 999px; border: 1px solid var(--line); line-height: 1; }
+.disp-pill .dot { width: 9px; height: 9px; margin: 0; }
+.disp-pill.verde { color: var(--green); background: var(--green-bg); border-color: rgba(86,201,138,.32); }
+.disp-pill.amarillo { color: var(--amber); background: var(--amber-bg); border-color: rgba(224,180,74,.32); }
+.disp-pill.rojo { color: var(--red); background: rgba(226,103,90,.14); border-color: rgba(226,103,90,.32); }
+.disp-pill.cerrado { color: var(--muted); background: var(--surface-2); border-color: var(--line-2); }
 .det-row { display: flex; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 14px; align-items: center; }
 .det-row .k { color: var(--muted); width: 22px; text-align: center; }
+/* Precio = dato clave: fila con más aire y monto resaltado. */
+.det-row.precio-row { padding: 14px 0; font-size: 15px; }
+.det-row.precio-row .precio-val { font-weight: 700; }
 .attrs { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
 .attr { background: transparent; border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 11px; font-size: 12px; }
 .calc { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px; margin: 16px 0; box-shadow: var(--shadow-soft); }
@@ -271,7 +288,16 @@ main, .view { flex: 1; min-height: 0; }
 .modal input[type="range"] { width: 100%; accent-color: var(--accent); }
 .calc .total { font-size: 30px; font-weight: 700; color: var(--accent); margin-top: 10px; letter-spacing: -0.02em; }
 .disclaimer { font-size: 12px; color: var(--amber); background: var(--amber-bg); border: 1px solid rgba(224,180,74,.3); border-radius: var(--r); padding: 11px 13px; margin-top: 14px; line-height: 1.45; }
-.det-actions { padding: 0 18px 26px; display: flex; flex-direction: column; gap: 10px; }
+/* Barra de acciones fija al fondo: "Llévame" siempre alcanzable aunque el
+   detalle sea largo (calculadora, fotos, comunidad). */
+.det-actions {
+  position: sticky; bottom: 0; z-index: 3; margin-top: auto;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  background: rgba(14,15,18,.88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line);
+}
+.det-actions .btn-primary { box-shadow: 0 8px 22px -10px rgba(201,242,78,.55); }   /* leve halo lima en la acción principal */
 .btn {
   border: 1px solid transparent; border-radius: var(--r); padding: 15px; font-size: 15px; font-weight: 700; cursor: pointer;
   display: flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--font-ui); letter-spacing: -0.01em;
@@ -291,6 +317,7 @@ main, .view { flex: 1; min-height: 0; }
 }
 .vote-si:hover, .vote-si:focus-visible { border-color: var(--green); color: var(--green); background: var(--green-bg); }
 .vote-no:hover, .vote-no:focus-visible { border-color: var(--red); color: var(--red); }
+.thumbs button:active { transform: scale(.95); }
 
 /* Modal */
 .modal-bg { position: absolute; inset: 0; background: rgba(0,0,0,.6); z-index: 60; display: none; align-items: center; justify-content: center; padding: 24px; }
