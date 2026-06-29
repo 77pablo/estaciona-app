@@ -669,7 +669,26 @@ function renderLista() {
   const sc = sheet ? sheet.scrollTop : 0;   // preservar scroll (no "saltar")
 
   if (lista.length === 0) {
-    $('#lista').innerHTML = '<div class="empty-big" style="padding:30px">Sin resultados con esos filtros.</div>';
+    const hayFiltros = contarFiltros() > 0;
+    const hayQuery = !!query.trim();
+    // Distinción honesta: ¿la ciudad no tiene datos, o los filtros/búsqueda no
+    // dejaron pasar nada? El mensaje y la salida cambian según el caso.
+    if (!hayFiltros && !hayQuery) {
+      $('#lista').innerHTML = `<div class="empty-big">
+        <span class="em">${ic('pin', 44)}</span>
+        <div class="empty-tit">Aún no tenemos datos de ${esc(ciudadActual)}</div>
+        <p>Todavía no cargamos estacionamientos en esta ciudad. Vamos sumando zonas de a poco — prueba con otra ciudad desde el selector de arriba.</p>
+      </div>`;
+    } else {
+      $('#lista').innerHTML = `<div class="empty-big">
+        <span class="em">${ic('search', 44)}</span>
+        <div class="empty-tit">Sin resultados ${hayQuery ? 'para tu búsqueda' : 'con esos filtros'}</div>
+        <p>${hayQuery
+          ? 'No encontramos estacionamientos que coincidan. Prueba con otra palabra o revisa los filtros.'
+          : 'Ningún estacionamiento cumple los filtros activos. Prueba aflojando alguno.'}</p>
+        ${hayFiltros ? `<button class="btn btn-primary" style="margin-top:14px" onclick="limpiarFiltros()">${ic('filters', 16)} Limpiar filtros</button>` : ''}
+      </div>`;
+    }
     return;
   }
   // Tráfico estimado de la hora (uno solo para toda la lista): colorea el tiempo en auto.
@@ -1649,8 +1668,10 @@ async function cargar() {
     if (!cargado) {
       $('#sheet-count').textContent = 'Error de conexión';
       $('#lista').innerHTML = `<div class="empty-big">
-        <span class="em">${ic('wifiOff', 46)}</span>No pudimos cargar los estacionamientos.<br>
-        <button class="btn btn-primary" style="margin-top:14px" onclick="cargar()">Reintentar</button></div>`;
+        <span class="em">${ic('wifiOff', 46)}</span>
+        <div class="empty-tit">No pudimos cargar los estacionamientos</div>
+        <p>Revisa tu conexión a internet e inténtalo de nuevo.</p>
+        <button class="btn btn-primary" style="margin-top:14px" onclick="cargar()">${ic('refresh', 16)} Reintentar</button></div>`;
     } else if (!sinConexionAvisado) {
       toast('Sin conexión, reintentando…');   // una sola vez por racha de errores
       sinConexionAvisado = true;
@@ -1686,10 +1707,19 @@ window.cerrarBienvenida = () => {
 
 // Tarjetas "esqueleto" con shimmer mientras carga la primera vez.
 function skeletonHtml() {
-  const card = `<div class="skel-card">
+  // Calca la tarjeta real: ícono + título (línea gruesa) + 2 sublíneas + precio
+  // apilado (monto + "/hr"). aria-hidden: el lector de pantalla no lee el placeholder.
+  const card = `<div class="skel-card" aria-hidden="true">
     <div class="skel skel-ic"></div>
-    <div class="skel-info"><div class="skel skel-line w70"></div><div class="skel skel-line w50"></div><div class="skel skel-line w40"></div></div>
-    <div class="skel skel-price"></div>
+    <div class="skel-info">
+      <div class="skel skel-line skel-title w70"></div>
+      <div class="skel skel-line w50"></div>
+      <div class="skel skel-line w40"></div>
+    </div>
+    <div class="skel-price-col">
+      <div class="skel skel-price"></div>
+      <div class="skel skel-price-sm"></div>
+    </div>
   </div>`;
   return card.repeat(5);
 }

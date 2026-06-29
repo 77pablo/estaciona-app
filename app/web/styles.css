@@ -501,10 +501,14 @@ main, .view { flex: 1; min-height: 0; }
   background: linear-gradient(90deg, var(--surface-2) 25%, rgba(244,242,236,.10) 37%, var(--surface-2) 63%);
   background-size: 400% 100%; border-radius: 5px; animation: shimmer 1.3s ease infinite;
 }
-.skel-ic { width: 36px; height: 36px; border-radius: var(--r); flex-shrink: 0; }
-.skel-line { height: 10px; }
+.skel-ic { width: 34px; height: 34px; border-radius: var(--r); flex-shrink: 0; }
+.skel-line { height: 9px; }
+.skel-line.skel-title { height: 13px; margin-bottom: 1px; }   /* calca el nombre (línea más gruesa) */
 .skel-line.w70 { width: 70%; } .skel-line.w50 { width: 50%; } .skel-line.w40 { width: 40%; }
-.skel-price { width: 46px; height: 22px; }
+/* Precio apilado: monto + "/hr", alineado a la derecha como en la tarjeta real */
+.skel-price-col { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; padding-left: 4px; }
+.skel-price { width: 48px; height: 16px; }
+.skel-price-sm { width: 26px; height: 9px; }
 @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 
 .mini-map { height: 160px; margin-top: 14px; border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow-soft); }
@@ -539,6 +543,8 @@ main, .view { flex: 1; min-height: 0; }
     animation-duration: .001ms !important; animation-iteration-count: 1 !important;
     transition-duration: .001ms !important; scroll-behavior: auto !important;
   }
+  /* Sin shimmer: placeholder plano y estático (no un degradado congelado) */
+  .skel { animation: none !important; background: rgba(244, 242, 236, .07); }
 }
 
 /* ============================================================================
