@@ -331,13 +331,14 @@ main, .view { flex: 1; min-height: 0; }
   font-size: 13px; cursor: pointer; transition: color .15s, border-color .15s;
 }
 .card-vermas:hover { color: var(--text); border-color: var(--accent); }
-/* Enlace "Ver detalle completo" bajo las acciones de la tarjeta expandida. */
+/* "Ver detalle completo": botón de ancho completo (mismo estilo que las acciones). */
 .card-detalle {
-  width: 100%; margin-top: 10px; background: transparent; border: none; cursor: pointer;
-  color: var(--muted); font-family: var(--font-ui); font-weight: 600; font-size: 12.5px;
-  padding: 4px; transition: color .15s;
+  width: 100%; margin-top: 10px; cursor: pointer;
+  background: transparent; border: 1px solid var(--line-2); color: var(--text);
+  border-radius: var(--r-lg); padding: 13px; font-family: var(--font-ui); font-weight: 700; font-size: 13.5px;
+  transition: color .15s, border-color .15s, background .15s;
 }
-.card-detalle:hover { color: var(--accent); }
+.card-detalle:hover { color: var(--accent); border-color: var(--accent); background: rgba(45,212,191,.06); }
 
 /* Card flotante sobre el mapa (al tocar un pin, estilo parkspot) */
 .mapcard {
