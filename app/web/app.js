@@ -336,6 +336,32 @@ function osmTileLayer() {
   });
 }
 
+// --- Capa de TRÁFICO en vivo (TomTom). Overlay de calles verde/amarillo/rojo. ---
+let trafficLayer = null;
+function toggleTrafico() {
+  if (!map || !TOMTOM_KEY) { toast('Tráfico no disponible'); return; }
+  const btn = document.querySelector('.leaflet-traffic-btn');
+  if (trafficLayer) {                       // apagar
+    map.removeLayer(trafficLayer); trafficLayer = null;
+    if (btn) btn.classList.remove('on');
+    return;
+  }
+  trafficLayer = L.tileLayer(               // estilo "relative0-dark": calza con el mapa oscuro
+    `https://api.tomtom.com/traffic/map/4/tile/flow/relative0-dark/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`,
+    { maxZoom: 22, opacity: 0.9, zIndex: 10, className: 'traffic-tiles' },
+  );
+  let errs = 0;
+  trafficLayer.on('tileerror', () => {      // si TomTom no autoriza/falla: se quita y avisa
+    if (++errs < 3) return;
+    if (trafficLayer) { map.removeLayer(trafficLayer); trafficLayer = null; }
+    if (btn) btn.classList.remove('on');
+    toast('Tráfico no disponible (activa "Maps API" en TomTom)');
+  });
+  trafficLayer.addTo(map);
+  if (btn) btn.classList.add('on');
+  toast('Tráfico en vivo activado 🚦');
+}
+
 // Capa satelital híbrida (satélite + nombres de calles) de MapTiler. La clase
 // 'sat-tiles' evita que el filtro oscuro invierta las fotos (CSS).
 function satTileLayer() {
@@ -430,6 +456,22 @@ function initMap() {
       },
     });
     map.addControl(new SatCtrl());
+  }
+
+  // Botón de tráfico en vivo (solo si hay key de TomTom).
+  if (TOMTOM_KEY) {
+    const TrafCtrl = L.Control.extend({
+      options: { position: 'topright' },
+      onAdd() {
+        const b = L.DomUtil.create('button', 'leaflet-geo-btn leaflet-traffic-btn');
+        b.type = 'button'; b.innerHTML = '🚦'; b.title = 'Tráfico en vivo';
+        b.setAttribute('aria-label', 'Mostrar tráfico en vivo');
+        L.DomEvent.disableClickPropagation(b);
+        L.DomEvent.on(b, 'click', () => toggleTrafico());
+        return b;
+      },
+    });
+    map.addControl(new TrafCtrl());
   }
 
   // Al cambiar el zoom: re-renderiza iconos (pines se simplifican si está lejos).

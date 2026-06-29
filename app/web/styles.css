@@ -497,8 +497,11 @@ main, .view { flex: 1; min-height: 0; }
 .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(.95) contrast(.9); }
 /* La vista satélite son fotos: NO invertir. */
 .sat-tiles .leaflet-tile, .sat-tiles.leaflet-tile { filter: none !important; }
-/* Botón satélite (esquina sup. derecha, mismo estilo que el de ubicación). */
-.leaflet-sat-btn { margin: 10px 10px 0 0 !important; }
+/* La capa de tráfico ya viene en colores para mapa oscuro: NO invertir. */
+.traffic-tiles .leaflet-tile, .traffic-tiles.leaflet-tile { filter: none !important; }
+/* Botones de capa (satélite/tráfico) en la esquina sup. derecha. */
+.leaflet-sat-btn, .leaflet-traffic-btn { margin: 10px 10px 0 0 !important; }
+.leaflet-traffic-btn.on { background: var(--accent); color: var(--on-accent); }
 .leaflet-control-attribution { background: rgba(22,24,29,.85) !important; color: var(--muted) !important; }
 .leaflet-control-attribution a { color: var(--accent) !important; }
 .leaflet-bar a { background: var(--surface-2) !important; color: var(--text) !important; border-color: var(--line) !important; }
