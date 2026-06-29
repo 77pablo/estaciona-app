@@ -13,6 +13,8 @@ votos.json
 .env.*
 # Key de MapTiler para correr en local (en Railway se usa la variable MAPTILER_KEY)
 maptiler.key
+# Key de TomTom para correr en local (en Railway se usa la variable TOMTOM_KEY)
+tomtom.key
 
 # Sistema operativo
 .DS_Store

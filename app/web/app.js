@@ -18,6 +18,7 @@ const CENTRO_DEFAULT = { ...CENTRO };   // copia inmutable de Temuco (ciudad cas
 let ZONAS = [];                    // ciudades con datos (del backend)
 let REGIONES = [];                 // 16 regiones de Chile, orden norte→sur (del backend)
 let MAPTILER_KEY = '';             // key de MapTiler (del backend); vacío => tiles OSM
+let TOMTOM_KEY = '';               // key de TomTom (del backend); vacío => ETA estimada
 let ciudadActual = 'Temuco';       // ciudad que se está mirando ahora
 let USER = { ...CENTRO };          // "estás aquí" (Temuco por defecto)
 let map = null, markers = {}, meMarker = null;
@@ -130,6 +131,23 @@ function trafHTML() {
   const t = trafico();
   const c = t.nivel === 'fluido' ? 'var(--green)' : t.nivel === 'medio' ? 'var(--amber)' : 'var(--red)';
   return `<span style="color:${c};font-weight:700">tráfico est. ${t.nivel}</span>`;
+}
+// ETA REAL con tráfico en vivo (TomTom Routing). Devuelve {min, delayMin} o null.
+// Cachea por id para no gastar cuota de más. Cae a la estimación si falla/sin key.
+const _etaCache = {};
+async function etaReal(p) {
+  if (!TOMTOM_KEY) return null;
+  if (_etaCache[p.id]) return _etaCache[p.id];
+  try {
+    const url = `https://api.tomtom.com/routing/1/calculateRoute/${USER.lat},${USER.lng}:${p.lat},${p.lng}/json?key=${TOMTOM_KEY}&traffic=true&travelMode=car`;
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const s = (await r.json())?.routes?.[0]?.summary;
+    if (!s) return null;
+    const res = { min: Math.max(1, Math.round(s.travelTimeInSeconds / 60)), delayMin: Math.round((s.trafficDelayInSeconds || 0) / 60) };
+    _etaCache[p.id] = res;
+    return res;
+  } catch { return null; }
 }
 
 // "Gratis real" (calle pública sin cobro) vs "gratis solo para clientes" (lote
@@ -621,7 +639,7 @@ function openDetalle(id) {
         : p.gratisInfo ? `<div class="det-row"><span class="k">${ic('tag')}</span><span>${esc(p.gratisInfo)}</span></div>` : ''}
       <div class="det-row"><span class="k">${ic('clock')}</span><span>${esc(p.horario)} · ${p.abierto ? '<b style="color:var(--green)">Abierto ahora</b>' : '<b style="color:var(--red)">Cerrado</b>'}</span></div>
       <div class="det-row"><span class="k">${ic('pin')}</span><span>${esc(p.direccion)} · ${Math.round(haversine(USER, p))} m · ${ic('walk', 13)} ${walkMin(haversine(USER, p))} min caminando</span></div>
-      <div class="det-row"><span class="k">${ic('car')}</span><span>${carMin(haversine(USER, p))} min en auto · ${trafHTML()}</span></div>
+      <div class="det-row"><span class="k">${ic('car')}</span><span id="det-eta">${carMin(haversine(USER, p))} min en auto · ${trafHTML()}</span></div>
       <div class="attrs">${attrs.map((a) => `<span class="attr">${a}</span>`).join('')}</div>
       ${p.precioHora > 0 ? `
       <div class="calc">
@@ -657,6 +675,14 @@ function openDetalle(id) {
     };
     sel.addEventListener('change', upd); upd();
   }
+  // Reemplaza la ETA estimada por la REAL con tráfico (TomTom), si está disponible.
+  etaReal(p).then((e) => {
+    const el = $('#det-eta');
+    if (el && e && detalleAbiertoId === p.id) {
+      el.innerHTML = `${e.min} min en auto · <b style="color:var(--green)">tráfico en vivo</b>${e.delayMin > 0 ? ` · +${e.delayMin} min por congestión` : ''}`;
+    }
+  });
+
   const det = $('#detalle');
   det.classList.add('open');
   _focoPrevio = document.activeElement;       // recuerda dónde estaba el foco
@@ -1232,7 +1258,7 @@ function skeletonHtml() {
 async function cargarConfig() {
   try {
     const r = await fetch('/api/config');
-    if (r.ok) { const c = await r.json(); MAPTILER_KEY = c.maptilerKey || ''; }
+    if (r.ok) { const c = await r.json(); MAPTILER_KEY = c.maptilerKey || ''; TOMTOM_KEY = c.tomtomKey || ''; }
   } catch { /* sin config: usamos OSM */ }
 }
 

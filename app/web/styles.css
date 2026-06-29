@@ -64,6 +64,15 @@ body {
 /* La cabecera y la primera tarjeta respiran un poco. */
 #lista { padding-top: 2px; padding-bottom: 8px; }
 
+/* ── Fluidez tipo iPhone: inercia de scroll, resortes suaves, frosted glass ── */
+.sheet, .overlay, .simple, #lista, .modal { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.modal-bg, .onboard { backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); }
+.overlay { transition: transform .42s cubic-bezier(.22, 1, .36, 1); }   /* abrir/cerrar con resorte suave */
+.btn, .chip, .fav-item, .thumbs button, .opts button, .leaflet-geo-btn, .cat-badge {
+  transition: transform .14s cubic-bezier(.34, 1.4, .64, 1), background .15s, border-color .15s, color .15s, filter .15s, box-shadow .15s;
+}
+.card { transition: transform .14s cubic-bezier(.34, 1.4, .64, 1), border-color .14s, box-shadow .14s; }
+
 /* Datos duros en monoespaciada (estilo reloj digital). */
 .card .price b, .calc .total, #ma-tiempo, .miauto-card .cost, .votos-info b { font-family: var(--font-mono); }
 

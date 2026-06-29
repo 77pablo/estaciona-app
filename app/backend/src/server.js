@@ -24,12 +24,13 @@ const PORT = process.env.PORT || 4000;
 // Key de MapTiler: la variable de entorno (Railway) manda; si no, se lee del
 // archivo local `app/backend/maptiler.key` (ignorado por git) para correr en
 // el PC sin tener que setear variables. Vacío => el mapa usa tiles de OSM.
-function leerMaptilerKey() {
-  if (process.env.MAPTILER_KEY) return process.env.MAPTILER_KEY.trim();
-  try { return readFileSync(join(__dirname, '..', 'maptiler.key'), 'utf8').trim(); }
+function leerKey(envName, file) {
+  if (process.env[envName]) return process.env[envName].trim();
+  try { return readFileSync(join(__dirname, '..', file), 'utf8').trim(); }
   catch { return ''; }
 }
-const MAPTILER_KEY = leerMaptilerKey();
+const MAPTILER_KEY = leerKey('MAPTILER_KEY', 'maptiler.key');
+const TOMTOM_KEY = leerKey('TOMTOM_KEY', 'tomtom.key');   // tráfico en vivo + ETA real
 
 // Clave de acceso (modo privado mientras se pule la app). Si la variable de
 // entorno ACCESO_CLAVE está puesta (en Railway), la app pide usuario/clave al
@@ -116,7 +117,7 @@ const server = http.createServer(async (req, res) => {
       // Config pública para el frontend. La API key de MapTiler vive en una
       // variable de entorno (NO en el repo, que es público). Si no está, el
       // frontend cae de vuelta a los tiles gratis de OSM.
-      return sendJSON(res, 200, { maptilerKey: MAPTILER_KEY });
+      return sendJSON(res, 200, { maptilerKey: MAPTILER_KEY, tomtomKey: TOMTOM_KEY });
     }
     if (url.pathname === '/api/health' && req.method === 'GET') {
       return sendJSON(res, 200, { ok: true });
