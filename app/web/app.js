@@ -14,7 +14,9 @@ const API = '/api/estacionamientos';
 // Estado en memoria.
 let DATA = [];
 let CENTRO = { lat: -38.7359, lng: -72.5905, nombre: 'Temuco' };
-let ZONAS = [];                    // ciudades de la región con datos (del backend)
+let ZONAS = [];                    // ciudades con datos (del backend)
+let REGIONES = [];                 // 16 regiones de Chile, orden norte→sur (del backend)
+let MAPTILER_KEY = '';             // key de MapTiler (del backend); vacío => tiles OSM
 let ciudadActual = 'Temuco';       // ciudad que se está mirando ahora
 let USER = { ...CENTRO };          // "estás aquí" (Temuco por defecto)
 let map = null, markers = {}, meMarker = null;
@@ -151,11 +153,21 @@ function zonaMasCercana(pt) {
   }
   return { zona: best, dist: bd };
 }
-// Llena el selector del header con las ciudades (nombre + cantidad).
+// Llena el selector del header con las ciudades, agrupadas por región (N→S).
 function poblarSelectorCiudades() {
   const sel = $('#ciudad-select');
   if (!sel || !ZONAS.length) return;
-  sel.innerHTML = ZONAS.map((z) => `<option value="${z.nombre}">${z.nombre} (${z.cantidad})</option>`).join('');
+  // Agrupa las ciudades por región.
+  const porRegion = {};
+  for (const z of ZONAS) (porRegion[z.region] = porRegion[z.region] || []).push(z);
+  // Orden de regiones: el oficial del backend (norte→sur); el resto al final.
+  const orden = REGIONES.length ? REGIONES : Object.keys(porRegion);
+  const regiones = [...orden, ...Object.keys(porRegion).filter((r) => !orden.includes(r))]
+    .filter((r) => porRegion[r]);
+  const opt = (z) => `<option value="${z.nombre}">${z.nombre} (${z.cantidad})</option>`;
+  sel.innerHTML = regiones
+    .map((r) => `<optgroup label="${r}">${porRegion[r].map(opt).join('')}</optgroup>`)
+    .join('');
   sel.value = ciudadActual;
 }
 // Ajusta la ciudad actual a la más cercana a un punto (sin mover el mapa).
@@ -206,17 +218,54 @@ const LS = {
 };
 
 // --- Mapa -------------------------------------------------------------------
+// Capa de tiles base. Usa MapTiler (plan con cuota, aguanta tráfico real) si hay
+// key; si no, cae a los tiles gratis de OSM (sirve en local / sin configurar).
+function baseTileLayer() {
+  if (MAPTILER_KEY) {
+    return L.tileLayer(
+      `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`,
+      {
+        maxZoom: 20,
+        crossOrigin: true,
+        attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      },
+    );
+  }
+  return osmTileLayer();
+}
+
+// Tiles gratis de OpenStreetMap (respaldo y modo sin key).
+function osmTileLayer() {
+  return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  });
+}
+
+// Agrega la capa base a un mapa. Si es MapTiler y los tiles fallan (key
+// restringida a otro dominio, cuota agotada, etc.), cae solo a OSM para que el
+// mapa NUNCA se quede gris.
+function addBaseLayer(targetMap) {
+  const layer = baseTileLayer().addTo(targetMap);
+  if (MAPTILER_KEY) {
+    let errs = 0;
+    layer.on('tileerror', () => {
+      if (++errs < 4) return;            // tolera fallos sueltos de red
+      layer.off('tileerror');
+      targetMap.removeLayer(layer);
+      osmTileLayer().addTo(targetMap);
+    });
+  }
+  return layer;
+}
+
 function initMap() {
   if (typeof L === 'undefined') {
     $('#map').innerHTML = '<div class="nomap">🗺️ El mapa necesita internet.<br>Igual puedes ver la lista.</div>';
     return;
   }
   map = L.map('map', { zoomControl: true }).setView([CENTRO.lat, CENTRO.lng], 16);
-  // Atribución de OpenStreetMap: OBLIGATORIA por su licencia.
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  }).addTo(map);
+  addBaseLayer(map);
   meMarker = L.marker([USER.lat, USER.lng], {
     icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [16, 16] }),
   }).addTo(map);
@@ -596,9 +645,7 @@ function crearMiniMapa(a) {
   if (typeof L === 'undefined') { el.style.display = 'none'; return; }
   miniMap = L.map(el, { zoomControl: false, attributionControl: false, dragging: true, scrollWheelZoom: false })
     .setView([a.lat, a.lng], 16);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap',
-  }).addTo(miniMap);
+  addBaseLayer(miniMap);
   L.marker([a.lat, a.lng], {
     icon: L.divIcon({ className: '', html: '<div class="pin verde">🚗</div>', iconSize: [0, 0] }),
   }).addTo(miniMap);
@@ -965,6 +1012,7 @@ async function cargar() {
     const j = await r.json();
     DATA = j.estacionamientos;
     if (j.centro) CENTRO = j.centro;
+    if (j.regiones && j.regiones.length) REGIONES = j.regiones;
     if (j.zonas && j.zonas.length && !ZONAS.length) { ZONAS = j.zonas; poblarSelectorCiudades(); }
     cargado = true;
     renderLista();
@@ -1016,9 +1064,19 @@ function skeletonHtml() {
 }
 
 // --- Init -------------------------------------------------------------------
-function init() {
+// Trae la config pública (key de MapTiler) antes de pintar el mapa. Si falla,
+// sigue igual con tiles de OSM (no bloquea el arranque).
+async function cargarConfig() {
+  try {
+    const r = await fetch('/api/config');
+    if (r.ok) { const c = await r.json(); MAPTILER_KEY = c.maptilerKey || ''; }
+  } catch { /* sin config: usamos OSM */ }
+}
+
+async function init() {
   $('#lista').innerHTML = skeletonHtml();   // esqueleto con shimmer mientras carga
   mostrarBienvenida();                       // tarjeta de bienvenida (1ª vez)
+  await cargarConfig();                      // key de mapas (antes de crear el mapa)
   initMap();
   // Chips rápidos.
   $('#chips').querySelectorAll('.chip').forEach((c) =>

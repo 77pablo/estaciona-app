@@ -9,16 +9,27 @@
 
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
 import { getEstacionamientos } from './engine.js';
-import { CENTRO, ZONAS } from './data.js';
+import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente } from './votos.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = join(__dirname, '..', '..', 'web');
 const PORT = process.env.PORT || 4000;
+
+// Key de MapTiler: la variable de entorno (Railway) manda; si no, se lee del
+// archivo local `app/backend/maptiler.key` (ignorado por git) para correr en
+// el PC sin tener que setear variables. Vacío => el mapa usa tiles de OSM.
+function leerMaptilerKey() {
+  if (process.env.MAPTILER_KEY) return process.env.MAPTILER_KEY.trim();
+  try { return readFileSync(join(__dirname, '..', 'maptiler.key'), 'utf8').trim(); }
+  catch { return ''; }
+}
+const MAPTILER_KEY = leerMaptilerKey();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -60,7 +71,7 @@ const server = http.createServer(async (req, res) => {
       const lista = getEstacionamientos().filter((e) => e.ciudad === ciudad);
       const tally = await tallyReciente(3);            // votos de las últimas 3 h
       for (const e of lista) { if (tally[e.id]) e.votos = tally[e.id]; }
-      return sendJSON(res, 200, { centro: CENTRO, zonas: ZONAS, estacionamientos: lista });
+      return sendJSON(res, 200, { centro: CENTRO, zonas: ZONAS, regiones: REGIONES, estacionamientos: lista });
     }
     if (url.pathname === '/api/voto' && req.method === 'POST') {
       let body = '';
@@ -73,6 +84,12 @@ const server = http.createServer(async (req, res) => {
         } catch { sendJSON(res, 400, { error: 'json inválido' }); }
       });
       return;
+    }
+    if (url.pathname === '/api/config' && req.method === 'GET') {
+      // Config pública para el frontend. La API key de MapTiler vive en una
+      // variable de entorno (NO en el repo, que es público). Si no está, el
+      // frontend cae de vuelta a los tiles gratis de OSM.
+      return sendJSON(res, 200, { maptilerKey: MAPTILER_KEY });
     }
     if (url.pathname === '/api/health' && req.method === 'GET') {
       return sendJSON(res, 200, { ok: true });

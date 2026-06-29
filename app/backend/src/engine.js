@@ -93,7 +93,7 @@ export function getEstacionamientos() {
     const abierto = abiertoAhora(e, hora);
     const gratis = gratisAhora(e, hora, dia);
     const base = {
-      id: e.id, tipo: e.tipo, ciudad: e.ciudad, nombre: e.nombre, direccion: e.direccion,
+      id: e.id, tipo: e.tipo, ciudad: e.ciudad, region: e.region, nombre: e.nombre, direccion: e.direccion,
       lat: e.lat, lng: e.lng, precioHora: e.precioHora, fraccion: e.fraccion,
       gratisInfo: e.gratis, gratisAhora: gratis, horario: e.horario,
       abierto, atributos: e.atributos,

@@ -11,6 +11,8 @@ votos.json
 # Secretos / entorno
 .env
 .env.*
+# Key de MapTiler para correr en local (en Railway se usa la variable MAPTILER_KEY)
+maptiler.key
 
 # Sistema operativo
 .DS_Store
