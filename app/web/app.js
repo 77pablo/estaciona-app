@@ -248,9 +248,47 @@ function osmTileLayer() {
   });
 }
 
-// Agrega la capa base a un mapa. Si es MapTiler y los tiles fallan (key
-// restringida a otro dominio, cuota agotada, etc.), cae solo a OSM para que el
-// mapa NUNCA se quede gris.
+// Capa satelital híbrida (satélite + nombres de calles) de MapTiler. La clase
+// 'sat-tiles' evita que el filtro oscuro invierta las fotos (CSS).
+function satTileLayer() {
+  return L.tileLayer(
+    `https://api.maptiler.com/maps/hybrid/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`,
+    {
+      maxZoom: 20, crossOrigin: true, className: 'sat-tiles',
+      attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    },
+  );
+}
+
+// --- Capa del mapa: calle <-> satélite ---
+let baseLayer = null;
+let mapModo = 'calle';   // 'calle' | 'satelite'
+function capaPara(modo) {
+  return (modo === 'satelite' && MAPTILER_KEY) ? satTileLayer() : baseTileLayer();
+}
+function setCapaMapa(modo) {
+  if (!map) return;
+  mapModo = modo;
+  if (baseLayer) map.removeLayer(baseLayer);
+  const layer = capaPara(modo);
+  layer.addTo(map);
+  if (layer.bringToBack) layer.bringToBack();
+  baseLayer = layer;
+  // Respaldo a OSM si MapTiler falla (solo en vista calle).
+  if (MAPTILER_KEY && modo !== 'satelite') {
+    let errs = 0;
+    layer.on('tileerror', () => {
+      if (++errs < 4) return;
+      layer.off('tileerror');
+      if (baseLayer === layer) { map.removeLayer(layer); const o = osmTileLayer(); o.addTo(map); if (o.bringToBack) o.bringToBack(); baseLayer = o; }
+    });
+  }
+  const btn = document.querySelector('.leaflet-sat-btn');
+  if (btn) { btn.innerHTML = modo === 'satelite' ? '🗺️' : '🛰️'; btn.title = modo === 'satelite' ? 'Ver calles' : 'Ver satélite'; }
+}
+
+// Agrega la capa base a un mapa (usado por el mini-mapa). Si es MapTiler y los
+// tiles fallan, cae solo a OSM para que el mapa NUNCA se quede gris.
 function addBaseLayer(targetMap) {
   const layer = baseTileLayer().addTo(targetMap);
   if (MAPTILER_KEY) {
@@ -271,7 +309,7 @@ function initMap() {
     return;
   }
   map = L.map('map', { zoomControl: true }).setView([CENTRO.lat, CENTRO.lng], 16);
-  addBaseLayer(map);
+  setCapaMapa('calle');
   meMarker = L.marker([USER.lat, USER.lng], {
     icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [16, 16] }),
   }).addTo(map);
@@ -289,6 +327,22 @@ function initMap() {
     },
   });
   map.addControl(new GeoCtrl());
+
+  // Botón para alternar vista calle <-> satélite (solo si hay MapTiler).
+  if (MAPTILER_KEY) {
+    const SatCtrl = L.Control.extend({
+      options: { position: 'topright' },
+      onAdd() {
+        const b = L.DomUtil.create('button', 'leaflet-geo-btn leaflet-sat-btn');
+        b.type = 'button'; b.innerHTML = '🛰️'; b.title = 'Ver satélite';
+        b.setAttribute('aria-label', 'Alternar vista satélite');
+        L.DomEvent.disableClickPropagation(b);
+        L.DomEvent.on(b, 'click', () => setCapaMapa(mapModo === 'satelite' ? 'calle' : 'satelite'));
+        return b;
+      },
+    });
+    map.addControl(new SatCtrl());
+  }
 
   // Al cambiar el zoom: re-renderiza iconos (pines se simplifican si está lejos).
   map.on('zoomend', () => updateMarkers(listaFiltrada()));
