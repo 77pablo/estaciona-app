@@ -78,7 +78,13 @@ async function serveStatic(res, urlPath) {
   if (!filePath.startsWith(WEB_DIR)) { res.writeHead(403); res.end('Prohibido'); return; }
   try {
     const data = await readFile(filePath);
-    res.writeHead(200, { 'Content-Type': MIME[extname(filePath)] || 'application/octet-stream' });
+    // 'no-cache' = el navegador puede guardar el archivo, pero SIEMPRE revalida
+    // con el servidor antes de usarlo. Evita que se quede pegado con CSS/JS
+    // viejos tras un cambio (causa típica de "no veo el rediseño").
+    res.writeHead(200, {
+      'Content-Type': MIME[extname(filePath)] || 'application/octet-stream',
+      'Cache-Control': 'no-cache',
+    });
     res.end(data);
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
