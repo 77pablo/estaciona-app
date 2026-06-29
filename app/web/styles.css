@@ -718,3 +718,50 @@ main, .view { flex: 1; min-height: 0; }
 .cluster-est.cerrado { background: #5b606b; color: #fff; }
 /* Las "patas" del abanico (spiderfy) en color de acento, no el azul por defecto. */
 .leaflet-cluster-spider-leg { stroke: var(--accent) !important; stroke-opacity: .55 !important; }
+
+/* ============================================================================
+   PULIDO MÓVIL (< 860px): áreas táctiles ≥44px, safe-area (notch), anti-zoom
+   en iOS y tipografía legible. NO afecta el layout de PC (≥860px), que tiene
+   su propio bloque más arriba.
+   ============================================================================ */
+
+/* Alto dinámico solo en celular puro: en iOS/Android la barra del navegador
+   "come" altura y con 100vh la barra inferior quedaba cortada. 100dvh sigue la
+   altura visible real; si el navegador no lo soporta, manda el 100vh base. */
+@media (max-width: 459px) {
+  .phone { height: 100dvh; max-height: none; }
+}
+
+@media (max-width: 859px) {
+  /* Notch y home-bar: el contenido no queda bajo la cámara ni la barra gestual. */
+  .appbar { padding-top: calc(15px + env(safe-area-inset-top, 0px)); }
+  .bottomnav { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  #banner { top: calc(64px + env(safe-area-inset-top, 0px)); }
+
+  /* Anti-zoom: Safari iOS hace zoom al enfocar un campo de texto < 16px. Subir
+     a 16px lo evita (y de paso se lee mejor). Los <select> no disparan zoom. */
+  .searchbar input,
+  .modal input[type="text"] { font-size: 16px; }
+
+  /* Barra de búsqueda: botones (filtros / limpiar) con objetivo táctil ≥44px. */
+  .searchbar { padding: 8px 12px; }
+  .searchbar button { min-width: 44px; min-height: 44px; }
+  .search-clear { width: 44px; height: 44px; }
+
+  /* Chips de filtro: más altos para el dedo (siguen en scroll horizontal). */
+  .chip { padding: 10px 14px; }
+
+  /* Selector de orden en la cabecera de la hoja: objetivo táctil más cómodo. */
+  .sheet-head select { padding: 8px 10px; font-size: 13px; }
+
+  /* Navegación inferior: cada ítem garantiza alto cómodo (≥44px) para tocar. */
+  .bottomnav .nav { min-height: 52px; }
+
+  /* Modal en pantalla chica: menos margen lateral, respeta el home-bar y nunca
+     desborda el alto visible (se hace scrollable por dentro). */
+  .modal-bg { padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .modal { max-height: calc(100dvh - 32px); }
+
+  /* Bienvenida (onboarding): mismo respeto al notch en pantallas muy chicas. */
+  .onboard { padding: 16px; }
+}
