@@ -345,16 +345,54 @@ main, .view { flex: 1; min-height: 0; }
 .simple { padding: 18px; overflow-y: auto; flex: 1; min-height: 0; }
 .simple h2 { font-size: 24px; margin-bottom: 14px; font-weight: 900; letter-spacing: -0.03em; }
 .empty-big { text-align: center; color: var(--muted); padding: 50px 20px; }
-.empty-big .em { font-size: 46px; display: block; margin-bottom: 14px; opacity: .8; }
-.miauto-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 22px; box-shadow: var(--shadow-soft); text-align: center; }
-.miauto-card .big { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
-.miauto-card .cost { font-size: 32px; font-weight: 700; color: var(--accent); margin: 8px 0; letter-spacing: -0.02em; }
+.empty-big .em { font-size: 46px; display: block; margin-bottom: 14px; opacity: .8; color: var(--muted); }
+.empty-big .em .ic-svg { vertical-align: middle; }
+.empty-tit { color: var(--text); font-size: 17px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px; }
+.empty-big p { font-size: 13.5px; line-height: 1.5; max-width: 320px; margin: 0 auto; }
+.empty-big p b { color: var(--text); }
+
+/* Tarjeta "dónde dejé el auto": ubicación arriba, panel de datos (cronómetro +
+   costo) tipo dashboard, y pie con alarma/ETA. El dato vivo va en monoespaciada. */
+.miauto-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; box-shadow: var(--shadow-soft); text-align: left; }
+.miauto-card .big { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.miauto-card .cost { font-size: 30px; font-weight: 700; color: var(--accent); margin: 0; letter-spacing: -0.02em; line-height: 1.15; }
 .miauto-card .lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; font-weight: 600; }
-.fav-item { display: flex; align-items: center; gap: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; margin-bottom: 10px; cursor: pointer; transition: border-color .12s; }
+
+.ma-loc { display: flex; gap: 11px; align-items: flex-start; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.ma-loc-ic { color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+.ma-loc-txt { min-width: 0; }
+.ma-loc-txt .lbl { margin-bottom: 2px; }
+.ma-dir { color: var(--muted); font-size: 13px; margin-top: 3px; line-height: 1.35; }
+
+.ma-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: end; }
+.ma-stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ma-stat .lbl { display: flex; align-items: center; gap: 5px; }
+
+/* Punto "en vivo" que late junto al cronómetro. */
+.ma-live { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(86,201,138,.55); animation: maPulse 1.9s ease-out infinite; }
+@keyframes maPulse {
+  0% { box-shadow: 0 0 0 0 rgba(86,201,138,.5); }
+  70% { box-shadow: 0 0 0 7px rgba(86,201,138,0); }
+  100% { box-shadow: 0 0 0 0 rgba(86,201,138,0); }
+}
+
+.ma-foot { display: flex; flex-direction: column; gap: 9px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.ma-line { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); font-weight: 500; }
+.ma-line .ic-svg { color: var(--muted); }
+.ma-line.urgente { color: var(--red); font-weight: 700; }
+.ma-line.urgente .ic-svg { color: var(--red); }
+.ma-nota { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; color: var(--muted); line-height: 1.45; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.ma-nota .ic-svg { color: var(--amber); margin-top: 1px; flex-shrink: 0; }
+.ma-acciones { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+.fav-item { display: flex; align-items: center; gap: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; margin-bottom: 10px; cursor: pointer; transition: border-color .12s, background .12s; }
 .fav-item:hover { border-color: var(--line-2); }
-.fav-item .ic { font-size: 21px; opacity: .9; }
-.fav-item .nm { font-weight: 700; }
-.fav-item .sub { font-size: 12px; color: var(--muted); }
+.fav-item .ic { font-size: 21px; opacity: .9; flex-shrink: 0; }
+.fav-item .nm { font-weight: 700; display: flex; align-items: center; gap: 7px; }
+.fav-item .sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Flecha "tocá para abrir" en los lugares guardados. */
+.fav-go { color: var(--muted); flex-shrink: 0; display: flex; transition: transform .14s, color .14s; }
+.fav-item:hover .fav-go { color: var(--accent); transform: translateX(2px); }
 
 /* Banner + toast */
 #banner {
@@ -524,8 +562,12 @@ main, .view { flex: 1; min-height: 0; }
 .modal input[type="text"]:focus { border-color: var(--accent); }
 
 .fav-item.lugar { gap: 8px; }
+.fav-item.lugar.fijada .ic { color: var(--accent); opacity: 1; }
 .lugar-main { display: flex; align-items: center; gap: 12px; flex: 1; cursor: pointer; min-width: 0; }
-.lugar-edit { border: 1px solid var(--line-2); background: transparent; border-radius: var(--r); padding: 9px 12px; font-size: 16px; cursor: pointer; flex-shrink: 0; color: var(--text); }
+/* Pill "Sin fijar": deja claro que Casa/Trabajo aún apunta a un sector por defecto. */
+.lugar-tag { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--amber); background: var(--amber-bg); border: 1px solid rgba(224,180,74,.3); border-radius: var(--r); padding: 1px 6px; }
+.lugar-edit { border: 1px solid var(--line-2); background: transparent; border-radius: var(--r); padding: 9px 12px; font-size: 16px; cursor: pointer; flex-shrink: 0; color: var(--text); transition: border-color .14s, color .14s, transform .14s; }
+.lugar-edit:hover { border-color: var(--accent); color: var(--accent); }
 .lugar-edit:active { transform: scale(.95); }
 
 .estado { font-weight: 700; font-size: 11px; font-family: var(--font-ui); }

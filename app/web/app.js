@@ -1106,24 +1106,42 @@ function renderMiAuto() {
   destruirMiniMapa();                 // limpia instancia previa antes de recrear
   if (!a) {
     v.innerHTML = `<div class="simple"><div class="empty-big">
-      <span class="em">${ic('car', 46)}</span>Aún no estás estacionado.<br>
-      Cuando estaciones, toca <b>"Estacioné aquí"</b> en cualquier lugar.</div></div>`;
+      <span class="em">${ic('car', 46)}</span>
+      <div class="empty-tit">Aún no estás estacionado</div>
+      <p>Cuando dejes el auto, abre un lugar y toca <b>"Estacioné aquí"</b>. Te guardo dónde quedó, con cronómetro y costo estimado.</p>
+      <button class="btn btn-primary" style="margin-top:18px" onclick="irA('buscar')">${ic('search', 16)} Buscar dónde estacionar</button>
+    </div></div>`;
     return;
   }
   v.innerHTML = `<div class="simple">
     <h2>${ic('car', 22)} Mi auto</h2>
     <div class="miauto-card">
-      <div class="lbl">Está en</div>
-      <div class="big" style="font-size:20px">${esc(a.nombre)}</div>
-      <div class="lbl" style="margin-bottom:10px">${esc(a.direccion)}</div>
-      <div class="lbl">Llevas</div>
-      <div class="big" id="ma-tiempo">—</div>
-      <div class="cost" id="ma-costo">—</div>
-      <div class="lbl" id="ma-alarma">—</div>
-      <div class="lbl" id="ma-eta">—</div>
+      <div class="ma-loc">
+        <span class="ma-loc-ic">${ic('pin', 18)}</span>
+        <div class="ma-loc-txt">
+          <div class="lbl">Está en</div>
+          <div class="big" style="font-size:20px">${esc(a.nombre)}</div>
+          <div class="ma-dir">${esc(a.direccion)}</div>
+        </div>
+      </div>
+      <div class="ma-stats">
+        <div class="ma-stat">
+          <div class="lbl">Llevas <span class="ma-live" title="En vivo" aria-hidden="true"></span></div>
+          <div class="big" id="ma-tiempo">—</div>
+        </div>
+        <div class="ma-stat">
+          <div class="lbl">Costo estimado</div>
+          <div class="cost" id="ma-costo">—</div>
+        </div>
+      </div>
+      <div class="ma-foot">
+        <div class="ma-line" id="ma-alarma">—</div>
+        <div class="ma-line" id="ma-eta">—</div>
+      </div>
+      ${a.precioHora ? `<div class="ma-nota">${ic('bulb', 13)} El costo es una estimación (descuenta horas gratis/cerradas). Confirma la tarifa en el lugar.</div>` : ''}
     </div>
     <div id="mini-map" class="mini-map" aria-label="Mapa con la ubicación de tu auto"></div>
-    <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
+    <div class="ma-acciones">
       <button class="btn btn-primary" onclick="llevame('${a.id}')">${ic('compass', 17)} Volver a mi auto</button>
       <button class="btn btn-second" onclick="compartir('${a.id}')">${ic('share', 16)} Compartir ubicación</button>
       <button class="btn btn-ghost" onclick="terminarAuto()">${ic('check', 16)} Terminar</button>
@@ -1139,10 +1157,11 @@ function actualizarMiAutoVivo() {
   const mins = Math.floor((Date.now() - a.inicio) / 60000);
   const hh = Math.floor(mins / 60), mm = mins % 60;
   const costo = costoTranscurrido(a);
-  let alarmaTxt = 'Sin alarma';
+  let alarmaTxt = 'Sin alarma', alarmaVencida = false;
   if (a.alarmaTs) {
     const rest = Math.round((a.alarmaTs - Date.now()) / 60000);
-    alarmaTxt = rest > 0 ? `Alarma en ${rest} min` : 'Alarma cumplida';
+    if (rest > 0) alarmaTxt = `Alarma en ${rest} min`;
+    else { alarmaTxt = 'Alarma cumplida'; alarmaVencida = true; }
   }
   const distVuelta = haversine(USER, a);   // ETA caminando de vuelta (~80 m/min)
   const set = (id, txt) => { const e = $(id); if (e) e.textContent = txt; };
@@ -1150,6 +1169,7 @@ function actualizarMiAutoVivo() {
   set('#ma-tiempo', `${hh}h ${mm}min`);
   set('#ma-costo', !a.precioHora ? 'Gratis' : costo === 0 ? 'Gratis ahora' : CLP(costo));
   setHtml('#ma-alarma', `${ic('clock', 14)} ${alarmaTxt}`);
+  $('#ma-alarma')?.classList.toggle('urgente', alarmaVencida);   // resalta cuando ya venció
   setHtml('#ma-eta', `${ic('walk', 14)} A ${walkMin(distVuelta)} min caminando (${Math.round(distVuelta)} m)`);
 }
 window.terminarAuto = () => { LS.clearAuto(); renderMiAuto(); toast('¡Listo, buen viaje! 🚗'); };
@@ -1165,9 +1185,14 @@ function renderFavoritos() {
     <h2 style="font-size:14px;color:var(--muted);margin:16px 0 8px">Lugares guardados</h2>
     ${favs.length ? favs.map((p) => `
       <div class="fav-item" data-id="${p.id}"><span class="ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 21)}</span>
-        <div style="flex:1"><div class="nm">${esc(p.nombre)}</div>
-        <div class="sub">${precioHTML(p)}${p.ciudad ? ' · ' + esc(p.ciudad) : ''} · ${esc(p.direccion)}</div></div></div>
-    `).join('') : `<div class="empty-big" style="padding:24px">Aún no guardas lugares.<br>Toca la ${ic('starOutline', 14)} en un estacionamiento.</div>`}
+        <div style="flex:1;min-width:0"><div class="nm">${esc(p.nombre)}</div>
+        <div class="sub">${precioHTML(p)}${p.ciudad ? ' · ' + esc(p.ciudad) : ''} · ${esc(p.direccion)}</div></div>
+        <span class="fav-go" aria-hidden="true">${ic('arrowRight', 16)}</span></div>
+    `).join('') : `<div class="empty-big" style="padding:28px 20px">
+      <span class="em">${ic('starOutline', 40)}</span>
+      <div class="empty-tit">Aún no guardas lugares</div>
+      <p>Toca la ${ic('starOutline', 14)} de un estacionamiento para guardarlo aquí y volver rápido.</p>
+    </div>`}
   </div>`;
   $('#view-favoritos').querySelectorAll('.fav-item[data-id]').forEach((el) =>
     el.addEventListener('click', () => irAFav(el.dataset.id)));
@@ -1196,13 +1221,15 @@ window.irLugar = (k) => {
 // Fila de Casa/Trabajo en Favoritos: tocar el texto = ver cerca; ✏️ = fijarla.
 function filaLugar(k, iconHtml) {
   const l = LUGARES[k];
-  const sub = l.set
+  const nom = LUGARES_DEF[k].nombre;
+  const fijada = !!l.set;
+  const sub = fijada
     ? `${esc(l.etiqueta || 'Ubicación fijada')} · ver cerca`
-    : 'Sin fijar · toca para poner tu dirección';
-  return `<div class="fav-item lugar">
+    : 'Sin fijar · usa el lápiz para poner tu dirección';
+  return `<div class="fav-item lugar${fijada ? ' fijada' : ''}">
     <div class="lugar-main" onclick="irLugar('${k}')"><span class="ic">${iconHtml}</span>
-      <div style="min-width:0"><div class="nm">${LUGARES_DEF[k].nombre}</div><div class="sub">${sub}</div></div></div>
-    <button class="lugar-edit" onclick="editarLugar('${k}')" aria-label="Fijar ${LUGARES_DEF[k].nombre}">${ic('edit', 16)}</button>
+      <div style="min-width:0"><div class="nm">${nom}${fijada ? '' : ' <span class="lugar-tag">Sin fijar</span>'}</div><div class="sub">${sub}</div></div></div>
+    <button class="lugar-edit" onclick="editarLugar('${k}')" aria-label="${fijada ? 'Editar' : 'Fijar'} ${nom}" title="${fijada ? 'Editar' : 'Fijar'} ${nom}">${ic('edit', 16)}</button>
   </div>`;
 }
 
