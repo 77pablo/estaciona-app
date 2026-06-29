@@ -68,6 +68,48 @@ function haversine(a, b) {
 }
 // Escapa texto para insertarlo seguro en innerHTML (datos de OSM/Nominatim).
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+// --- Íconos lineales modernos (trazo fino, heredan el color del texto) -------
+const ICONS = {
+  parking:'<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M9.5 16.5v-9h3.4a2.7 2.7 0 0 1 0 5.4H9.5"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.1-4.1"/>',
+  filters:'<path d="M4 7h16M4 12h16M4 17h16"/><circle cx="10" cy="7" r="2.3" fill="currentColor"/><circle cx="15" cy="12" r="2.3" fill="currentColor"/><circle cx="8" cy="17" r="2.3" fill="currentColor"/>',
+  pin:'<path d="M12 21s6.5-5.4 6.5-10.5a6.5 6.5 0 1 0-13 0C5.5 15.6 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2.3"/>',
+  locate:'<circle cx="12" cy="12" r="6.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/>',
+  layers:'<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/>',
+  refresh:'<path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M20.5 4v4.3h-4.3"/>',
+  car:'<path d="M5 13l1.4-4.2A2 2 0 0 1 8.3 7.4h7.4a2 2 0 0 1 1.9 1.4L19 13"/><path d="M4 13h16v3.5a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1V16H7.5v.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V13Z"/><path d="M7.5 15.6h.01M16.5 15.6h.01"/>',
+  walk:'<circle cx="13" cy="4" r="1.7"/><path d="m9 21 2.2-6.5-1.7-1.5V9.5l3.3-1 1.7 3 2.2 1"/><path d="m12.2 14.5-1 6.5"/>',
+  starOutline:'<path d="m12 3.5 2.6 5.3 5.9.8-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8-4.3-4.2 5.9-.8L12 3.5Z"/>',
+  starFull:'<path d="m12 3.5 2.6 5.3 5.9.8-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8-4.3-4.2 5.9-.8L12 3.5Z" fill="currentColor"/>',
+  arrowLeft:'<path d="M19 12H5"/><path d="m11 18-6-6 6-6"/>',
+  arrowRight:'<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
+  share:'<path d="M21 3 3 10.5l7 2.5 2.5 7L21 3Z"/>',
+  home:'<path d="m3 11 9-7 9 7"/><path d="M5.5 9.5V20h13V9.5"/>',
+  work:'<rect x="3" y="7.5" width="18" height="12.5" rx="2"/><path d="M8.5 7.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1.5"/>',
+  wallet:'<rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><circle cx="16.5" cy="14.5" r="1.1" fill="currentColor"/>',
+  tag:'<path d="M3 3.5h7L21 14.5l-6.5 6.5L3.5 10.5V3.5Z"/><circle cx="7.3" cy="7.3" r="1.3"/>',
+  clock:'<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>',
+  calc:'<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8 7h8"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/>',
+  compass:'<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5.5-5 2 2-5.5 5-2Z"/>',
+  camera:'<rect x="3" y="6.5" width="13" height="11" rx="2.5"/><path d="m16 10.5 5-3v9l-5-3"/>',
+  zap:'<path d="M13 2.5 5 13.5h6l-1 8 8-11h-6l1-8Z"/>',
+  access:'<circle cx="12" cy="3.8" r="1.7"/><path d="M5 8.5h14"/><path d="M12 8v6"/><path d="m8 21 4-7 4 7"/>',
+  road:'<path d="M7.5 21 9 3M16.5 21 15 3"/><path d="M12 5v2.5M12 11v2.5M12 17v2.5"/>',
+  wifiOff:'<path d="M3 8.5a15 15 0 0 1 5-3.1M21 8.5a15 15 0 0 0-7-3.2"/><path d="M6.5 12a10 10 0 0 1 3-1.6M17.5 12a10 10 0 0 0-2-1.1"/><path d="M9.5 15.3a5 5 0 0 1 5 0"/><path d="M12 19h.01"/><path d="m3 3 18 18"/>',
+  check:'<path d="M20 6.5 9.5 17 4 11.5"/>',
+  edit:'<path d="M12.5 20H21"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z"/>',
+  cart:'<circle cx="9.5" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2.5 4H5l2.2 11.5h10L19 7.5H6"/>',
+  bulb:'<path d="M9.5 18h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.2 11.1c.5.3.7.8.7 1.4V16h5v-.5c0-.6.2-1.1.7-1.4A6 6 0 0 0 12 3Z"/>',
+  thumbUp:'<path d="M7 10.5V20H4.6a.6.6 0 0 1-.6-.6v-8.3a.6.6 0 0 1 .6-.6H7Z"/><path d="M7 10.5 11 3a2 2 0 0 1 2 2v3.5h5.4a2 2 0 0 1 2 2.4l-1.1 6A2 2 0 0 1 17.3 20H7"/>',
+  thumbDown:'<path d="M17 13.5V4h2.4a.6.6 0 0 1 .6.6v8.3a.6.6 0 0 1-.6.6H17Z"/><path d="M17 13.5 13 21a2 2 0 0 1-2-2v-3.5H5.6a2 2 0 0 1-2-2.4l1.1-6A2 2 0 0 1 6.7 4H17"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  users:'<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.3a3 3 0 0 1 0 5.7"/><path d="M15.4 20a5.5 5.5 0 0 0-1.5-3.8"/>',
+};
+// Devuelve un <svg> inline del ícono pedido (hereda color y se alinea al texto).
+function ic(name, size = 18) {
+  return `<svg class="ic-svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+}
 const walkMin = (m) => Math.max(1, Math.round(m / 80));
 // Tráfico ESTIMADO según la hora local (no es tráfico en vivo). Devuelve la
 // velocidad urbana promedio y una etiqueta honesta. Hora punta = más lento.
@@ -105,7 +147,7 @@ function precioCorto(p) {
 function precioHTML(p) {
   if (p.gratisAhora) return '<span class="free">Gratis ahora</span>';
   if (esGratisReal(p)) return '<span class="free">Gratis</span>';
-  if (esGratisClientes(p)) return '<span class="free-cli">🛒 Solo clientes</span>';
+  if (esGratisClientes(p)) return `<span class="free-cli">${ic('cart', 12)} Solo clientes</span>`;
   return `<b>${CLP(p.precioHora)}</b><small>/hr</small>`;
 }
 
@@ -302,7 +344,7 @@ function setCapaMapa(modo) {
     });
   }
   const btn = document.querySelector('.leaflet-sat-btn');
-  if (btn) { btn.innerHTML = modo === 'satelite' ? '🗺️' : '🛰️'; btn.title = modo === 'satelite' ? 'Ver calles' : 'Ver satélite'; }
+  if (btn) { btn.innerHTML = ic('layers', 20); btn.title = modo === 'satelite' ? 'Ver calles' : 'Ver satélite'; }
 }
 
 // Agrega la capa base a un mapa (usado por el mini-mapa). Si es MapTiler y los
@@ -323,7 +365,7 @@ function addBaseLayer(targetMap) {
 
 function initMap() {
   if (typeof L === 'undefined') {
-    $('#map').innerHTML = '<div class="nomap">🗺️ El mapa necesita internet.<br>Igual puedes ver la lista.</div>';
+    $('#map').innerHTML = '<div class="nomap">El mapa necesita internet.<br>Igual puedes ver la lista.</div>';
     return;
   }
   map = L.map('map', { zoomControl: true }).setView([CENTRO.lat, CENTRO.lng], 16);
@@ -337,7 +379,7 @@ function initMap() {
     options: { position: 'bottomright' },
     onAdd() {
       const b = L.DomUtil.create('button', 'leaflet-geo-btn');
-      b.type = 'button'; b.innerHTML = '📍'; b.title = 'Mi ubicación';
+      b.type = 'button'; b.innerHTML = ic('locate', 20); b.title = 'Mi ubicación';
       b.setAttribute('aria-label', 'Usar mi ubicación');
       L.DomEvent.disableClickPropagation(b);
       L.DomEvent.on(b, 'click', () => usarMiUbicacion());
@@ -352,7 +394,7 @@ function initMap() {
       options: { position: 'topright' },
       onAdd() {
         const b = L.DomUtil.create('button', 'leaflet-geo-btn leaflet-sat-btn');
-        b.type = 'button'; b.innerHTML = '🛰️'; b.title = 'Ver satélite';
+        b.type = 'button'; b.innerHTML = ic('layers', 20); b.title = 'Ver satélite';
         b.setAttribute('aria-label', 'Alternar vista satélite');
         L.DomEvent.disableClickPropagation(b);
         L.DomEvent.on(b, 'click', () => setCapaMapa(mapModo === 'satelite' ? 'calle' : 'satelite'));
@@ -385,7 +427,7 @@ function iconHtml(p) {
   // El pin seleccionado siempre conserva su precio para no perderlo de vista.
   const zoom = map ? map.getZoom() : 16;
   if (zoom < 14 && !esSel) return `<div class="pin-dot ${nivel}"></div>`;
-  return `<div class="pin ${nivel}${esSel ? ' sel' : ''}">${p.tipo === 'calle' ? '🛣️' : '🅿️'} ${precioCorto(p)}</div>`;
+  return `<div class="pin ${nivel}${esSel ? ' sel' : ''}">${ic(p.tipo === 'calle' ? 'road' : 'parking', 13)} ${precioCorto(p)}</div>`;
 }
 
 // Seleccionar = centrar el mapa en el lugar y resaltar su pin.
@@ -503,11 +545,11 @@ function renderLista() {
     const precio = precioHTML(p);
     return `
       <div class="card" data-id="${p.id}">
-        <div class="ic">${p.tipo === 'calle' ? '🛣️' : '🅿️'}</div>
+        <div class="ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 22)}</div>
         <div class="info">
-          <div class="nm">${esc(p.nombre)} ${LS.isFav(p.id) ? '⭐' : ''}</div>
+          <div class="nm">${esc(p.nombre)} ${LS.isFav(p.id) ? ic('starFull', 13) : ''}</div>
           <div class="sub">${estadoHTML(p)} · ${dispTxt}</div>
-          <div class="sub">${Math.round(p.dist)} m · 🚶 ${walkMin(p.dist)} min · 🚗 ${carMin(p.dist)} min${p.gratisInfo ? ' · <span class="' + (esGratisClientes(p) ? 'badge-cli' : 'badge-free') + '">' + esc(p.gratisInfo) + '</span>' : ''}</div>
+          <div class="sub">${Math.round(p.dist)} m · ${ic('walk', 13)} ${walkMin(p.dist)} · ${ic('car', 13)} ${carMin(p.dist)} min${p.gratisInfo ? ' · <span class="' + (esGratisClientes(p) ? 'badge-cli' : 'badge-free') + '">' + esc(p.gratisInfo) + '</span>' : ''}</div>
         </div>
         <div class="price">${precio}</div>
       </div>`;
@@ -534,11 +576,11 @@ function openDetalle(id) {
   panselect(p);                 // centrar mapa + resaltar el pin del lugar
 
   const attrs = [];
-  if (p.atributos.techado) attrs.push('🏠 Techado');
-  if (p.atributos.ev) attrs.push('⚡ Cargador EV');
-  if (p.atributos.accesible) attrs.push('♿ Accesible');
-  if (p.atributos.camaras) attrs.push('📹 Con cámaras');
-  if (attrs.length === 0) attrs.push('🅿️ Sin servicios extra');
+  if (p.atributos.techado) attrs.push(ic('home', 14) + ' Techado');
+  if (p.atributos.ev) attrs.push(ic('zap', 14) + ' Cargador EV');
+  if (p.atributos.accesible) attrs.push(ic('access', 14) + ' Accesible');
+  if (p.atributos.camaras) attrs.push(ic('camera', 14) + ' Con cámaras');
+  if (attrs.length === 0) attrs.push('Sin servicios extra');
 
   const precioLinea = esGratisClientes(p)
     ? 'Gratis para clientes (con compra)'
@@ -549,25 +591,25 @@ function openDetalle(id) {
 
   $('#detalle').innerHTML = `
     <div class="det-top">
-      <button onclick="cerrarDetalle()" title="Volver" aria-label="Volver">←</button>
+      <button onclick="cerrarDetalle()" title="Volver" aria-label="Volver">${ic('arrowLeft', 20)}</button>
       <div class="t">${esc(p.nombre)}</div>
-      <button onclick="toggleFavDetalle('${p.id}')" title="Guardar" aria-label="${fav ? 'Quitar de favoritos' : 'Guardar en favoritos'}">${fav ? '⭐' : '☆'}</button>
-      <button onclick="compartir('${p.id}')" title="Compartir" aria-label="Compartir">↗</button>
+      <button onclick="toggleFavDetalle('${p.id}')" title="Guardar" aria-label="${fav ? 'Quitar de favoritos' : 'Guardar en favoritos'}">${fav ? ic('starFull', 20) : ic('starOutline', 20)}</button>
+      <button onclick="compartir('${p.id}')" title="Compartir" aria-label="Compartir">${ic('share', 19)}</button>
     </div>
     <div class="det-body">
-      <div class="det-hero"><span class="hero-ic">${p.tipo === 'calle' ? '🛣️' : '🅿️'}</span><span class="hero-nm">${esc(p.nombre)}</span></div>
+      <div class="det-hero"><span class="hero-ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 30)}</span><span class="hero-nm">${esc(p.nombre)}</span></div>
       <div class="det-status" id="det-status-line">${lineaDisponibilidad(p)}</div>
-      <div class="det-row"><span class="k">💰</span><span>${precioLinea}</span></div>
+      <div class="det-row"><span class="k">${ic('wallet')}</span><span>${precioLinea}</span></div>
       ${esGratisClientes(p)
-        ? `<div class="aviso-cli">🛒 <b>Gratis solo para clientes</b> — válido con compra en el local, no es estacionamiento público.</div>`
-        : p.gratisInfo ? `<div class="det-row"><span class="k">🆓</span><span>${esc(p.gratisInfo)}</span></div>` : ''}
-      <div class="det-row"><span class="k">⏰</span><span>${esc(p.horario)} · ${p.abierto ? '<b style="color:var(--green)">Abierto ahora</b>' : '<b style="color:var(--red)">Cerrado</b>'}</span></div>
-      <div class="det-row"><span class="k">📍</span><span>${esc(p.direccion)} · ${Math.round(haversine(USER, p))} m · 🚶 ${walkMin(haversine(USER, p))} min caminando</span></div>
-      <div class="det-row"><span class="k">🚗</span><span>${carMin(haversine(USER, p))} min en auto · ${trafHTML()}</span></div>
+        ? `<div class="aviso-cli">${ic('cart', 16)} <b>Gratis solo para clientes</b> — válido con compra en el local, no es estacionamiento público.</div>`
+        : p.gratisInfo ? `<div class="det-row"><span class="k">${ic('tag')}</span><span>${esc(p.gratisInfo)}</span></div>` : ''}
+      <div class="det-row"><span class="k">${ic('clock')}</span><span>${esc(p.horario)} · ${p.abierto ? '<b style="color:var(--green)">Abierto ahora</b>' : '<b style="color:var(--red)">Cerrado</b>'}</span></div>
+      <div class="det-row"><span class="k">${ic('pin')}</span><span>${esc(p.direccion)} · ${Math.round(haversine(USER, p))} m · ${ic('walk', 13)} ${walkMin(haversine(USER, p))} min caminando</span></div>
+      <div class="det-row"><span class="k">${ic('car')}</span><span>${carMin(haversine(USER, p))} min en auto · ${trafHTML()}</span></div>
       <div class="attrs">${attrs.map((a) => `<span class="attr">${a}</span>`).join('')}</div>
       ${p.precioHora > 0 ? `
       <div class="calc">
-        <h4>🧮 ¿Cuánto pagaré?</h4>
+        <h4>${ic('calc', 15)} ¿Cuánto pagaré?</h4>
         Salgo en
         <select id="calc-horas">
           ${[1, 2, 3, 4, 6, 8].map((h) => `<option value="${h}">${h} hora${h > 1 ? 's' : ''}</option>`).join('')}
@@ -575,18 +617,18 @@ function openDetalle(id) {
         <div class="total" id="calc-total">${CLP(p.precioHora)}</div>
         <div class="calc-nota" id="calc-nota"></div>
       </div>` : ''}
-      <div class="det-row"><span class="k">👥</span>
+      <div class="det-row"><span class="k">${ic('users')}</span>
         <span>¿Encontraste cupo aquí?</span>
         <span class="thumbs" style="margin-left:auto;display:flex;gap:6px">
-          <button onclick="confirmarCupo('${p.id}',true)" aria-label="Sí, había cupo">👍</button>
-          <button onclick="confirmarCupo('${p.id}',false)" aria-label="No había cupo">👎</button>
+          <button class="vote-si" onclick="confirmarCupo('${p.id}',true)" aria-label="Sí, había cupo">${ic('check', 16)} Sí</button>
+          <button class="vote-no" onclick="confirmarCupo('${p.id}',false)" aria-label="No había cupo">${ic('x', 16)} No</button>
         </span></div>
-      ${p.votos ? `<div class="votos-info">🗳️ Últimas 3 h: <b>${p.votos.up}</b> dijeron que había cupo · <b>${p.votos.down}</b> que no</div>` : ''}
-      <p class="disclaimer">💡 Precio referencial. Confirma la tarifa en el lugar.</p>
+      ${p.votos ? `<div class="votos-info">${ic('users', 14)} Últimas 3 h: <b>${p.votos.up}</b> dijeron que había cupo · <b>${p.votos.down}</b> que no</div>` : ''}
+      <p class="disclaimer">${ic('bulb', 15)} Precio referencial. Confirma la tarifa en el lugar.</p>
     </div>
     <div class="det-actions">
-      <button class="btn btn-primary" onclick="llevame('${p.id}')">🧭 Llévame</button>
-      <button class="btn btn-second" onclick="abrirEstacione('${p.id}')">🚗 Estacioné aquí</button>
+      <button class="btn btn-primary" onclick="llevame('${p.id}')">${ic('compass', 17)} Llévame</button>
+      <button class="btn btn-second" onclick="abrirEstacione('${p.id}')">${ic('car', 17)} Estacioné aquí</button>
     </div>`;
 
   const sel = $('#calc-horas');
@@ -643,11 +685,11 @@ window.llevame = (id) => {
   if (!p) return;
   _rutaDest = p;
   $('#modal').innerHTML = `
-    <h3>🧭 ¿Con qué app te llevo?</h3>
+    <h3>${ic('compass', 18)} ¿Con qué app te llevo?</h3>
     <p>${esc(p.nombre || 'Tu auto')}${p.direccion ? ' · ' + esc(p.direccion) : ''}</p>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <button class="btn btn-primary" onclick="irRuta('google')">🗺️ Google Maps</button>
-      <button class="btn btn-second" onclick="irRuta('waze')">🚗 Waze</button>
+      <button class="btn btn-primary" onclick="irRuta('google')">${ic('compass', 17)} Google Maps</button>
+      <button class="btn btn-second" onclick="irRuta('waze')">${ic('car', 17)} Waze</button>
       <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
     </div>`;
   abrirModal();
@@ -676,9 +718,9 @@ window.abrirEstacione = (id) => {
   if (!p) return;
   _estacionePend = p; _alarmaSel = null;
   $('#modal').innerHTML = `
-    <h3>🚗 Guardar mi estacionamiento</h3>
+    <h3>${ic('car', 18)} Guardar mi estacionamiento</h3>
     <p>${esc(p.nombre)} · ${esc(p.direccion)}</p>
-    <p style="margin-bottom:8px"><b>⏰ Alarma anti-multa</b> — ¿te aviso en…?</p>
+    <p style="margin-bottom:8px"><b>${ic('clock', 15)} Alarma anti-multa</b> — ¿te aviso en…?</p>
     <div class="opts" id="alarma-opts">
       <button data-min="30">30 min</button>
       <button data-min="60">1 hora</button>
@@ -731,7 +773,7 @@ function crearMiniMapa(a) {
     .setView([a.lat, a.lng], 16);
   addBaseLayer(miniMap);
   L.marker([a.lat, a.lng], {
-    icon: L.divIcon({ className: '', html: '<div class="pin verde">🚗</div>', iconSize: [0, 0] }),
+    icon: L.divIcon({ className: '', html: `<div class="pin verde">${ic('car', 13)}</div>`, iconSize: [0, 0] }),
   }).addTo(miniMap);
   setTimeout(() => miniMap && miniMap.invalidateSize(), 60);
 }
@@ -742,12 +784,12 @@ function renderMiAuto() {
   destruirMiniMapa();                 // limpia instancia previa antes de recrear
   if (!a) {
     v.innerHTML = `<div class="simple"><div class="empty-big">
-      <span class="em">🚗</span>Aún no estás estacionado.<br>
+      <span class="em">${ic('car', 46)}</span>Aún no estás estacionado.<br>
       Cuando estaciones, toca <b>"Estacioné aquí"</b> en cualquier lugar.</div></div>`;
     return;
   }
   v.innerHTML = `<div class="simple">
-    <h2>🚗 Mi auto</h2>
+    <h2>${ic('car', 22)} Mi auto</h2>
     <div class="miauto-card">
       <div class="lbl">Está en</div>
       <div class="big" style="font-size:20px">${esc(a.nombre)}</div>
@@ -760,9 +802,9 @@ function renderMiAuto() {
     </div>
     <div id="mini-map" class="mini-map" aria-label="Mapa con la ubicación de tu auto"></div>
     <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
-      <button class="btn btn-primary" onclick="llevame('${a.id}')">🧭 Volver a mi auto</button>
-      <button class="btn btn-second" onclick="compartir('${a.id}')">↗ Compartir ubicación</button>
-      <button class="btn btn-ghost" onclick="terminarAuto()">✓ Terminar</button>
+      <button class="btn btn-primary" onclick="llevame('${a.id}')">${ic('compass', 17)} Volver a mi auto</button>
+      <button class="btn btn-second" onclick="compartir('${a.id}')">${ic('share', 16)} Compartir ubicación</button>
+      <button class="btn btn-ghost" onclick="terminarAuto()">${ic('check', 16)} Terminar</button>
     </div></div>`;
   crearMiniMapa(a);
   actualizarMiAutoVivo();             // rellena tiempo/costo/alarma/ETA
@@ -778,14 +820,15 @@ function actualizarMiAutoVivo() {
   let alarmaTxt = 'Sin alarma';
   if (a.alarmaTs) {
     const rest = Math.round((a.alarmaTs - Date.now()) / 60000);
-    alarmaTxt = rest > 0 ? `Alarma en ${rest} min` : 'Alarma cumplida ⏰';
+    alarmaTxt = rest > 0 ? `Alarma en ${rest} min` : 'Alarma cumplida';
   }
   const distVuelta = haversine(USER, a);   // ETA caminando de vuelta (~80 m/min)
   const set = (id, txt) => { const e = $(id); if (e) e.textContent = txt; };
+  const setHtml = (id, html) => { const e = $(id); if (e) e.innerHTML = html; };
   set('#ma-tiempo', `${hh}h ${mm}min`);
   set('#ma-costo', !a.precioHora ? 'Gratis' : costo === 0 ? 'Gratis ahora' : CLP(costo));
-  set('#ma-alarma', `⏰ ${alarmaTxt}`);
-  set('#ma-eta', `🚶 A ${walkMin(distVuelta)} min caminando (${Math.round(distVuelta)} m)`);
+  setHtml('#ma-alarma', `${ic('clock', 14)} ${alarmaTxt}`);
+  setHtml('#ma-eta', `${ic('walk', 14)} A ${walkMin(distVuelta)} min caminando (${Math.round(distVuelta)} m)`);
 }
 window.terminarAuto = () => { LS.clearAuto(); renderMiAuto(); toast('¡Listo, buen viaje! 🚗'); };
 
@@ -794,15 +837,15 @@ function renderFavoritos() {
   // Usa el objeto guardado; si es formato viejo (id string), lo busca en la ciudad actual.
   const favs = LS.getFavs().map((f) => (typeof f === 'string' ? DATA.find((p) => p.id === f) : f)).filter(Boolean);
   $('#view-favoritos').innerHTML = `<div class="simple">
-    <h2>⭐ Favoritos</h2>
-    ${filaLugar('casa', '🏠')}
-    ${filaLugar('trabajo', '💼')}
+    <h2>${ic('starFull', 22)} Favoritos</h2>
+    ${filaLugar('casa', ic('home', 20))}
+    ${filaLugar('trabajo', ic('work', 20))}
     <h2 style="font-size:14px;color:var(--muted);margin:16px 0 8px">Lugares guardados</h2>
     ${favs.length ? favs.map((p) => `
-      <div class="fav-item" data-id="${p.id}"><span class="ic">${p.tipo === 'calle' ? '🛣️' : '🅿️'}</span>
+      <div class="fav-item" data-id="${p.id}"><span class="ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 21)}</span>
         <div style="flex:1"><div class="nm">${esc(p.nombre)}</div>
         <div class="sub">${precioHTML(p)}${p.ciudad ? ' · ' + esc(p.ciudad) : ''} · ${esc(p.direccion)}</div></div></div>
-    `).join('') : '<div class="empty-big" style="padding:24px">Aún no guardas lugares.<br>Toca la ⭐ en un estacionamiento.</div>'}
+    `).join('') : `<div class="empty-big" style="padding:24px">Aún no guardas lugares.<br>Toca la ${ic('starOutline', 14)} en un estacionamiento.</div>`}
   </div>`;
   $('#view-favoritos').querySelectorAll('.fav-item[data-id]').forEach((el) =>
     el.addEventListener('click', () => irAFav(el.dataset.id)));
@@ -829,15 +872,15 @@ window.irLugar = (k) => {
 };
 
 // Fila de Casa/Trabajo en Favoritos: tocar el texto = ver cerca; ✏️ = fijarla.
-function filaLugar(k, ic) {
+function filaLugar(k, iconHtml) {
   const l = LUGARES[k];
   const sub = l.set
-    ? `${esc(l.etiqueta || 'Ubicación fijada')} · ver cerca →`
-    : 'Sin fijar · toca ✏️ para poner tu dirección';
+    ? `${esc(l.etiqueta || 'Ubicación fijada')} · ver cerca`
+    : 'Sin fijar · toca para poner tu dirección';
   return `<div class="fav-item lugar">
-    <div class="lugar-main" onclick="irLugar('${k}')"><span class="ic">${ic}</span>
+    <div class="lugar-main" onclick="irLugar('${k}')"><span class="ic">${iconHtml}</span>
       <div style="min-width:0"><div class="nm">${LUGARES_DEF[k].nombre}</div><div class="sub">${sub}</div></div></div>
-    <button class="lugar-edit" onclick="editarLugar('${k}')" aria-label="Fijar ${LUGARES_DEF[k].nombre}">✏️</button>
+    <button class="lugar-edit" onclick="editarLugar('${k}')" aria-label="Fijar ${LUGARES_DEF[k].nombre}">${ic('edit', 16)}</button>
   </div>`;
 }
 
@@ -847,12 +890,12 @@ window.editarLugar = (k) => {
   _lugarEdit = k;
   const nom = LUGARES_DEF[k].nombre;
   $('#modal').innerHTML = `
-    <h3>📍 Fijar ${nom}</h3>
+    <h3>${ic('pin', 18)} Fijar ${nom}</h3>
     <p>¿Dónde queda tu ${nom.toLowerCase()}? Se guarda solo en este teléfono.</p>
     <input id="lugar-dir" type="text" placeholder="Escribe la dirección o lugar…" autocomplete="off" aria-label="Dirección de ${nom}" />
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
-      <button class="btn btn-primary" onclick="fijarLugarDireccion()">🔎 Buscar esta dirección</button>
-      <button class="btn btn-second" onclick="fijarLugarAqui()">📍 Usar mi ubicación actual</button>
+      <button class="btn btn-primary" onclick="fijarLugarDireccion()">${ic('search', 17)} Buscar esta dirección</button>
+      <button class="btn btn-second" onclick="fijarLugarAqui()">${ic('locate', 17)} Usar mi ubicación actual</button>
       <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
     </div>`;
   abrirModal();
@@ -960,12 +1003,12 @@ function abrirFiltros() {
     </div>
     <p style="margin:12px 0 6px">Servicios</p>
     <div class="opts" id="f-serv">
-      <button data-k="gratis" class="${chip(f.gratis)}">🆓 Gratis</button>
-      <button data-k="barato" class="${chip(f.barato)}">💸 Barato</button>
-      <button data-k="techado" class="${chip(f.techado)}">🏠 Techado</button>
-      <button data-k="ev" class="${chip(f.ev)}">⚡ Cargador EV</button>
-      <button data-k="accesible" class="${chip(f.accesible)}">♿ Accesible</button>
-      <button data-k="abierto" class="${chip(f.abierto)}">⏰ Abierto ahora</button>
+      <button data-k="gratis" class="${chip(f.gratis)}">${ic('tag', 14)} Gratis</button>
+      <button data-k="barato" class="${chip(f.barato)}">${ic('wallet', 14)} Barato</button>
+      <button data-k="techado" class="${chip(f.techado)}">${ic('home', 14)} Techado</button>
+      <button data-k="ev" class="${chip(f.ev)}">${ic('zap', 14)} Cargador EV</button>
+      <button data-k="accesible" class="${chip(f.accesible)}">${ic('access', 14)} Accesible</button>
+      <button data-k="abierto" class="${chip(f.abierto)}">${ic('clock', 14)} Abierto ahora</button>
     </div>
     <p style="margin:12px 0 6px">Distancia máxima: <b id="f-dist-lbl">${f.distMax ? f.distMax + ' m' : 'sin límite'}</b></p>
     <input id="f-dist" type="range" min="0" max="2000" step="100" value="${f.distMax}" style="width:100%" />
@@ -1035,7 +1078,7 @@ function chequearAlarma() {
   if (a && a.alarmaTs && !a.alarmaSonó && Date.now() >= a.alarmaTs) {
     a.alarmaSonó = true; LS.setAuto(a);
     const b = $('#banner');
-    b.innerHTML = `<span>⏰ ¡Revisa tu estacionamiento! (${esc(a.nombre)})</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
+    b.innerHTML = `<span>${ic('clock', 16)} ¡Revisa tu estacionamiento! (${esc(a.nombre)})</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
     b.classList.add('show');
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification('Estaciona ⏰', { body: `Revisa tu estacionamiento en ${a.nombre}` });
@@ -1054,7 +1097,7 @@ function chequearRecordatorioAuto() {
   a.recordado = true; LS.setAuto(a);
   const fecha = inicio.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' });
   const b = $('#banner');
-  b.innerHTML = `<span>🚗 ¿Sigues con tu auto en ${esc(a.nombre)}? Lo guardaste el ${fecha}</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
+  b.innerHTML = `<span>${ic('car', 16)} ¿Sigues con tu auto en ${esc(a.nombre)}? Lo guardaste el ${fecha}</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
   b.classList.add('show');
 }
 
@@ -1123,7 +1166,7 @@ async function cargar() {
     if (!cargado) {
       $('#sheet-count').textContent = 'Error de conexión';
       $('#lista').innerHTML = `<div class="empty-big">
-        <span class="em">📡</span>No pudimos cargar los estacionamientos.<br>
+        <span class="em">${ic('wifiOff', 46)}</span>No pudimos cargar los estacionamientos.<br>
         <button class="btn btn-primary" style="margin-top:14px" onclick="cargar()">Reintentar</button></div>`;
     } else if (!sinConexionAvisado) {
       toast('Sin conexión, reintentando…');   // una sola vez por racha de errores
@@ -1139,13 +1182,13 @@ function mostrarBienvenida() {
   const o = $('#onboard');
   if (!o) return;
   o.innerHTML = `<div class="onboard-card" role="dialog" aria-label="Bienvenida">
-    <div class="onboard-ic" aria-hidden="true">🅿️</div>
+    <div class="onboard-ic" aria-hidden="true">${ic('parking', 44)}</div>
     <h3>¡Bienvenido a Estaciona!</h3>
-    <p>Versión <b>piloto</b> para <b>todo Chile</b>: te mostramos dónde estacionar, cuánto cobran y si es gratis. Elige tu ciudad arriba 📍 o usa tu ubicación.</p>
+    <p>Versión <b>piloto</b> para <b>todo Chile</b>: te mostramos dónde estacionar, cuánto cobran y si es gratis. Elige tu ciudad arriba o usa tu ubicación.</p>
     <ul class="onboard-list">
-      <li>🔓 Funciona <b>sin cuenta</b>: tus favoritos y tu auto se guardan solo en este teléfono.</li>
-      <li>📍 Toca el botón de ubicación para ver lo más cercano a ti.</li>
-      <li>💡 Los precios son referenciales: confirma siempre en el lugar.</li>
+      <li>Funciona <b>sin cuenta</b>: tus favoritos y tu auto se guardan solo en este teléfono.</li>
+      <li>Toca el botón de ubicación para ver lo más cercano a ti.</li>
+      <li>Los precios son referenciales: confirma siempre en el lugar.</li>
     </ul>
     <button class="btn btn-primary" onclick="cerrarBienvenida()">Entendido</button>
   </div>`;
@@ -1221,6 +1264,13 @@ async function init() {
   window.addEventListener('resize', () => map && map.invalidateSize());
 
   cargar();
+  // Si llegó desde la landing con ?q=… (buscador de la portada), busca eso al abrir.
+  const qInicial = new URLSearchParams(location.search).get('q');
+  if (qInicial) {
+    const s = $('#search'); if (s) s.value = qInicial;
+    query = qInicial;
+    setTimeout(() => geocodificar(qInicial), 400);   // deja cargar el mapa primero
+  }
   chequearRecordatorioAuto();   // aviso "¿sigues con tu auto?" si quedó de otro día
   setInterval(cargar, 6000);
   setInterval(() => { if ($('#view-miauto').classList.contains('active')) actualizarMiAutoVivo(); }, 1000);

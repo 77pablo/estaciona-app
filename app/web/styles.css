@@ -52,6 +52,18 @@ body {
 }
 ::selection { background: var(--accent); color: var(--on-accent); }
 
+/* Íconos lineales: heredan el color del texto y se alinean a la línea base. */
+.ic-svg { display: inline-block; vertical-align: -0.18em; flex-shrink: 0; }
+
+/* Tirador de plegar panel: se ocultó (ensuciaba el borde entre mapa y lista). */
+.panel-toggle { display: none !important; }
+
+/* Panel de resultados con textura sutil (no un bloque oscuro vacío). */
+.sheet { background-image: var(--grain); }
+.card:hover { border-color: var(--line-2); box-shadow: var(--shadow); }
+/* La cabecera y la primera tarjeta respiran un poco. */
+#lista { padding-top: 2px; padding-bottom: 8px; }
+
 /* Datos duros en monoespaciada (estilo reloj digital). */
 .card .price b, .calc .total, #ma-tiempo, .miauto-card .cost, .votos-info b { font-family: var(--font-mono); }
 
@@ -164,12 +176,13 @@ main, .view { flex: 1; min-height: 0; }
 .sheet-head::before { content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 34px; height: 4px; background: var(--line-2); border-radius: 3px; }
 #sheet-count { font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
 
-/* Tarjeta */
+/* Tarjeta: superficie elevada con relieve (le da vida al panel, no una lista plana) */
 .card {
-  display: flex; gap: 13px; align-items: center; padding: 15px 18px; border-bottom: 1px solid var(--line); cursor: pointer;
-  transition: background .12s;
+  display: flex; gap: 13px; align-items: center; padding: 14px 15px; margin: 9px 12px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-soft); transition: border-color .14s, transform .08s, box-shadow .14s;
 }
-.card:active { background: var(--surface-2); }
+.card:active { transform: scale(.995); }
 .card .ic { font-size: 22px; opacity: .9; }
 .card .info { flex: 1; min-width: 0; }
 .card .nm { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
@@ -238,8 +251,15 @@ main, .view { flex: 1; min-height: 0; }
 .btn-second { background: var(--surface-2); color: var(--text); border: 1px solid var(--line-2); }
 .btn-second:hover { border-color: var(--accent); }
 .btn-ghost { background: transparent; color: var(--muted); font-weight: 600; }
-.thumbs { display: flex; gap: 10px; margin-top: 10px; }
-.thumbs button { flex: 1; border: 1px solid var(--line-2); background: var(--surface-2); border-radius: var(--r); padding: 11px; font-size: 18px; cursor: pointer; color: var(--text); }
+.thumbs { display: flex; gap: 8px; }
+.thumbs button {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text);
+  border-radius: var(--r); padding: 7px 13px; font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: var(--font-ui); transition: border-color .15s, color .15s, background .15s;
+}
+.vote-si:hover, .vote-si:focus-visible { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+.vote-no:hover, .vote-no:focus-visible { border-color: var(--red); color: var(--red); }
 
 /* Modal */
 .modal-bg { position: absolute; inset: 0; background: rgba(0,0,0,.6); z-index: 60; display: none; align-items: center; justify-content: center; padding: 24px; }
@@ -364,7 +384,7 @@ main, .view { flex: 1; min-height: 0; }
 }
 
 /* Skeleton */
-.skel-card { display: flex; gap: 13px; align-items: center; padding: 15px 18px; border-bottom: 1px solid var(--line); }
+.skel-card { display: flex; gap: 13px; align-items: center; padding: 14px 15px; margin: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-2); }
 .skel-info { flex: 1; display: flex; flex-direction: column; gap: 7px; }
 .skel {
   background: linear-gradient(90deg, var(--surface-2) 25%, rgba(244,242,236,.10) 37%, var(--surface-2) 63%);
