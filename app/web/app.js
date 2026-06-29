@@ -176,7 +176,7 @@ function precioHTML(p) {
   if (esGratisReal(p)) return '<span class="free">Gratis</span>';
   if (esGratisClientes(p)) return `<span class="free-cli">${ic('cart', 12)} Solo clientes</span>`;
   if (p.verificado) return `<b>${CLP(p.precioHora)}</b><small>/hr</small>`;
-  return `<b>~${CLP(p.precioHora)}</b><small>/hr aprox.</small>`;
+  return `<b class="precio-est-num">~${CLP(p.precioHora)}</b><small>est.</small>`;
 }
 
 // --- Cálculo de costo realista (descuenta horas gratis y cerradas) ----------
@@ -474,6 +474,17 @@ function initMap() {
     map.addControl(new TrafCtrl());
   }
 
+  // Leyenda del semáforo (qué significan los colores de los pines).
+  const LegendCtrl = L.Control.extend({
+    options: { position: 'bottomleft' },
+    onAdd() {
+      const d = L.DomUtil.create('div', 'mapa-leyenda');
+      d.innerHTML = '<span><i class="dot verde"></i>Suele haber</span><span><i class="dot amarillo"></i>Puede costar</span><span><i class="dot rojo"></i>Difícil</span>';
+      return d;
+    },
+  });
+  map.addControl(new LegendCtrl());
+
   // Al cambiar el zoom: re-renderiza iconos (pines se simplifican si está lejos).
   map.on('zoomend', () => updateMarkers(listaFiltrada()));
   // Al mover el mapa: si el centro se aleja del usuario, ofrece "Buscar en esta zona".
@@ -493,10 +504,10 @@ function onMapMove() {
 function iconHtml(p) {
   const nivel = p.disponibilidad.nivel;
   const esSel = p.id === selectedId;
-  // Mapa alejado (zoom < 14): simplifica a un punto para no saturar.
+  // Mapa alejado (zoom < 15): simplifica a un punto para no saturar de precios.
   // El pin seleccionado siempre conserva su precio para no perderlo de vista.
   const zoom = map ? map.getZoom() : 16;
-  if (zoom < 14 && !esSel) return `<div class="pin-dot ${nivel}"></div>`;
+  if (zoom < 15 && !esSel) return `<div class="pin-dot ${nivel}"></div>`;
   return `<div class="pin ${nivel}${esSel ? ' sel' : ''}">${ic(p.tipo === 'calle' ? 'road' : 'parking', 13)} ${precioCorto(p)}</div>`;
 }
 
@@ -610,19 +621,16 @@ function renderLista() {
   }
   $('#lista').innerHTML = lista.map((p) => {
     const d = p.disponibilidad, nivel = d.nivel;
-    const dispTxt = d.modo === 'envivo'
-      ? `<span class="dot ${nivel}"></span>${nivel === 'cerrado' ? 'Cerrado' : d.cuposLibres + ' cupo' + (d.cuposLibres === 1 ? '' : 's') + ' · en vivo'}`
-      : `<span class="dot ${nivel}"></span>${d.label} · estimación`;
-    const precio = precioHTML(p);
+    // Disponibilidad = estimación honesta (sin número falso de "cupos en vivo").
+    const disp = nivel === 'cerrado' ? '' : ` · <span class="dot ${nivel}"></span>${d.label}`;
     return `
       <div class="card" data-id="${p.id}">
         <div class="ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 22)}</div>
         <div class="info">
           <div class="nm">${esc(p.nombre)} ${LS.isFav(p.id) ? ic('starFull', 13) : ''} ${catBadge(p)}</div>
-          <div class="sub">${estadoHTML(p)} · ${dispTxt}</div>
-          <div class="sub">${Math.round(p.dist)} m · ${ic('walk', 13)} ${walkMin(p.dist)} · ${ic('car', 13)} ${carMin(p.dist)} min${p.gratisInfo ? ' · <span class="' + (esGratisClientes(p) ? 'badge-cli' : 'badge-free') + '">' + esc(p.gratisInfo) + '</span>' : ''}</div>
+          <div class="sub">${estadoHTML(p)}${disp} · ${Math.round(p.dist)} m · ${ic('walk', 12)} ${walkMin(p.dist)} min</div>
         </div>
-        <div class="price">${precio}</div>
+        <div class="price">${precioHTML(p)}</div>
       </div>`;
   }).join('');
 
@@ -634,9 +642,7 @@ function renderLista() {
 // --- Detalle ----------------------------------------------------------------
 function lineaDisponibilidad(p) {
   const d = p.disponibilidad, nivel = d.nivel;
-  const txt = d.modo === 'envivo'
-    ? `${nivel === 'cerrado' ? 'Cerrado ahora' : d.cuposLibres + ' cupo' + (d.cuposLibres === 1 ? '' : 's') + ' disponible' + (d.cuposLibres === 1 ? '' : 's')} <small>· en vivo</small>`
-    : `${d.label} <small>· estimación, no en vivo</small>`;
+  const txt = nivel === 'cerrado' ? 'Cerrado ahora' : `${d.label} <small>· disponibilidad estimada</small>`;
   return `<span class="dot ${nivel}"></span>${txt}`;
 }
 

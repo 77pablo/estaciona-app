@@ -18,31 +18,10 @@ for (const e of ESTACIONAMIENTOS) {
   if (o) { Object.assign(e, o); e.verificado = true; }
 }
 
-const TICK_MS = 4000;
-
-// Estado dinámico solo para privados (cupos libres).
-const estado = {};
-for (const e of ESTACIONAMIENTOS) {
-  if (e.tipo === 'privado') {
-    // Arranca con una ocupación aleatoria realista (40%–95%).
-    const ocup = 0.4 + Math.random() * 0.55;
-    estado[e.id] = Math.max(0, Math.round(e.capacidad * (1 - ocup)));
-  }
-}
-
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-// Avanza la simulación de cupos de privados.
-function tick() {
-  for (const e of ESTACIONAMIENTOS) {
-    if (e.tipo !== 'privado') continue;
-    // Variación suave: entran y salen autos.
-    const delta = Math.round((Math.random() - 0.5) * 4);
-    estado[e.id] = clamp(estado[e.id] + delta, 0, e.capacidad);
-  }
-}
-const timer = setInterval(tick, TICK_MS);
-if (timer.unref) timer.unref();
+// NOTA: NO simulamos "cupos en vivo" (sería inventar un dato real). La
+// disponibilidad es una ESTIMACIÓN honesta tipo semáforo según la hora/día.
 
 // Nivel de semáforo a partir de un ratio de disponibilidad 0..1.
 function nivelPorRatio(ratio) {
@@ -111,23 +90,12 @@ export function getEstacionamientos() {
       abierto, verificado: e.verificado, fuente: e.fuente, atributos: e.atributos,
     };
 
-    if (e.tipo === 'privado') {
-      const libres = estado[e.id];
-      const ratio = libres / e.capacidad;
-      return {
-        ...base,
-        disponibilidad: {
-          modo: 'envivo',
-          cuposLibres: libres,
-          capacidad: e.capacidad,
-          nivel: !abierto ? 'cerrado' : nivelPorRatio(ratio),
-        },
-      };
-    } else {
-      const demanda = clamp(e.demandaBase * factorHora(hora, dia), 0, 1);
-      const disp = 1 - demanda; // disponibilidad estimada
-      const nivel = nivelPorRatio(disp);
-      const label = nivel === 'verde' ? 'Suele haber cupo'
+    {
+      // Estimación honesta por hora (privados sin demandaBase usan 0.55 por defecto).
+      const demanda = clamp((e.demandaBase ?? 0.55) * factorHora(hora, dia), 0, 1);
+      const nivel = !abierto ? 'cerrado' : nivelPorRatio(1 - demanda);
+      const label = nivel === 'cerrado' ? 'Cerrado ahora'
+        : nivel === 'verde' ? 'Suele haber cupo'
         : nivel === 'amarillo' ? 'Puede costar' : 'Difícil ahora';
       return {
         ...base,
