@@ -54,7 +54,10 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     if (url.pathname === '/api/estacionamientos' && req.method === 'GET') {
-      const lista = getEstacionamientos();
+      // Nacional: se devuelve SOLO la ciudad pedida (o Temuco por defecto), para
+      // no enviar miles de registros. Las zonas (ligeras) van siempre.
+      const ciudad = url.searchParams.get('ciudad') || CENTRO.nombre;
+      const lista = getEstacionamientos().filter((e) => e.ciudad === ciudad);
       const tally = await tallyReciente(3);            // votos de las últimas 3 h
       for (const e of lista) { if (tally[e.id]) e.votos = tally[e.id]; }
       return sendJSON(res, 200, { centro: CENTRO, zonas: ZONAS, estacionamientos: lista });

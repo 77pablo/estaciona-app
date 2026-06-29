@@ -181,19 +181,25 @@ function cambiarCiudad(nombre, mover = true) {
     USER = { lat: z.lat, lng: z.lng };
     if (map) { map.setView([z.lat, z.lng], 15); meMarker?.setLatLng([z.lat, z.lng]); }
   }
-  renderLista();
+  DATA = [];                 // limpia mientras llega la ciudad nueva
+  cargar();                  // trae los estacionamientos de esa ciudad
 }
 
 // --- localStorage (datos en el teléfono) ------------------------------------
 const LS = {
-  getFavs: () => JSON.parse(localStorage.getItem('estaciona_favs') || '[]'),
-  toggleFav: (id) => {
-    const f = LS.getFavs(); const i = f.indexOf(id);
-    if (i >= 0) f.splice(i, 1); else f.push(id);
+  // Favoritos: se guarda el OBJETO del lugar (no solo el id) para poder mostrarlo
+  // aunque estés mirando otra ciudad. Tolera el formato viejo (solo id string).
+  getFavs: () => { try { return JSON.parse(localStorage.getItem('estaciona_favs') || '[]'); } catch { return []; } },
+  isFav: (id) => LS.getFavs().some((f) => (f.id || f) === id),
+  toggleFav: (p) => {
+    const id = p.id || p;
+    const f = LS.getFavs();
+    const i = f.findIndex((x) => (x.id || x) === id);
+    if (i >= 0) f.splice(i, 1);
+    else f.push({ id, nombre: p.nombre, ciudad: p.ciudad, lat: p.lat, lng: p.lng, precioHora: p.precioHora, gratisInfo: p.gratisInfo, direccion: p.direccion, tipo: p.tipo });
     localStorage.setItem('estaciona_favs', JSON.stringify(f));
-    return f.includes(id);
+    return f.some((x) => (x.id || x) === id);
   },
-  isFav: (id) => LS.getFavs().includes(id),
   getAuto: () => JSON.parse(localStorage.getItem('estaciona_miauto') || 'null'),
   setAuto: (a) => localStorage.setItem('estaciona_miauto', JSON.stringify(a)),
   clearAuto: () => localStorage.removeItem('estaciona_miauto'),
@@ -479,7 +485,7 @@ window.cerrarDetalle = () => {
   }
   $('#detalle').classList.remove('open');
 };
-window.toggleFavDetalle = (id) => { LS.toggleFav(id); openDetalle(id); renderLista(); };
+window.toggleFavDetalle = (id) => { const p = DATA.find((x) => x.id === id); if (p) LS.toggleFav(p); openDetalle(id); renderLista(); };
 window.confirmarCupo = (id, ok) => {
   toast(ok ? '¡Gracias! Confirmado 👍' : 'Gracias, lo anotamos 👎');
   fetch('/api/voto', {
@@ -654,7 +660,8 @@ window.terminarAuto = () => { LS.clearAuto(); renderMiAuto(); toast('¡Listo, bu
 
 // --- Favoritos --------------------------------------------------------------
 function renderFavoritos() {
-  const favs = LS.getFavs().map((id) => DATA.find((p) => p.id === id)).filter(Boolean);
+  // Usa el objeto guardado; si es formato viejo (id string), lo busca en la ciudad actual.
+  const favs = LS.getFavs().map((f) => (typeof f === 'string' ? DATA.find((p) => p.id === f) : f)).filter(Boolean);
   $('#view-favoritos').innerHTML = `<div class="simple">
     <h2>⭐ Favoritos</h2>
     ${filaLugar('casa', '🏠')}
@@ -663,18 +670,31 @@ function renderFavoritos() {
     ${favs.length ? favs.map((p) => `
       <div class="fav-item" data-id="${p.id}"><span class="ic">${p.tipo === 'calle' ? '🛣️' : '🅿️'}</span>
         <div style="flex:1"><div class="nm">${p.nombre}</div>
-        <div class="sub">${precioHTML(p)} · ${p.direccion}</div></div></div>
+        <div class="sub">${precioHTML(p)}${p.ciudad ? ' · ' + p.ciudad : ''} · ${p.direccion}</div></div></div>
     `).join('') : '<div class="empty-big" style="padding:24px">Aún no guardas lugares.<br>Toca la ⭐ en un estacionamiento.</div>'}
   </div>`;
   $('#view-favoritos').querySelectorAll('.fav-item[data-id]').forEach((el) =>
-    el.addEventListener('click', () => openDetalle(el.dataset.id)));
+    el.addEventListener('click', () => irAFav(el.dataset.id)));
 }
+// Tocar un favorito: si es de otra ciudad, cambia a esa ciudad; si es de la
+// actual, abre su detalle directamente.
+window.irAFav = (id) => {
+  const f = LS.getFavs().find((x) => (x.id || x) === id);
+  if (f && f.ciudad && f.ciudad !== ciudadActual) {
+    irA('buscar');
+    cambiarCiudad(f.ciudad, true);
+    toast(`Mostrando ${f.ciudad}`);
+    return;
+  }
+  irA('buscar');
+  openDetalle(id);
+};
 window.irLugar = (k) => {
   const l = LUGARES[k];
   USER = { lat: l.lat, lng: l.lng }; irA('buscar');
   ciudadPorPunto(USER);                 // ajusta la ciudad a la del lugar guardado
   if (map) { map.setView([l.lat, l.lng], 15); meMarker?.setLatLng([l.lat, l.lng]); }
-  renderLista(); toast(`Mostrando cerca de ${LUGARES_DEF[k].nombre}`);
+  cargar(); toast(`Mostrando cerca de ${LUGARES_DEF[k].nombre}`);
 };
 
 // Fila de Casa/Trabajo en Favoritos: tocar el texto = ver cerca; ✏️ = fijarla.
@@ -749,7 +769,7 @@ function usarMiUbicacion() {
       if (map) { map.setView([me.lat, me.lng], 15); meMarker?.setLatLng([me.lat, me.lng]); }
       toast(`📍 Estás en ${zona.nombre}`);
       iniciarSeguimiento();               // el punto azul te sigue mientras te mueves
-      renderLista();
+      cargar();                           // carga los estacionamientos de tu ciudad
     },
     () => toast('No pudimos obtener tu ubicación'),
     { enableHighAccuracy: true, timeout: 8000 }
@@ -783,10 +803,10 @@ async function geocodificar(texto) {
     if (!arr.length) { toast('No encontré ese lugar — filtro la lista'); renderLista(); return; }
     const lat = parseFloat(arr[0].lat), lng = parseFloat(arr[0].lon);
     USER = { lat, lng };
-    ciudadPorPunto(USER);                 // salta a la ciudad de la región más cercana
+    ciudadPorPunto(USER);                 // salta a la ciudad más cercana
     query = ''; $('#search').value = '';  // limpia la búsqueda para ver esa ciudad
     if (map) { map.setView([lat, lng], 15); meMarker?.setLatLng([lat, lng]); }
-    renderLista();
+    cargar();
     toast('📍 ' + (arr[0].display_name || q).split(',')[0]);
   } catch {
     // Degrada con gracia: si no hay internet/falla, queda el filtro de lista.
@@ -940,7 +960,7 @@ function initSheetDrag() {
 // --- Ciclo de datos (con estados de carga / error) --------------------------
 async function cargar() {
   try {
-    const r = await fetch(API);
+    const r = await fetch(`${API}?ciudad=${encodeURIComponent(ciudadActual)}`);
     if (!r.ok) throw new Error('http ' + r.status);
     const j = await r.json();
     DATA = j.estacionamientos;
@@ -970,7 +990,7 @@ function mostrarBienvenida() {
   o.innerHTML = `<div class="onboard-card" role="dialog" aria-label="Bienvenida">
     <div class="onboard-ic" aria-hidden="true">🅿️</div>
     <h3>¡Bienvenido a Estaciona!</h3>
-    <p>Versión <b>piloto</b> para la <b>Región de La Araucanía</b>: te mostramos dónde estacionar, cuánto cobran y si es gratis, ciudad por ciudad.</p>
+    <p>Versión <b>piloto</b> para <b>todo Chile</b>: te mostramos dónde estacionar, cuánto cobran y si es gratis. Elige tu ciudad arriba 📍 o usa tu ubicación.</p>
     <ul class="onboard-list">
       <li>🔓 Funciona <b>sin cuenta</b>: tus favoritos y tu auto se guardan solo en este teléfono.</li>
       <li>📍 Toca el botón de ubicación para ver lo más cercano a ti.</li>
@@ -1020,7 +1040,7 @@ function init() {
     meMarker?.setLatLng([c.lat, c.lng]);
     ciudadPorPunto(USER);                 // si el centro quedó en otra ciudad, cámbiala
     $('#btn-zona').classList.remove('show');
-    renderLista();
+    cargar();
     toast('Buscando en esta zona 🔄');
   });
   // Panel izquierdo plegable (solo PC): mapa a pantalla completa al cerrarlo.
