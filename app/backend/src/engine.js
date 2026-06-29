@@ -97,9 +97,9 @@ export function getEstacionamientos() {
     const gratis = gratisAhora(e, hora, dia);
     const base = {
       id: e.id, tipo: e.tipo, ciudad: e.ciudad, region: e.region, categoria: e.categoria, nombre: e.nombre, direccion: e.direccion,
-      lat: e.lat, lng: e.lng, precioHora: e.precioHora, fraccion: e.fraccion,
+      lat: e.lat, lng: e.lng, precioHora: e.precioHora, precioMin: e.precioMin, fraccion: e.fraccion,
       gratisInfo: e.gratis, gratisAhora: gratis, horario: e.horario,
-      abierto, verificado: e.verificado, atributos: e.atributos,
+      abierto, verificado: e.verificado, fuente: e.fuente, atributos: e.atributos,
     };
 
     if (e.tipo === 'privado') {

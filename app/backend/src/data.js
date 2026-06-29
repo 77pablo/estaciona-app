@@ -5067,18 +5067,20 @@ export const ESTACIONAMIENTOS = [
     "direccion": "Santiago (centro)",
     "lat": -33.433825,
     "lng": -70.648149,
-    "precioHora": 900,
+    "precioHora": 3420,
     "fraccion": null,
     "gratis": null,
     "horario": "10:00–22:00",
     "capacidad": 150,
-    "verificado": false,
+    "verificado": true,
     "atributos": {
       "techado": true,
       "ev": false,
       "accesible": false,
       "camaras": false
-    }
+    },
+    "precioMin": 57,
+    "fuente": "autopase.cl (Saba)"
   },
   {
     "id": "santiago-7",
@@ -7643,18 +7645,20 @@ export const ESTACIONAMIENTOS = [
     "direccion": "Santiago (centro)",
     "lat": -33.438804,
     "lng": -70.64401,
-    "precioHora": 900,
+    "precioHora": 3420,
     "fraccion": null,
     "gratis": null,
     "horario": "08:30–20:00",
     "capacidad": 40,
-    "verificado": false,
+    "verificado": true,
     "atributos": {
       "techado": false,
       "ev": false,
       "accesible": false,
       "camaras": false
-    }
+    },
+    "precioMin": 57,
+    "fuente": "autopase.cl (Saba)"
   },
   {
     "id": "santiago-13",
@@ -8379,18 +8383,20 @@ export const ESTACIONAMIENTOS = [
     "direccion": "Providencia (centro)",
     "lat": -33.424725,
     "lng": -70.613653,
-    "precioHora": 600,
+    "precioHora": 3420,
     "fraccion": null,
     "gratis": null,
     "horario": "10:00–22:00",
     "capacidad": 150,
-    "verificado": false,
+    "verificado": true,
     "atributos": {
       "techado": true,
       "ev": false,
       "accesible": false,
       "camaras": false
-    }
+    },
+    "precioMin": 57,
+    "fuente": "autopase.cl (Saba)"
   },
   {
     "id": "providencia-19",
@@ -8402,18 +8408,20 @@ export const ESTACIONAMIENTOS = [
     "direccion": "Providencia (centro)",
     "lat": -33.42353,
     "lng": -70.612258,
-    "precioHora": 600,
+    "precioHora": 3420,
     "fraccion": null,
     "gratis": null,
     "horario": "10:00–22:00",
     "capacidad": 150,
-    "verificado": false,
+    "verificado": true,
     "atributos": {
       "techado": true,
       "ev": false,
       "accesible": false,
       "camaras": false
-    }
+    },
+    "precioMin": 57,
+    "fuente": "autopase.cl (Saba)"
   },
   {
     "id": "providencia-20",
@@ -8425,18 +8433,20 @@ export const ESTACIONAMIENTOS = [
     "direccion": "Providencia (centro)",
     "lat": -33.421797,
     "lng": -70.609676,
-    "precioHora": 600,
+    "precioHora": 3420,
     "fraccion": null,
     "gratis": null,
     "horario": "10:00–22:00",
     "capacidad": 150,
-    "verificado": false,
+    "verificado": true,
     "atributos": {
       "techado": true,
       "ev": false,
       "accesible": false,
       "camaras": false
-    }
+    },
+    "precioMin": 57,
+    "fuente": "autopase.cl (Saba)"
   },
   {
     "id": "providencia-21",
@@ -10196,18 +10206,20 @@ export const ESTACIONAMIENTOS = [
     "direccion": "Valparaíso (centro)",
     "lat": -33.043586,
     "lng": -71.62334,
-    "precioHora": 900,
+    "precioHora": 3420,
     "fraccion": null,
     "gratis": null,
     "horario": "10:00–22:00",
     "capacidad": 150,
-    "verificado": false,
+    "verificado": true,
     "atributos": {
       "techado": true,
       "ev": false,
       "accesible": false,
       "camaras": false
-    }
+    },
+    "precioMin": 57,
+    "fuente": "autopase.cl (Saba)"
   },
   {
     "id": "valdivia-4",
@@ -31931,18 +31943,20 @@ export const ESTACIONAMIENTOS = [
     "direccion": "Santiago (centro)",
     "lat": -33.447459,
     "lng": -70.652619,
-    "precioHora": 900,
+    "precioHora": 3420,
     "fraccion": null,
     "gratis": null,
     "horario": "08:30–20:00",
     "capacidad": 40,
-    "verificado": false,
+    "verificado": true,
     "atributos": {
       "techado": false,
       "ev": false,
       "accesible": false,
       "camaras": false
-    }
+    },
+    "precioMin": 57,
+    "fuente": "autopase.cl (Saba)"
   },
   {
     "id": "quilicura-3",
