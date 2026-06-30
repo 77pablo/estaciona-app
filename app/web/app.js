@@ -32,6 +32,7 @@ let MAPTILER_KEY = '';             // key de MapTiler (del backend); vacío => t
 let TOMTOM_KEY = '';               // key de TomTom (del backend); vacío => ETA estimada
 let ciudadActual = 'Temuco';       // ciudad que se está mirando ahora
 let USER = { ...CENTRO };          // "estás aquí" (Temuco por defecto)
+let userReal = false;              // ¿USER viene de geolocalización real? (no del centro de la ciudad)
 let map = null, markers = {}, meMarker = null;
 let markerLayer = null;             // dónde viven los pines: clúster (si hay lib) o el propio mapa
 let CLUSTER = false;                // true si leaflet.markercluster cargó (agrupa pines)
@@ -45,6 +46,7 @@ let cargaSeq = 0;                  // contador de cargas: descarta respuestas vi
 let sinConexionAvisado = false;    // evita spamear el toast "Sin conexión" cada 6s
 let _focoPrevio = null;            // foco previo del detalle, para restaurarlo al cerrarlo
 let _focoModal = null;             // foco previo del modal (separado: un modal puede abrirse SOBRE el detalle)
+let _onCerrarModal = null;         // callback opcional al cerrar el modal (p.ej. revertir filtros no aplicados)
 let detalleAbiertoId = null;
 let filtros = {
   gratis: false, barato: false, techado: false, abierto: false,
@@ -298,7 +300,7 @@ function cambiarCiudad(nombre, mover = true) {
     if (map) { map.setView([z.lat, z.lng], 15); meMarker?.setLatLng([z.lat, z.lng]); }
   }
   DATA = [];                 // limpia mientras llega la ciudad nueva
-  cargar();                  // trae los estacionamientos de esa ciudad
+  return cargar();           // trae los estacionamientos de esa ciudad (devuelve la promesa)
 }
 
 // --- localStorage (datos en el teléfono) ------------------------------------
@@ -816,7 +818,7 @@ function abrirMapCard(id) {
       <div class="mapcard-precio">${precioGrande(p)}</div>
       <div class="mapcard-disp">
         <div class="mapcard-disp-top"><span>Disponibilidad</span><span class="badge-disp ${nivel}">${estadoTxt}</span></div>
-        <div class="disp-bar"><i class="disp-fill ${nivel}" style="width:${barPct}%"></i></div>
+        <div class="disp-bar" aria-hidden="true"><i class="disp-fill ${nivel}" style="width:${barPct}%"></i></div>
         <div class="mapcard-meta">${votos}${dist} m · ${tipoTxt}</div>
       </div>
     </div>
@@ -912,7 +914,7 @@ function openDetalle(id) {
 
       <div class="comunidad">
         <h4>${ic('users', 15)} La comunidad</h4>
-        ${p.comunidad?.precioReportado ? `<div class="com-precio">${ic('wallet', 14)} La gente reporta <b>~${CLP(p.comunidad.precioReportado)}/hr</b> · ${p.comunidad.nPrecios} reporte${p.comunidad.nPrecios > 1 ? 's' : ''}</div>` : ''}
+        <div id="com-precio-wrap">${comPrecioHTML(p)}</div>
         <div id="com-lista" class="com-lista"></div>
         <div class="com-acciones">
           <button class="btn btn-second" onclick="reportarPrecio('${p.id}')">${ic('wallet', 16)} Reportar precio</button>
@@ -949,6 +951,7 @@ function openDetalle(id) {
   cargarComentarios(p.id);                    // trae los comentarios de la gente
   cargarFotos(p.id);                          // trae las fotos de la gente
 
+  cerrarMapCard();                            // la card flotante del pin no debe quedar sobre el detalle
   const det = $('#detalle');
   det.classList.add('open');
   _focoPrevio = document.activeElement;       // recuerda dónde estaba el foco
@@ -975,6 +978,20 @@ function fechaAbs(ts) {
   catch { return ''; }
 }
 const _comSkel = '<div class="com-skel skel"></div><div class="com-skel skel"></div>';
+// Línea "La gente reporta ~$X/hr" (solo si hay precios reportados). Contenedor
+// estable #com-precio-wrap para poder refrescarla sin reconstruir el detalle.
+function comPrecioHTML(p) {
+  return p.comunidad?.precioReportado
+    ? `<div class="com-precio">${ic('wallet', 14)} La gente reporta <b>~${CLP(p.comunidad.precioReportado)}/hr</b> · ${p.comunidad.nPrecios} reporte${p.comunidad.nPrecios > 1 ? 's' : ''}</div>`
+    : '';
+}
+// Refresca la sección "comunidad" EN SITIO (sin reabrir el detalle → sin saltar
+// el scroll). cargar() ya actualiza el precio reportado vía refrescarDetalle;
+// aquí solo falta recargar la lista de comentarios.
+async function refrescarComunidad(id) {
+  await cargar();
+  if (detalleAbiertoId === id) cargarComentarios(id);
+}
 async function cargarComentarios(id) {
   const el = $('#com-lista');
   if (el && detalleAbiertoId === id) el.innerHTML = _comSkel;   // mientras carga, esqueleto
@@ -1041,12 +1058,19 @@ window.enviarComentario = (id) => {
   enviarAporte(id, { texto: t });
 };
 async function enviarAporte(id, body) {
+  // Bloquea los botones del modal mientras envía (evita doble envío en redes lentas).
+  const btns = [...($('#modal')?.querySelectorAll('button') || [])];
+  const primary = $('#modal')?.querySelector('.btn-primary');
+  const txtPrev = primary?.textContent;
+  btns.forEach((b) => (b.disabled = true));
+  if (primary) primary.textContent = 'Enviando…';
+  const rehabilitar = () => { btns.forEach((b) => (b.disabled = false)); if (primary && txtPrev) primary.textContent = txtPrev; };
   try {
     const r = await fetch('/api/aporte', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) });
     const j = await r.json();
-    if (j.ok) { cerrarModal(); toast('¡Gracias por tu aporte!'); cargar(); if (detalleAbiertoId === id) openDetalle(id); }
-    else toast('No se pudo enviar el aporte');
-  } catch { toast('Sin conexión'); }
+    if (j.ok) { cerrarModal(); toast('¡Gracias por tu aporte!'); if (detalleAbiertoId === id) refrescarComunidad(id); else cargar(); }
+    else { toast('No se pudo enviar el aporte'); rehabilitar(); }
+  } catch { toast('Sin conexión'); rehabilitar(); }
 }
 
 // --- Fotos de la gente ------------------------------------------------------
@@ -1183,8 +1207,11 @@ window.confirmarCupo = (id, ok) => {
 function refrescarDetalle() {
   if (!detalleAbiertoId) return;
   const p = DATA.find((x) => x.id === detalleAbiertoId);
+  if (!p) return;
   const el = $('#det-status-line');
-  if (p && el) el.innerHTML = lineaDisponibilidad(p);
+  if (el) el.innerHTML = lineaDisponibilidad(p);
+  const w = $('#com-precio-wrap');                 // mantiene fresco "la gente reporta ~$X"
+  if (w) w.innerHTML = comPrecioHTML(p);
 }
 
 // --- Llévame / Compartir ----------------------------------------------------
@@ -1268,8 +1295,10 @@ window.abrirEstacione = (id) => {
       <button data-min="0">Sin alarma</button>
     </div>
     ${bloqueada ? `<p class="alarma-aviso">${ic('bulb', 13)} Tu navegador bloqueó las notificaciones, pero igual te avisaré dentro de la app.</p>` : ''}
-    <button class="btn btn-primary" onclick="guardarEstacione()">Listo</button>
-    <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>`;
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="guardarEstacione()">Listo</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
   $('#alarma-opts').querySelectorAll('button').forEach((b) =>
     b.addEventListener('click', () => {
       $('#alarma-opts').querySelectorAll('button').forEach((x) => x.classList.remove('on'));
@@ -1401,13 +1430,19 @@ function actualizarMiAutoVivo() {
   const distVuelta = haversine(USER, a);   // ETA caminando de vuelta (~80 m/min)
   const set = (id, txt) => { const e = $(id); if (e) e.textContent = txt; };
   const setHtml = (id, html) => { const e = $(id); if (e) e.innerHTML = html; };
-  set('#ma-tiempo', `${hh}h ${mm}min`);
+  set('#ma-tiempo', hh > 0 ? `${hh}h ${mm}min` : `${mm} min`);   // bajo 1 h no muestra "0h"
   set('#ma-costo', !a.precioHora ? 'Gratis' : costo === 0 ? 'Gratis ahora' : CLP(costo));
   setHtml('#ma-alarma', `${ic('clock', 14)} ${alarmaTxt}`);
   $('#ma-alarma')?.classList.toggle('urgente', alarmaVencida);   // resalta cuando ya venció
-  setHtml('#ma-eta', `${ic('walk', 14)} A ${walkMin(distVuelta)} min caminando (${Math.round(distVuelta)} m)`);
+  // ETA de vuelta solo si sabemos dónde estás (geolocalización real); si no, no inventamos distancia.
+  setHtml('#ma-eta', userReal
+    ? `${ic('walk', 14)} A ${walkMin(distVuelta)} min caminando (${Math.round(distVuelta)} m)`
+    : `${ic('walk', 14)} Activa tu ubicación para ver la distancia de vuelta`);
 }
-window.terminarAuto = () => { LS.clearAuto(); renderMiAuto(); toast('¡Listo, buen viaje! 🚗'); };
+window.terminarAuto = () => {
+  if (!confirm('¿Terminar y olvidar dónde dejaste tu auto?')) return;   // acción sin retorno
+  LS.clearAuto(); renderMiAuto(); toast('¡Listo, buen viaje! 🚗');
+};
 
 // --- Favoritos --------------------------------------------------------------
 function renderFavoritos() {
@@ -1436,17 +1471,17 @@ function renderFavoritos() {
 // actual, abre su detalle directamente.
 window.irAFav = (id) => {
   const f = LS.getFavs().find((x) => (x.id || x) === id);
+  irA('buscar');
   if (f && f.ciudad && f.ciudad !== ciudadActual) {
-    irA('buscar');
-    cambiarCiudad(f.ciudad, true);
-    toast(`Mostrando ${f.ciudad}`);
+    // Cambia a la ciudad del favorito y, cuando lleguen sus datos, abre su detalle.
+    cambiarCiudad(f.ciudad, true).then(() => { if (DATA.some((p) => p.id === id)) openDetalle(id); });
     return;
   }
-  irA('buscar');
   openDetalle(id);
 };
 window.irLugar = (k) => {
   const l = LUGARES[k];
+  if (!l.set) { editarLugar(k); return; }   // aún sin fijar: pide la dirección en vez de saltar a un sector por defecto
   USER = { lat: l.lat, lng: l.lng }; irA('buscar');
   ciudadPorPunto(USER);                 // ajusta la ciudad a la del lugar guardado
   if (map) { map.setView([l.lat, l.lng], 15); meMarker?.setLatLng([l.lat, l.lng]); }
@@ -1522,7 +1557,7 @@ function usarMiUbicacion() {
         cambiarCiudad(CENTRO_DEFAULT.nombre, true);
         return;
       }
-      USER = me;
+      USER = me; userReal = true;
       ciudadPorPunto(me);                 // ciudad = la más cercana
       if (map) { map.setView([me.lat, me.lng], 15); meMarker?.setLatLng([me.lat, me.lng]); }
       toast(`📍 Estás en ${zona.nombre}`);
@@ -1541,7 +1576,7 @@ function iniciarSeguimiento() {
     (pos) => {
       const me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       if (zonaMasCercana(me).dist > 80000) return;  // claramente fuera de la región
-      USER = me;
+      USER = me; userReal = true;
       meMarker?.setLatLng([me.lat, me.lng]);        // mueve el punto, sin recentrar
     },
     () => {},                                         // permisos/errores en silencio
@@ -1682,24 +1717,36 @@ function abrirFiltros() {
     $('#f-dist-lbl').textContent = distLabel(filtros.distMax);
   });
   abrirModal();
+  // Los toggles mutan `filtros` en vivo, pero solo se "aplican" con Aplicar. Si el
+  // usuario cierra sin aplicar (tocar fuera/Escape/Cancelar), revertimos al estado previo.
+  const snap = JSON.stringify(filtros);
+  _onCerrarModal = () => { filtros = JSON.parse(snap); syncChips(); actualizarBadgeFiltros(); };
 }
-window.aplicarFiltros = () => { cerrarModal(); syncChips(); actualizarBadgeFiltros(); renderLista(); };
+window.aplicarFiltros = () => { _onCerrarModal = null; cerrarModal(); syncChips(); actualizarBadgeFiltros(); renderLista(); };
 window.limpiarFiltros = () => {
   filtros = { gratis: false, barato: false, techado: false, abierto: false, ev: false, accesible: false, soloPublicos: false, tipo: 'todos', distMax: 0 };
+  _onCerrarModal = null;   // ya aplicamos el "limpiar": no revertir al cerrar
   cerrarModal(); syncChips(); actualizarBadgeFiltros(); renderLista(); toast('Filtros limpiados');
 };
 function syncChips() {
-  $('#chips').querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', filtros[c.dataset.f]));
+  $('#chips').querySelectorAll('.chip').forEach((c) => {
+    const on = !!filtros[c.dataset.f];
+    c.classList.toggle('on', on);
+    c.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
 }
 
 // --- Modales ----------------------------------------------------------------
 function abrirModal() {
+  _onCerrarModal = null;                  // cada modal arranca sin callback de cierre
   _focoModal = document.activeElement;   // foco propio: NO pisa el del detalle si el modal se abre encima
   $('#modal-bg').classList.add('open');
   const m = $('#modal'); m.setAttribute('tabindex', '-1'); m.focus();
 }
 window.cerrarModal = () => {
+  const cb = _onCerrarModal; _onCerrarModal = null;   // se ejecuta al cerrar (revertir filtros, etc.)
   $('#modal-bg').classList.remove('open');
+  if (cb) cb();
   if (_focoModal?.focus) _focoModal.focus();
 };
 
@@ -1989,8 +2036,10 @@ async function init() {
   initMap();
   // Chips rápidos.
   $('#chips').querySelectorAll('.chip').forEach((c) =>
-    c.addEventListener('click', () => { const f = c.dataset.f; filtros[f] = !filtros[f]; c.classList.toggle('on', filtros[f]); actualizarBadgeFiltros(); renderLista(); }));
+    c.addEventListener('click', () => { const f = c.dataset.f; filtros[f] = !filtros[f]; c.classList.toggle('on', filtros[f]); c.setAttribute('aria-pressed', filtros[f] ? 'true' : 'false'); actualizarBadgeFiltros(); renderLista(); }));
   $('#btn-filtros').addEventListener('click', abrirFiltros);
+  // Cerrar cualquier modal tocando el fondo oscuro (no el contenido del modal).
+  $('#modal-bg').addEventListener('click', (e) => { if (e.target.id === 'modal-bg') cerrarModal(); });
   actualizarBadgeFiltros();
   // Selector de orden de la lista (cercanía / precio).
   $('#sheet-order').addEventListener('change', (e) => { orden = e.target.value; renderLista(); });

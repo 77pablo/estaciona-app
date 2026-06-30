@@ -766,7 +766,7 @@ main, .view { flex: 1; min-height: 0; }
 .com-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .com-item { background: var(--surface-2); border: 1px solid var(--line); border-left: 2px solid var(--line-2); border-radius: var(--r); padding: 10px 12px; font-size: 13.5px; display: flex; flex-direction: column; gap: 5px; }
 .com-item .com-texto { line-height: 1.45; word-break: break-word; }
-.com-item .com-fecha { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; align-self: flex-start; }
+.com-item .com-fecha { font-size: 11.5px; color: var(--muted); align-self: flex-start; white-space: nowrap; }
 .com-vacio { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 14px; line-height: 1.4; border: 1px dashed var(--line-2); border-radius: var(--r-lg); background: var(--surface-2); }
 .com-vacio svg { opacity: .7; flex-shrink: 0; }
 .com-skel { height: 42px; border-radius: var(--r); }
