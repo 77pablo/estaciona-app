@@ -20,6 +20,7 @@ import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, elimi
 import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto } from './fotos.js';
 import { registrarLugar, lugaresDe, lugaresRecientes, eliminarLugar, contarLugares } from './lugares.js';
 import { registrarEvento, resumenAnalytics } from './analytics.js';
+import { agregarDestacado, quitarDestacado, mapaDestacados, listarDestacados } from './destacados.js';
 import { revisarFoto } from './modera-foto.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -85,7 +86,7 @@ function rateLimit(req, max, ventanaMs) {
 }
 
 // Rutas "bonitas": la landing es la portada (/), la app vive en /app.
-const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html', '/terminos': '/terminos.html', '/privacidad': '/privacidad.html' };
+const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html', '/terminos': '/terminos.html', '/privacidad': '/privacidad.html', '/operadores': '/operadores.html' };
 
 async function serveStatic(res, urlPath) {
   const rel = ALIAS[urlPath] || urlPath;
@@ -129,9 +130,11 @@ const server = http.createServer(async (req, res) => {
       const lista = [...base, ...reportados];
       const tally = await tallyReciente(3);            // votos de las últimas 3 h
       const com = await resumenAportes();              // precios/comentarios de la gente
+      const dest = await mapaDestacados();             // patrocinados activos (publicidad)
       for (const e of lista) {
         if (tally[e.id]) e.votos = tally[e.id];
         if (com[e.id]) e.comunidad = com[e.id];
+        if (dest[e.id]) { e.destacado = true; e.destacadoEtiqueta = dest[e.id]; }
       }
       return sendJSON(res, 200, { centro: CENTRO, zonas: ZONAS, regiones: REGIONES, estacionamientos: lista });
     }
@@ -183,6 +186,7 @@ const server = http.createServer(async (req, res) => {
         nVotos: await contarVotos(),
         nLugares: await contarLugares(),
         analytics: await resumenAnalytics(),
+        destacados: await listarDestacados(),
       });
     }
     if (url.pathname === '/api/mod/borrar' && req.method === 'POST') {
@@ -198,6 +202,22 @@ const server = http.createServer(async (req, res) => {
           else if (tipo === 'foto') ok = await eliminarFoto(id, file);
           else if (tipo === 'lugar') ok = await eliminarLugar(id);
           sendJSON(res, ok ? 200 : 400, { ok });
+        } catch { sendJSON(res, 400, { ok: false }); }
+      });
+      return;
+    }
+    if (url.pathname === '/api/mod/destacado' && req.method === 'POST') {
+      if (!esAdmin(url)) return sendJSON(res, 403, { error: 'no autorizado' });
+      let body = '', tooBig = false;
+      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 4000) tooBig = true; });
+      req.on('end', async () => {
+        if (tooBig) return sendJSON(res, 413, { ok: false });
+        try {
+          const { accion, id, etiqueta, dias } = JSON.parse(body || '{}');
+          let r;
+          if (accion === 'remove') r = { ok: await quitarDestacado(id) };
+          else r = await agregarDestacado(id, etiqueta, dias);
+          sendJSON(res, r.ok ? 200 : 400, r);
         } catch { sendJSON(res, 400, { ok: false }); }
       });
       return;
@@ -273,5 +293,6 @@ server.listen(PORT, () => {
   console.log(`   · fotos   → ${persist('FOTOS_DIR')}`);
   console.log(`   · lugares → ${persist('LUGARES_PATH')}`);
   console.log(`   · stats   → ${persist('ANALYTICS_PATH')}`);
+  console.log(`   · destac. → ${persist('DESTACADOS_PATH')}`);
   console.log('');
 });

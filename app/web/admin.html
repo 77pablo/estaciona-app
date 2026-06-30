@@ -61,6 +61,16 @@
     <div id="stats" class="stats"></div>
     <h2>Uso de la app <span class="muted">(anónimo)</span></h2>
     <div id="uso"></div>
+
+    <h2>Destacados <span class="muted">(patrocinados / publicidad)</span> <span id="cuentaDest" class="muted"></span></h2>
+    <p class="sub" style="margin:-4px 0 10px">Aparecen primero y con insignia. Para destacar uno nuevo: busca su ciudad, ubícalo y dale “Destacar”.</p>
+    <div id="destActivos"></div>
+    <div class="row" style="margin-top:10px">
+      <input id="destCiudad" type="text" placeholder="Ciudad (ej. Temuco) para buscar lugares…" autocomplete="off" />
+      <button class="btn" onclick="cargarLugaresDestacar()">Buscar</button>
+    </div>
+    <div id="destBuscar"></div>
+
     <div class="row">
       <input id="buscar" type="search" placeholder="Buscar por palabra o por lugar…" autocomplete="off" />
     </div>
@@ -78,7 +88,7 @@
 
 <script>
   let CLAVE = '';
-  let DATOS = { comentarios: [], fotos: [], precios: [], lugares: [], nVotos: 0, nLugares: 0, analytics: null };   // feed completo cargado (se filtra en vivo)
+  let DATOS = { comentarios: [], fotos: [], precios: [], lugares: [], nVotos: 0, nLugares: 0, analytics: null, destacados: [] };   // feed completo cargado (se filtra en vivo)
   const CLP = (n) => '$' + new Intl.NumberFormat('es-CL').format(Math.round(n));
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -128,6 +138,16 @@
         <div><h3>Por acción</h3>${filas(a.porEvento)}</div>
         <div><h3>Top ciudades</h3>${(a.topCiudades || []).map(([c, n]) => `<div class="uso-row"><span>${esc(c)}</span><b>${n}</b></div>`).join('') || '<div class="vacio">Sin datos aún</div>'}</div>
       </div>`;
+
+    // Destacados activos (publicidad). Lista con opción de quitar.
+    const ds = DATOS.destacados || [];
+    $('#cuentaDest').textContent = `(${ds.filter((d) => d.activo).length} activos)`;
+    $('#destActivos').innerHTML = ds.length ? ds.map((d) => `
+      <div class="item">
+        <div><div class="txt">⭐ ${esc(d.etiqueta)} · <span class="price-id">${esc(d.id)}</span> ${d.activo ? '' : '<span style="color:var(--muted)">(vencido)</span>'}</div>
+        <div class="meta">${d.hasta ? 'vence ' + fecha(d.hasta) : 'sin vencimiento'}</div></div>
+        <button class="del" onclick="quitarDest('${esc(d.id)}')">Quitar</button>
+      </div>`).join('') : '<div class="vacio">Ningún destacado aún.</div>';
 
     // Precios reportados por la gente (para cosechar a precios-reales.js).
     $('#cuentaPre').textContent = q ? `(${pres.length} de ${(DATOS.precios || []).length})` : `(${(DATOS.precios || []).length})`;
@@ -188,6 +208,49 @@
     else prompt('Copia esta línea:', linea);
   };
   $('#clave').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
+
+  // ── Destacados (patrocinados) ──
+  async function recargarFeed() {
+    const r = await fetch('/api/mod/feed?clave=' + encodeURIComponent(CLAVE));
+    if (r.ok) { DATOS = await r.json(); render(); }
+  }
+  window.cargarLugaresDestacar = async () => {
+    const ciudad = $('#destCiudad').value.trim();
+    if (!ciudad) return;
+    $('#destBuscar').innerHTML = '<div class="vacio">Cargando…</div>';
+    try {
+      const r = await fetch('/api/estacionamientos?ciudad=' + encodeURIComponent(ciudad));
+      const j = await r.json();
+      const list = j.estacionamientos || [];
+      $('#destBuscar').innerHTML = list.length ? list.map((p) => `
+        <div class="item">
+          <div><div class="txt">${esc(p.nombre)} ${p.destacado ? '<span style="color:var(--accent)">★ ya destacado</span>' : ''}</div>
+          <div class="meta">${esc(p.id)}${p.direccion ? ' · ' + esc(p.direccion) : ''}</div></div>
+          <button class="copy" onclick="destacar('${esc(p.id)}')">Destacar</button>
+        </div>`).join('') : '<div class="vacio">Sin lugares en esa ciudad (revisa el nombre exacto).</div>';
+    } catch { $('#destBuscar').innerHTML = '<div class="err">Error al cargar.</div>'; }
+  };
+  window.destacar = async (id) => {
+    const etiqueta = prompt('Texto de la insignia (ej. "Destacado", "Patrocinado"):', 'Destacado');
+    if (etiqueta === null) return;
+    const dias = prompt('¿Por cuántos días? (vacío o 0 = sin vencimiento)', '30');
+    if (dias === null) return;
+    const r = await fetch('/api/mod/destacado?clave=' + encodeURIComponent(CLAVE), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: 'add', id, etiqueta: etiqueta || 'Destacado', dias: Number(dias) || 0 }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (j.ok) { alert('✅ Destacado activado.'); recargarFeed(); } else alert('No se pudo activar.');
+  };
+  window.quitarDest = async (id) => {
+    if (!confirm('¿Quitar este destacado?')) return;
+    const r = await fetch('/api/mod/destacado?clave=' + encodeURIComponent(CLAVE), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: 'remove', id }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (j.ok) { DATOS.destacados = (DATOS.destacados || []).filter((d) => d.id !== id); render(); } else alert('No se pudo quitar.');
+  };
 </script>
 </body>
 </html>

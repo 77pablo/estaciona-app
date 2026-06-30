@@ -617,13 +617,14 @@ function clusterIcon(cluster) {
 function iconHtml(p) {
   const nivel = p.disponibilidad.nivel;
   const esSel = p.id === selectedId;
+  const dest = p.destacado ? ' dest' : '';
   // Mapa alejado (zoom < 15): simplifica a un punto para no saturar de precios.
-  // El pin seleccionado siempre conserva su precio para no perderlo de vista.
+  // El pin seleccionado y los DESTACADOS siempre conservan el pin "P".
   const zoom = map ? map.getZoom() : 16;
-  if (zoom < 15 && !esSel) return `<div class="pin-dot ${nivel}"></div>`;
+  if (zoom < 15 && !esSel && !p.destacado) return `<div class="pin-dot ${nivel}"></div>`;
   // Pin "P" circular (estilo parkspot); el seleccionado muestra el precio arriba.
   const precio = esSel ? `<span class="pin-precio">${precioCorto(p)}</span>` : '';
-  return `<div class="pin-p ${nivel}${esSel ? ' sel' : ''}">${precio}P</div>`;
+  return `<div class="pin-p ${nivel}${esSel ? ' sel' : ''}${dest}">${precio}P</div>`;
 }
 
 // Seleccionar = centrar el mapa en el lugar y resaltar su pin.
@@ -658,6 +659,7 @@ function zOffset(p) {
     : p.precioHora == null
       ? 0                                              // pago sin dato: no lo priorizamos como si fuera barato
       : Math.max(0, 1200 - Math.min(p.precioHora, 1200));
+  if (p.destacado) z += 3000;            // patrocinados por encima de los normales
   if (p.id === selectedId) z += 5000;
   return Math.round(z);
 }
@@ -671,7 +673,7 @@ function updateMarkers(lista) {
     const nivel = p.disponibilidad.nivel, sel = p.id === selectedId;
     // Firma de lo que afecta el aspecto del pin: si no cambió, no re-seteamos el
     // icono (cada setIcon fuerza refresco del clúster → caro cada 6 s).
-    const sig = `${nivel}|${sel ? 's' : ''}|${simpl && !sel ? 'd' : 'p'}`;
+    const sig = `${nivel}|${sel ? 's' : ''}|${simpl && !sel && !p.destacado ? 'd' : 'p'}|${p.destacado ? 'D' : ''}`;
     let mk = markers[p.id];
     if (mk) {
       if (mk._sig !== sig) { mk.setIcon(L.divIcon({ className: '', html: iconHtml(p), iconSize: [0, 0] })); mk._sig = sig; }
@@ -715,6 +717,8 @@ function listaFiltrada() {
       return true;
     })
     .sort((a, b) => {
+      // Destacados (patrocinados) primero, sin importar el orden elegido.
+      if (!!a.destacado !== !!b.destacado) return a.destacado ? -1 : 1;
       if (orden === 'precio') {
         // Precio efectivo: gratis (o gratis ahora) cuenta como 0. Empate → cercanía.
         const pa = (a.gratisAhora || a.precioHora === 0) ? 0 : (a.precioHora == null ? Infinity : a.precioHora);
@@ -800,7 +804,8 @@ function renderLista() {
     // Check verde — NO una estrella dorada (eso parecería un rating inventado).
     const votos = p.votos ? `<span class="card-rate" title="${p.votos.up} confirmaron cupo (últimas 3 h)">${ic('check', 12)} ${p.votos.up}</span>` : '';
     return `
-      <div class="card ${nivel}${p.id === selectedId ? ' sel' : ''}" data-id="${p.id}" role="button" tabindex="0" aria-label="${esc(p.nombre)}, ver detalle">
+      <div class="card ${nivel}${p.id === selectedId ? ' sel' : ''}${p.destacado ? ' dest' : ''}" data-id="${p.id}" role="button" tabindex="0" aria-label="${esc(p.nombre)}, ver detalle">
+        ${p.destacado ? `<div class="dest-tag">${ic('starFull', 11)} ${esc(p.destacadoEtiqueta || 'Destacado')}</div>` : ''}
         <div class="card-main">
           <div class="card-info">
             <div class="nm"><span class="estado-dot ${nivel}" aria-hidden="true"></span><span class="nm-txt">${esc(p.nombre)}</span>${LS.isFav(p.id) ? ic('starFull', 12) : ''}${catBadge(p)}</div>
@@ -890,6 +895,7 @@ function abrirMapCard(id) {
   const el = $('#mapcard');
   el.innerHTML = `
     <button class="mapcard-x" onclick="cerrarMapCard()" aria-label="Cerrar">${ic('x', 16)}</button>
+    ${p.destacado ? `<div class="dest-tag">${ic('starFull', 11)} ${esc(p.destacadoEtiqueta || 'Destacado')}</div>` : ''}
     <div class="mapcard-nm"><span class="estado-dot ${nivel}" aria-hidden="true"></span><span class="nm-txt">${esc(p.nombre)}</span></div>
     <div class="mapcard-addr">${esc(p.direccion || p.ciudad || '')}</div>
     <div class="mapcard-body">
@@ -1025,6 +1031,7 @@ function openDetalle(id) {
     <div class="det-body">
       <div class="det-hero"><span class="hero-ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 30)}</span><span class="hero-nm">${esc(p.nombre)}</span></div>
       <div class="det-status" id="det-status-line">${lineaDisponibilidad(p)}</div>
+      ${p.destacado ? `<div class="aviso-dest">${ic('starFull', 15)} <b>${esc(p.destacadoEtiqueta || 'Destacado')}</b> · espacio destacado (publicidad)</div>` : ''}
       ${p.reportado ? `<div class="aviso-com">${ic('users', 16)} Estacionamiento <b>aportado por la comunidad</b> — gracias por sumar. Si algo está mal, coméntalo abajo.</div>` : ''}
       ${p.categoria ? `<div class="aviso-cli">${catBadge(p)} Es un estacionamiento de <b>${esc(p.categoria.toLowerCase())}</b> — puede ser de uso restringido, no público general.</div>` : ''}
       <div class="det-row precio-row"><span class="k">${ic('wallet')}</span><span class="precio-val">${precioLinea}</span></div>
