@@ -10,6 +10,7 @@
 import { ESTACIONAMIENTOS } from './data.js';
 import { mapaPreciosReales } from './precios-reales.js';
 import { FICHAS_EXTRA } from './fichas-extra.js';
+import { ESTIMACIONES_COMUNA } from './estimaciones-comuna.js';
 
 // Dataset completo = OSM (data.js) + fichas hechas a mano (fichas-extra.js, que
 // sobreviven a la regeneración de data.js).
@@ -21,6 +22,15 @@ const OVERRIDES = mapaPreciosReales();
 for (const e of FICHAS) {
   const o = OVERRIDES[e.id];
   if (o) { Object.assign(e, o); e.verificado = true; }
+}
+
+// Estimación por comuna: para fichas SIN precio real (verificado:false) y PAGADAS
+// (precioHora > 0), reemplaza el estimado genérico por el promedio real de la
+// comuna. NO toca verificadas ni gratis; la ficha sigue siendo estimación ("~est.").
+for (const e of FICHAS) {
+  if (!e.verificado && e.precioHora > 0 && ESTIMACIONES_COMUNA[e.ciudad]) {
+    e.precioHora = ESTIMACIONES_COMUNA[e.ciudad];
+  }
 }
 
 // ── Clasificador de "categoría" por nombre (red de seguridad) ───────────────
