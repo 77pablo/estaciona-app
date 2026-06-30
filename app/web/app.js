@@ -71,7 +71,7 @@ function cargarLugares() {
 let LUGARES = cargarLugares();
 function guardarLugar(k, lat, lng, etiqueta) {
   LUGARES[k] = { nombre: LUGARES_DEF[k].nombre, lat, lng, etiqueta: etiqueta || null, set: true };
-  localStorage.setItem('estaciona_lugares', JSON.stringify(LUGARES));
+  lsSet('estaciona_lugares', JSON.stringify(LUGARES));
 }
 
 // --- Utilidades -------------------------------------------------------------
@@ -153,7 +153,10 @@ function trafHTML() {
 const _etaCache = {};
 async function etaReal(p) {
   if (!TOMTOM_KEY) return null;
-  if (_etaCache[p.id]) return _etaCache[p.id];
+  // Cachea por destino + ORIGEN (USER redondeado ~100 m): si te mueves, no
+  // reusamos una ETA calculada desde otro punto y rotulada "en vivo".
+  const k = `${p.id}@${USER.lat.toFixed(3)},${USER.lng.toFixed(3)}`;
+  if (_etaCache[k]) return _etaCache[k];
   try {
     const url = `https://api.tomtom.com/routing/1/calculateRoute/${USER.lat},${USER.lng}:${p.lat},${p.lng}/json?key=${TOMTOM_KEY}&traffic=true&travelMode=car`;
     const r = await fetch(url);
@@ -161,7 +164,7 @@ async function etaReal(p) {
     const s = (await r.json())?.routes?.[0]?.summary;
     if (!s) return null;
     const res = { min: Math.max(1, Math.round(s.travelTimeInSeconds / 60)), delayMin: Math.round((s.trafficDelayInSeconds || 0) / 60) };
-    _etaCache[p.id] = res;
+    _etaCache[k] = res;
     return res;
   } catch { return null; }
 }
@@ -300,10 +303,20 @@ function cambiarCiudad(nombre, mover = true) {
     if (map) { map.setView([z.lat, z.lng], 15); meMarker?.setLatLng([z.lat, z.lng]); }
   }
   DATA = [];                 // limpia mientras llega la ciudad nueva
+  $('#lista').innerHTML = skeletonHtml();        // feedback inmediato (no dejar las tarjetas viejas)
+  $('#sheet-count').textContent = 'Cargando…';
   return cargar();           // trae los estacionamientos de esa ciudad (devuelve la promesa)
 }
 
 // --- localStorage (datos en el teléfono) ------------------------------------
+// Escritura segura: en modo privado / sin cuota, setItem lanza. Avisamos una vez
+// pero NUNCA dejamos a medias el flujo que llamó (ej. cerrar la bienvenida).
+let _lsAvisado = false;
+function lsSet(key, value) {
+  try { localStorage.setItem(key, value); return true; }
+  catch { if (!_lsAvisado) { _lsAvisado = true; toast('No pude guardar en este dispositivo (¿modo privado?)'); } return false; }
+}
+function lsRemove(key) { try { localStorage.removeItem(key); } catch {} }
 const LS = {
   // Favoritos: se guarda el OBJETO del lugar (no solo el id) para poder mostrarlo
   // aunque estés mirando otra ciudad. Tolera el formato viejo (solo id string).
@@ -315,15 +328,15 @@ const LS = {
     const i = f.findIndex((x) => (x.id || x) === id);
     if (i >= 0) f.splice(i, 1);
     else f.push({ id, nombre: p.nombre, ciudad: p.ciudad, lat: p.lat, lng: p.lng, precioHora: p.precioHora, gratisInfo: p.gratisInfo, direccion: p.direccion, tipo: p.tipo });
-    localStorage.setItem('estaciona_favs', JSON.stringify(f));
+    lsSet('estaciona_favs', JSON.stringify(f));
     return f.some((x) => (x.id || x) === id);
   },
   getAuto: () => { try { return JSON.parse(localStorage.getItem('estaciona_miauto') || 'null'); } catch { return null; } },
-  setAuto: (a) => localStorage.setItem('estaciona_miauto', JSON.stringify(a)),
-  clearAuto: () => localStorage.removeItem('estaciona_miauto'),
+  setAuto: (a) => lsSet('estaciona_miauto', JSON.stringify(a)),
+  clearAuto: () => lsRemove('estaciona_miauto'),
   // Recordatorios "Avísame": avisos locales para revisar un lugar a cierta hora.
   getRecs: () => { try { return JSON.parse(localStorage.getItem('estaciona_recs') || '[]'); } catch { return []; } },
-  setRecs: (r) => localStorage.setItem('estaciona_recs', JSON.stringify(r)),
+  setRecs: (r) => lsSet('estaciona_recs', JSON.stringify(r)),
 };
 
 // --- Mapa -------------------------------------------------------------------
@@ -876,7 +889,7 @@ function lineaDisponibilidad(p) {
 
 function openDetalle(id) {
   const p = DATA.find((x) => x.id === id);
-  if (!p) return;
+  if (!p) { toast('Este lugar ya no está disponible'); return; }
   detalleAbiertoId = id;
   panselect(p);                 // centrar mapa + resaltar el pin del lugar
 
@@ -1341,7 +1354,7 @@ window.guardarEstacione = () => {
   // Inteligencia: si el lugar está muy cerca de Casa/Trabajo, no es "tu auto".
   for (const k of ['casa', 'trabajo']) {
     const l = LUGARES[k];
-    if (haversine(l, p) < 150) {
+    if (l.set && haversine(l, p) < 150) {   // solo si Casa/Trabajo está fijada (no coords por defecto)
       cerrarModal(); cerrarDetalle();
       toast(`Estás en ${l.nombre}, no marqué tu auto`);
       return;
@@ -1647,6 +1660,7 @@ function setBuscando(on) {
 
 // --- Buscar dirección/lugar (geocodificación con Nominatim de OpenStreetMap) -
 async function geocodificar(texto) {
+  if (buscando) return;                  // evita peticiones concurrentes a Nominatim (rate-limit ~1/s)
   const q = texto.trim();
   if (!q) { renderLista(); return; }
   setBuscando(true);
@@ -1893,9 +1907,12 @@ window.confirmarAviso = (id) => {
   LS.setRecs(recs);
   cerrarModal();
   const ok = `Te aviso en ${fmtMin(min)} ✓`;
+  const enApp = 'Aviso activado; te avisaré dentro de la app';
   // Permiso de notificación: se pide solo ahora (gesto del usuario).
   if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission().then((perm) => toast(perm === 'granted' ? ok : 'Aviso activado; te avisaré dentro de la app'));
+    Notification.requestPermission().then((perm) => toast(perm === 'granted' ? ok : enApp));
+  } else if ('Notification' in window && Notification.permission === 'denied') {
+    toast(enApp);   // honesto: sin permiso del sistema, el aviso solo llega dentro de la app
   } else { toast(ok); }
 };
 // Dispara los recordatorios "Avísame" vencidos (banner + notificación) y limpia los viejos.
@@ -1986,7 +2003,7 @@ async function cargar() {
     if (!r.ok) throw new Error('http ' + r.status);
     const j = await r.json();
     if (seq !== cargaSeq) return;     // llegó una carga más reciente: ignora esta respuesta vieja
-    DATA = j.estacionamientos;
+    DATA = Array.isArray(j.estacionamientos) ? j.estacionamientos : [];   // respuesta rara → lista vacía, no romper
     if (j.centro) CENTRO = j.centro;
     if (j.regiones && j.regiones.length) REGIONES = j.regiones;
     if (j.zonas && j.zonas.length && !ZONAS.length) { ZONAS = j.zonas; poblarSelectorCiudades(); }
@@ -2013,7 +2030,8 @@ window.cargar = cargar;
 
 // --- Bienvenida (solo la primera vez) ---------------------------------------
 function mostrarBienvenida() {
-  if (localStorage.getItem('estaciona_onboarded')) return;
+  let onb; try { onb = localStorage.getItem('estaciona_onboarded'); } catch { onb = '1'; }
+  if (onb) return;
   const o = $('#onboard');
   if (!o) return;
   o.innerHTML = `<div class="onboard-card" role="dialog" aria-modal="true" aria-labelledby="onboard-tit">
@@ -2032,8 +2050,8 @@ function mostrarBienvenida() {
   setTimeout(() => o.querySelector('.btn-primary')?.focus(), 60);   // foco al botón (lector de pantalla)
 }
 window.cerrarBienvenida = () => {
-  localStorage.setItem('estaciona_onboarded', '1');
-  $('#onboard')?.classList.remove('show');
+  $('#onboard')?.classList.remove('show');   // cierra SIEMPRE (aunque no se pueda persistir)
+  lsSet('estaciona_onboarded', '1');
 };
 
 // Tarjetas "esqueleto" con shimmer mientras carga la primera vez.
@@ -2099,7 +2117,7 @@ async function init() {
     ciudadPorPunto(USER);                 // si el centro quedó en otra ciudad, cámbiala
     $('#btn-zona').classList.remove('show');
     cargar();
-    toast('Buscando en esta zona 🔄');
+    toast('Buscando cerca de aquí 🔄');
   });
   // Panel izquierdo plegable (solo PC): mapa a pantalla completa al cerrarlo.
   $('#btn-panel').addEventListener('click', () => {

@@ -71,10 +71,11 @@ function factorHora(hora, dia) {
 
 // ¿Está abierto ahora? (según el campo horario, de forma simple).
 function abiertoAhora(e, hora) {
-  if (e.horario === '24h' || e.horario === 'Libre') return true;
+  if (!e.horario || e.horario === '24h' || e.horario === 'Libre') return true;   // sin horario → no asumir cerrado
   const m = e.horario.match(/(\d{1,2}):\d{2}\D+(\d{1,2}):\d{2}/);
   if (!m) return true;
   const desde = Number(m[1]), hasta = Number(m[2]);
+  if (desde === hasta) return true;                        // "00:00–00:00" = 24h
   if (hasta < desde) return hora >= desde || hora < hasta; // cruza medianoche
   return hora >= desde && hora < hasta;
 }

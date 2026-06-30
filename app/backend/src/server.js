@@ -118,9 +118,10 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, { centro: CENTRO, zonas: ZONAS, regiones: REGIONES, estacionamientos: lista });
     }
     if (url.pathname === '/api/aporte' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 20000) req.destroy(); });
+      let body = '', tooBig = false;
+      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 20000) tooBig = true; });   // marca y drena; responde en 'end'
       req.on('end', async () => {
+        if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
         try {
           const { id, precio, texto } = JSON.parse(body || '{}');
           const ok = await registrarAporte(id, precio, texto);
@@ -134,9 +135,10 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, await aportesDe(id));
     }
     if (url.pathname === '/api/foto' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 3_000_000) req.destroy(); });   // tope ~3MB
+      let body = '', tooBig = false;
+      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 3_000_000) tooBig = true; });   // tope ~3MB; responde en 'end' (el cliente muestra "muy pesada")
       req.on('end', async () => {
+        if (tooBig) return sendJSON(res, 413, { ok: false });
         try {
           const { id, dataUrl } = JSON.parse(body || '{}');
           const rev = await revisarFoto(dataUrl);     // moderación automática (Sightengine)
@@ -159,9 +161,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/mod/borrar' && req.method === 'POST') {
       if (!esAdmin(url)) return sendJSON(res, 403, { error: 'no autorizado' });
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 10000) req.destroy(); });
+      let body = '', tooBig = false;
+      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 10000) tooBig = true; });
       req.on('end', async () => {
+        if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
         try {
           const { tipo, id, ts, file } = JSON.parse(body || '{}');
           let ok = false;
@@ -173,9 +176,10 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (url.pathname === '/api/voto' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 10000) req.destroy(); });
+      let body = '', tooBig = false;
+      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 10000) tooBig = true; });
       req.on('end', async () => {
+        if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
         try {
           const { id, ok } = JSON.parse(body || '{}');
           await registrarVoto(id, ok);

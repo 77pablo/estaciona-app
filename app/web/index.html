@@ -63,7 +63,7 @@
         <button class="chip" aria-pressed="false" data-f="abierto"><svg class="ic-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg> Abierto</button>
       </div>
       <div id="map" role="application" aria-label="Mapa de estacionamientos"></div>
-      <button id="btn-zona" class="zona-btn"><svg class="ic-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M20.5 4v4.3h-4.3"/></svg> Buscar en esta zona</button>
+      <button id="btn-zona" class="zona-btn"><svg class="ic-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M20.5 4v4.3h-4.3"/></svg> Buscar cerca de aquí</button>
       <div class="sheet">
         <div class="sheet-head">
           <span id="sheet-count" aria-live="polite" aria-atomic="true">Cargando…</span>
@@ -97,8 +97,8 @@
     <div class="overlay" id="detalle" role="dialog" aria-modal="true" aria-label="Detalle del estacionamiento"></div>
     <div class="modal-bg" id="modal-bg"><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
     <div class="onboard" id="onboard"></div>
-    <div id="banner"></div>
-    <div id="toast"></div>
+    <div id="banner" role="status" aria-live="assertive"></div>
+    <div id="toast" role="status" aria-live="polite"></div>
     <!-- Card flotante sobre el mapa (al tocar un pin). La llena app.js. -->
     <div id="mapcard" class="mapcard" hidden></div>
   </div>
