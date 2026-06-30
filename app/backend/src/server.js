@@ -15,8 +15,8 @@ import { dirname, join, normalize, extname } from 'node:path';
 
 import { getEstacionamientos } from './engine.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
-import { registrarVoto, tallyReciente } from './votos.js';
-import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte } from './aportes.js';
+import { registrarVoto, tallyReciente, contarVotos } from './votos.js';
+import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
 import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto } from './fotos.js';
 import { revisarFoto } from './modera-foto.js';
 
@@ -157,7 +157,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/mod/feed' && req.method === 'GET') {
       if (!esAdmin(url)) return sendJSON(res, 403, { error: 'no autorizado' });
-      return sendJSON(res, 200, { comentarios: await comentariosRecientes(), fotos: await fotosRecientes() });
+      return sendJSON(res, 200, {
+        comentarios: await comentariosRecientes(),
+        fotos: await fotosRecientes(),
+        precios: await preciosReportados(),
+        nVotos: await contarVotos(),
+      });
     }
     if (url.pathname === '/api/mod/borrar' && req.method === 'POST') {
       if (!esAdmin(url)) return sendJSON(res, 403, { error: 'no autorizado' });

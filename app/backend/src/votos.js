@@ -51,6 +51,12 @@ export async function registrarVoto(id, ok) {
   await guardar();
 }
 
+// Total de votos acumulados (para el contador del panel admin / monitoreo).
+export async function contarVotos() {
+  await cargar();
+  return votos.length;
+}
+
 // Conteo de votos por lugar en las últimas `horas` horas: { [id]: {up, down} }.
 export async function tallyReciente(horas = 3) {
   await cargar();

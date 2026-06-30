@@ -72,6 +72,17 @@ export async function resumenAportes() {
   return out;
 }
 
+// --- Panel admin ---
+// Precios reportados por la gente, por lugar (para cosechar a precios-reales.js).
+// Cada uno: { id, precioReportado (mediana), nPrecios }. Ordenado por más reportes.
+export async function preciosReportados() {
+  const r = await resumenAportes();
+  return Object.entries(r)
+    .filter(([, v]) => v.precioReportado != null)
+    .map(([id, v]) => ({ id, precioReportado: v.precioReportado, nPrecios: v.nPrecios }))
+    .sort((a, b) => b.nPrecios - a.nPrecios);
+}
+
 // --- Moderación ---
 // Comentarios recientes de TODO el país (para el panel admin). Máx n.
 export async function comentariosRecientes(n = 80) {

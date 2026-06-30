@@ -30,6 +30,14 @@
   .muted{font-weight:400;letter-spacing:0;text-transform:none}
   .err{color:var(--red);font-size:14px}
   #panel{display:none}
+  /* Contadores de lo acumulado (monitoreo de persistencia + actividad). */
+  .stats{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 14px;flex:1;min-width:104px}
+  .stat b{display:block;font-size:22px;font-weight:800;font-family:ui-monospace,monospace}
+  .stat span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .price-val{font-family:ui-monospace,monospace;font-weight:700}
+  .copy{background:transparent;border:1px solid var(--line);color:var(--muted);padding:7px 11px;font-size:12px}
+  code{font-family:ui-monospace,monospace;background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:12px}
 </style>
 </head>
 <body>
@@ -45,9 +53,13 @@
   </div>
 
   <div id="panel">
+    <div id="stats" class="stats"></div>
     <div class="row">
       <input id="buscar" type="search" placeholder="Buscar por palabra o por lugar…" autocomplete="off" />
     </div>
+    <h2>Precios reportados por la gente <span id="cuentaPre" class="muted"></span></h2>
+    <p class="sub" style="margin:-4px 0 10px">Lo que la gente sugiere. Si un precio se repite y te cuadra, usa “copiar” y pégalo en <code>precios-reales.js</code> para dejarlo como verificado.</p>
+    <div id="precios"></div>
     <h2>Comentarios <span id="cuentaCom" class="muted"></span></h2>
     <div id="comentarios"></div>
     <h2>Fotos <span id="cuentaFot" class="muted"></span></h2>
@@ -56,7 +68,8 @@
 
 <script>
   let CLAVE = '';
-  let DATOS = { comentarios: [], fotos: [] };   // feed completo cargado (se filtra en vivo)
+  let DATOS = { comentarios: [], fotos: [], precios: [], nVotos: 0 };   // feed completo cargado (se filtra en vivo)
+  const CLP = (n) => '$' + new Intl.NumberFormat('es-CL').format(Math.round(n));
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const fecha = (ts) => new Date(ts).toLocaleString('es-CL', { timeZone: 'America/Santiago' });
@@ -77,9 +90,27 @@
 
   function render() {
     const q = norm($('#buscar').value.trim());
-    // Filtra comentarios por texto o por lugar (id); fotos solo por lugar (id).
+    // Filtra comentarios por texto o por lugar (id); fotos y precios por lugar (id).
     const coms = q ? DATOS.comentarios.filter((c) => norm(c.texto).includes(q) || norm(c.id).includes(q)) : DATOS.comentarios;
     const fots = q ? DATOS.fotos.filter((f) => norm(f.id).includes(q)) : DATOS.fotos;
+    const pres = q ? (DATOS.precios || []).filter((p) => norm(p.id).includes(q)) : (DATOS.precios || []);
+
+    // Contadores (totales sin filtrar): sirven para monitorear que la gente aporta y que PERSISTE.
+    $('#stats').innerHTML = [
+      ['Comentarios', DATOS.comentarios.length],
+      ['Fotos', DATOS.fotos.length],
+      ['Precios reportados', (DATOS.precios || []).length],
+      ['Votos', DATOS.nVotos || 0],
+    ].map(([lbl, n]) => `<div class="stat"><b>${n}</b><span>${lbl}</span></div>`).join('');
+
+    // Precios reportados por la gente (para cosechar a precios-reales.js).
+    $('#cuentaPre').textContent = q ? `(${pres.length} de ${(DATOS.precios || []).length})` : `(${(DATOS.precios || []).length})`;
+    $('#precios').innerHTML = pres.length ? pres.map((p) => `
+      <div class="item">
+        <div><div class="txt"><span class="price-val">~${CLP(p.precioReportado)}/hr</span> · <span class="price-id">${esc(p.id)}</span></div>
+        <div class="meta">${p.nPrecios} reporte${p.nPrecios === 1 ? '' : 's'} de la gente</div></div>
+        <button class="copy" onclick="copiarLinea(this,'${esc(p.id)}',${p.precioReportado})">Copiar línea</button>
+      </div>`).join('') : `<div class="vacio">${q ? 'Ningún precio coincide.' : 'Aún nadie reporta precios.'}</div>`;
 
     $('#cuentaCom').textContent = q ? `(${coms.length} de ${DATOS.comentarios.length})` : `(${DATOS.comentarios.length})`;
     $('#cuentaFot').textContent = q ? `(${fots.length} de ${DATOS.fotos.length})` : `(${DATOS.fotos.length})`;
@@ -113,6 +144,13 @@
       render();
     } else alert('No se pudo eliminar.');
   }
+  // Copia una línea lista para pegar en precios-reales.js (precio reportado = por hora).
+  window.copiarLinea = (btn, id, precio) => {
+    const linea = `  { id: '${id}', precioHora: ${Math.round(precio)}, fuente: 'reporte comunidad' },`;
+    const ok = () => { btn.textContent = '¡Copiado!'; setTimeout(() => { btn.textContent = 'Copiar línea'; }, 1500); };
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(linea).then(ok).catch(() => prompt('Copia esta línea:', linea));
+    else prompt('Copia esta línea:', linea);
+  };
   $('#clave').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
 </script>
 </body>
