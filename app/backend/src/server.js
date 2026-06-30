@@ -46,7 +46,9 @@ const TOMTOM_KEY = leerKey('TOMTOM_KEY', 'tomtom.key');   // tráfico en vivo + 
 const ACCESO_CLAVE = (process.env.ACCESO_CLAVE || '').trim();
 // Clave de MODERACIÓN (solo Abel). Para borrar comentarios/fotos en /admin.
 const ADMIN_CLAVE = leerKey('ADMIN_CLAVE', 'admin.key');
-const esAdmin = (url) => !!ADMIN_CLAVE && url.searchParams.get('clave') === ADMIN_CLAVE;
+// Clave admin: se prefiere por header (x-mod-clave) para NO dejarla en logs/URL;
+// se acepta ?clave= como respaldo (compatibilidad).
+const esAdmin = (req, url) => !!ADMIN_CLAVE && (((req.headers['x-mod-clave'] || '') === ADMIN_CLAVE) || url.searchParams.get('clave') === ADMIN_CLAVE);
 function autorizado(req) {
   if (!ACCESO_CLAVE) return true;                 // sin clave configurada => app pública
   const m = (req.headers.authorization || '').match(/^Basic\s+(.+)$/i);
@@ -76,7 +78,10 @@ function sendJSON(res, status, data) {
 // (la moderación en /admin es la última línea), pero frena floods accidentales/básicos.
 const _ipHits = new Map();
 function rateLimit(req, max, ventanaMs) {
-  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'x';
+  // El cliente puede falsificar X-Forwarded-For; el valor confiable es el ÚLTIMO
+  // (el que agrega el proxy de Railway), no el primero. Si no hay, la IP del socket.
+  const xff = (req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const ip = xff.length ? xff[xff.length - 1] : (req.socket.remoteAddress || 'x');
   const ahora = Date.now();
   const arr = (_ipHits.get(ip) || []).filter((t) => ahora - t < ventanaMs);
   arr.push(ahora);
@@ -110,6 +115,7 @@ async function serveStatic(res, urlPath) {
 }
 
 const server = http.createServer(async (req, res) => {
+  req.on('error', () => {});   // aborto/corte del cliente a mitad de subida: no tumbar el server
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     // Modo privado: si hay clave configurada, exige autenticación antes de TODO.
@@ -177,7 +183,7 @@ const server = http.createServer(async (req, res) => {
       return await servirFoto(res, url.pathname);
     }
     if (url.pathname === '/api/mod/feed' && req.method === 'GET') {
-      if (!esAdmin(url)) return sendJSON(res, 403, { error: 'no autorizado' });
+      if (!esAdmin(req, url)) return sendJSON(res, 403, { error: 'no autorizado' });
       return sendJSON(res, 200, {
         comentarios: await comentariosRecientes(),
         fotos: await fotosRecientes(),
@@ -190,7 +196,7 @@ const server = http.createServer(async (req, res) => {
       });
     }
     if (url.pathname === '/api/mod/borrar' && req.method === 'POST') {
-      if (!esAdmin(url)) return sendJSON(res, 403, { error: 'no autorizado' });
+      if (!esAdmin(req, url)) return sendJSON(res, 403, { error: 'no autorizado' });
       let body = '', tooBig = false;
       req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 10000) tooBig = true; });
       req.on('end', async () => {
@@ -207,7 +213,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (url.pathname === '/api/mod/destacado' && req.method === 'POST') {
-      if (!esAdmin(url)) return sendJSON(res, 403, { error: 'no autorizado' });
+      if (!esAdmin(req, url)) return sendJSON(res, 403, { error: 'no autorizado' });
       let body = '', tooBig = false;
       req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 4000) tooBig = true; });
       req.on('end', async () => {

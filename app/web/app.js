@@ -311,7 +311,7 @@ function ciudadPorPunto(pt, maxDist = 40000) {
 // Cambia la ciudad que se está mirando: centra el mapa y filtra la lista.
 function cambiarCiudad(nombre, mover = true) {
   const z = ZONAS.find((x) => x.nombre === nombre);
-  if (!z) return;
+  if (!z) return Promise.resolve();   // siempre promesa (irAFav encadena .then)
   ciudadActual = nombre;
   track('ciudad', nombre);
   const sel = $('#ciudad-select');
@@ -346,7 +346,7 @@ const LS = {
     const f = LS.getFavs();
     const i = f.findIndex((x) => (x.id || x) === id);
     if (i >= 0) f.splice(i, 1);
-    else f.push({ id, nombre: p.nombre, ciudad: p.ciudad, lat: p.lat, lng: p.lng, precioHora: p.precioHora, gratisInfo: p.gratisInfo, direccion: p.direccion, tipo: p.tipo });
+    else f.push({ id, nombre: p.nombre, ciudad: p.ciudad, lat: p.lat, lng: p.lng, precioHora: p.precioHora, gratisInfo: p.gratisInfo, direccion: p.direccion, tipo: p.tipo, verificado: p.verificado });
     lsSet('estaciona_favs', JSON.stringify(f));
     return f.some((x) => (x.id || x) === id);
   },
@@ -793,7 +793,7 @@ function renderLista() {
   const traf = trafico();
   const trafColor = traf.nivel === 'fluido' ? 'var(--green)' : traf.nivel === 'medio' ? 'var(--amber)' : 'var(--red)';
   $('#lista').innerHTML = lista.map((p) => {
-    const d = p.disponibilidad, nivel = d.nivel;
+    const d = p.disponibilidad || {}, nivel = d.nivel || 'cerrado';   // defensivo: nunca tumbar la lista
     // Disponibilidad = estimación honesta (sin número falso de "cupos en vivo").
     const estadoTxt = nivel === 'cerrado' ? 'Cerrado'
       : nivel === 'verde' ? 'Disponible'
@@ -804,7 +804,7 @@ function renderLista() {
     // Check verde — NO una estrella dorada (eso parecería un rating inventado).
     const votos = p.votos ? `<span class="card-rate" title="${p.votos.up} confirmaron cupo (últimas 3 h)">${ic('check', 12)} ${p.votos.up}</span>` : '';
     return `
-      <div class="card ${nivel}${p.id === selectedId ? ' sel' : ''}${p.destacado ? ' dest' : ''}" data-id="${p.id}" role="button" tabindex="0" aria-label="${esc(p.nombre)}, ver detalle">
+      <div class="card ${nivel}${p.id === selectedId ? ' sel' : ''}${p.destacado ? ' dest' : ''}" data-id="${esc(p.id)}" role="button" tabindex="0" aria-label="${esc(p.nombre)}, ver detalle">
         ${p.destacado ? `<div class="dest-tag">${ic('starFull', 11)} ${esc(p.destacadoEtiqueta || 'Destacado')}</div>` : ''}
         <div class="card-main">
           <div class="card-info">
@@ -1376,7 +1376,7 @@ let _rutaDest = null;
 function abrirRuta(p) {
   if (!p) return;
   _rutaDest = p;
-  track('comollegar', p.ciudad);
+  track('comollegar', p.ciudad || ciudadActual);
   $('#modal').innerHTML = `
     <h3>${ic('compass', 18)} ¿Con qué app te llevo?</h3>
     <p>${esc(p.nombre || 'Tu auto')}${p.direccion ? ' · ' + esc(p.direccion) : ''}</p>
@@ -2121,6 +2121,7 @@ function enfocables(c) {
 // pierdan detrás del overlay.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    if (_reportando) { cancelarReporte(); return; }
     if ($('#onboard').classList.contains('show')) window.cerrarBienvenida();
     else if ($('#modal-bg').classList.contains('open')) window.cerrarModal();
     else if ($('#detalle').classList.contains('open')) window.cerrarDetalle();
@@ -2142,6 +2143,9 @@ document.addEventListener('keydown', (e) => {
 // --- Navegación entre vistas ------------------------------------------------
 function irA(view) {
   cerrarMapCard();                              // oculta la card flotante del mapa al cambiar de vista
+  // Cierra overlays abiertos (en PC el detalle tapaba la columna izquierda de la vista nueva).
+  if ($('#detalle')?.classList.contains('open')) cerrarDetalle();
+  if ($('#modal-bg')?.classList.contains('open')) cerrarModal();
   if (view !== 'buscar') { if (_reportando) salirModoReporte(); $('#comparar-bar')?.classList.remove('show'); }
   else actualizarBarraComparar();              // al volver al mapa, restaura la barra si hay selección
   if (view !== 'miauto') destruirMiniMapa();   // libera el mini-mapa al salir

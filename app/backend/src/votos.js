@@ -19,6 +19,11 @@ let _dirOk = false, _avisoFallo = false;
 
 let votos = [];
 let cargaPromise = null;
+let _cola = Promise.resolve();   // serializa escrituras (sin carreras sobre el archivo)
+
+// id válido = slug del dataset (sin comillas/símbolos) → evita corromper el JSON
+// y cierra inyección por id en el panel admin.
+const ID_OK = (id) => typeof id === 'string' && /^[a-z0-9-]{1,64}$/.test(id);
 
 // Carga idempotente: se cachea la promesa, así dos votos casi simultáneos en el
 // primer arranque comparten la MISMA carga (sin ventana de carrera que pierda votos).
@@ -27,17 +32,16 @@ function cargar() {
     .then((txt) => { votos = JSON.parse(txt) || []; })
     .catch(() => { votos = []; });
 }
-async function guardar() {
-  // Escritura atómica: escribe a un .tmp y renombra (rename es atómico en el
-  // mismo disco). Evita que un corte a mitad de escritura deje el JSON corrupto
-  // y borre todos los votos.
-  const tmp = FILE + '.tmp';
+// Cola: cada escritura corre DESPUÉS de la anterior (aunque alguna falle), con
+// .tmp ÚNICO por escritura → evita JSON corrupto → catch→[] → pérdida total.
+function guardar() { _cola = _cola.then(escribir, escribir); return _cola; }
+async function escribir() {
+  const tmp = `${FILE}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+  const datos = JSON.stringify(votos);
   try {
     if (!_dirOk) { await mkdir(dirname(FILE), { recursive: true }); _dirOk = true; }   // crea el dir del volumen si falta
-    await writeFile(tmp, JSON.stringify(votos)); await rename(tmp, FILE);
+    await writeFile(tmp, datos); await rename(tmp, FILE);
   } catch (e) {
-    // Disco no escribible: seguimos en memoria, pero avisamos UNA vez para que se
-    // note en los logs de Railway si el volumen quedó mal montado (no persiste).
     if (!_avisoFallo) { _avisoFallo = true; console.warn(`[votos] no pude escribir en ${FILE}: ${e.message} — los votos NO persisten`); }
   }
 }
@@ -45,7 +49,7 @@ async function guardar() {
 // Registra un voto (ok = true → "había cupo"; false → "no había").
 export async function registrarVoto(id, ok) {
   await cargar();
-  if (!id || typeof id !== 'string') return;
+  if (!ID_OK(id)) return;
   votos.push({ id, ok: !!ok, ts: Date.now() });
   if (votos.length > 5000) votos = votos.slice(-5000); // poda para no crecer infinito
   await guardar();

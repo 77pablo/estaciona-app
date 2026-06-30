@@ -16,16 +16,26 @@ let _dirOk = false, _avisoFallo = false;
 
 let aportes = [];
 let cargaPromise = null;
+let _cola = Promise.resolve();   // serializa escrituras (sin carreras sobre el archivo)
+
+// id válido = slug del dataset (sin comillas/símbolos) → evita corromper el JSON
+// y cierra el XSS por id en el panel admin (el id se muestra en onclick).
+const ID_OK = (id) => typeof id === 'string' && /^[a-z0-9-]{1,64}$/.test(id);
+
 function cargar() {
   return cargaPromise ??= readFile(FILE, 'utf8')
     .then((txt) => { aportes = JSON.parse(txt) || []; })
     .catch(() => { aportes = []; });
 }
-async function guardar() {
-  const tmp = FILE + '.tmp';
+// Cola: cada escritura corre DESPUÉS de la anterior, con .tmp ÚNICO → sin carrera
+// que corrompa el JSON (evita pérdida total de aportes vía catch→[]).
+function guardar() { _cola = _cola.then(escribir, escribir); return _cola; }
+async function escribir() {
+  const tmp = `${FILE}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+  const datos = JSON.stringify(aportes);
   try {
     if (!_dirOk) { await mkdir(dirname(FILE), { recursive: true }); _dirOk = true; }   // crea el dir del volumen si falta
-    await writeFile(tmp, JSON.stringify(aportes)); await rename(tmp, FILE);
+    await writeFile(tmp, datos); await rename(tmp, FILE);
   } catch (e) {
     if (!_avisoFallo) { _avisoFallo = true; console.warn(`[aportes] no pude escribir en ${FILE}: ${e.message} — los aportes NO persisten`); }
   }
@@ -34,7 +44,7 @@ async function guardar() {
 // Registra un aporte. precio (número CLP/hora) y/o texto (comentario). Devuelve ok.
 export async function registrarAporte(id, precio, texto) {
   await cargar();
-  if (!id || typeof id !== 'string') return false;
+  if (!ID_OK(id)) return false;
   const p = Number(precio);
   const precioOk = Number.isFinite(p) && p > 0 && p <= 20000 ? Math.round(p) : null;
   const t = typeof texto === 'string' ? texto.trim().slice(0, 280) : '';

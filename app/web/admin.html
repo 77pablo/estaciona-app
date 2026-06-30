@@ -99,7 +99,7 @@
   async function entrar() {
     CLAVE = $('#clave').value.trim();
     if (!CLAVE) return;
-    const r = await fetch('/api/mod/feed?clave=' + encodeURIComponent(CLAVE));
+    const r = await fetch('/api/mod/feed', { headers: { 'x-mod-clave': CLAVE } });
     if (r.status === 403) { $('#loginErr').textContent = 'Clave incorrecta.'; return; }
     if (!r.ok) { $('#loginErr').textContent = 'Error al cargar.'; return; }
     $('#login').style.display = 'none';
@@ -188,8 +188,8 @@
 
   async function borrar(btn, tipo, id, ts, file) {
     if (!confirm('¿Eliminar este ' + tipo + '?')) return;
-    const r = await fetch('/api/mod/borrar?clave=' + encodeURIComponent(CLAVE), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const r = await fetch('/api/mod/borrar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-mod-clave': CLAVE },
       body: JSON.stringify({ tipo, id, ts, file }),
     });
     const j = await r.json().catch(() => ({}));
@@ -211,7 +211,7 @@
 
   // ── Destacados (patrocinados) ──
   async function recargarFeed() {
-    const r = await fetch('/api/mod/feed?clave=' + encodeURIComponent(CLAVE));
+    const r = await fetch('/api/mod/feed', { headers: { 'x-mod-clave': CLAVE } });
     if (r.ok) { DATOS = await r.json(); render(); }
   }
   window.cargarLugaresDestacar = async () => {
@@ -235,8 +235,8 @@
     if (etiqueta === null) return;
     const dias = prompt('¿Por cuántos días? (vacío o 0 = sin vencimiento)', '30');
     if (dias === null) return;
-    const r = await fetch('/api/mod/destacado?clave=' + encodeURIComponent(CLAVE), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const r = await fetch('/api/mod/destacado', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-mod-clave': CLAVE },
       body: JSON.stringify({ accion: 'add', id, etiqueta: etiqueta || 'Destacado', dias: Number(dias) || 0 }),
     });
     const j = await r.json().catch(() => ({}));
@@ -244,8 +244,8 @@
   };
   window.quitarDest = async (id) => {
     if (!confirm('¿Quitar este destacado?')) return;
-    const r = await fetch('/api/mod/destacado?clave=' + encodeURIComponent(CLAVE), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const r = await fetch('/api/mod/destacado', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-mod-clave': CLAVE },
       body: JSON.stringify({ accion: 'remove', id }),
     });
     const j = await r.json().catch(() => ({}));
