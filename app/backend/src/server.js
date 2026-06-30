@@ -22,7 +22,7 @@ import { registrarLugar, lugaresDe, lugaresRecientes, eliminarLugar, contarLugar
 import { registrarEvento, resumenAnalytics, vistasLugar } from './analytics.js';
 import { agregarDestacado, quitarDestacado, mapaDestacados, listarDestacados } from './destacados.js';
 import { revisarFoto } from './modera-foto.js';
-import { ready as dbReady } from './db.js';
+import { ready as dbReady, backend as dbBackend } from './db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = join(__dirname, '..', '..', 'web');
@@ -346,14 +346,16 @@ server.listen(PORT, () => {
   console.log('  🅿️  Estaciona  🅿️');
   console.log(`  Abre la app en:  http://localhost:${PORT}`);
   console.log('  Ctrl+C para detener.');
-  // Persistencia: votos/aportes/lugares/destacados/analítica viven en SQLite
-  // (define SQLITE_PATH al volumen, ej. /data/estaciona.sqlite). Las fotos siguen
-  // como archivos (define FOTOS_DIR al volumen).
+  // Persistencia: votos/aportes/lugares/destacados/analítica viven en la base de
+  // datos (Postgres administrado si hay DATABASE_URL; si no, SQLite en SQLITE_PATH,
+  // que debe apuntar al volumen, ej. /data/estaciona.sqlite). Las fotos siguen como
+  // archivos (define FOTOS_DIR al volumen).
   const persist = (env) => process.env[env] ? `${process.env[env]}  (persiste)` : `local efímero — SE BORRA en redeploy (define ${env})`;
   console.log('  Persistencia:');
-  // Refleja el estado REAL de SQLite: si no cargó, NADA se guarda aunque SQLITE_PATH esté definido.
-  if (dbReady) console.log(`   · base de datos → ${persist('SQLITE_PATH')}`);
-  else console.log('   · base de datos → ⚠️  SQLite NO cargó: votos/aportes/lugares/analítica NO se guardan (revisa SQLITE_PATH / versión de Node ≥22.5)');
+  // Refleja el estado REAL del backend: si no cargó, NADA se guarda.
+  if (dbReady && dbBackend === 'postgres') console.log('   · base de datos → PostgreSQL administrado vía DATABASE_URL  (persiste, multi-instancia)');
+  else if (dbReady) console.log(`   · base de datos → SQLite ${persist('SQLITE_PATH')}`);
+  else console.log('   · base de datos → ⚠️  NO cargó: votos/aportes/lugares/analítica NO se guardan (revisa DATABASE_URL / SQLITE_PATH / Node ≥22.5)');
   console.log(`   · fotos         → ${persist('FOTOS_DIR')}`);
   console.log('');
 });

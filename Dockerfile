@@ -1,15 +1,21 @@
 # ============================================================================
 # Estaciona — imagen para Railway (en la RAÍZ del repo, para que Railway la
 # encuentre sin configurar Root Directory).
-# App de Node puro (node:http), SIN dependencias externas → build muy simple.
 # Railway entrega el puerto por la variable PORT; el server.js ya la respeta.
-# Node 24: trae SQLite integrado (node:sqlite) que usa la base de datos.
+# Node 24: trae SQLite integrado (node:sqlite) usado como base de datos local.
+# Dependencia: `pg` (Postgres administrado) cuando está definida DATABASE_URL.
 # ============================================================================
 FROM node:24-alpine
 
 WORKDIR /app
 
-# Copiamos el backend (código + package.json) y el frontend estático.
+# Primero el manifiesto, para instalar dependencias (cachea esta capa).
+COPY app/backend/package*.json ./backend/
+WORKDIR /app/backend
+RUN npm install --omit=dev --no-audit --no-fund
+
+# Luego el código del backend y el frontend estático.
+WORKDIR /app
 COPY app/backend ./backend
 COPY app/web ./web
 

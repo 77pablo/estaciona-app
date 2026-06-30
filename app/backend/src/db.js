@@ -1,16 +1,22 @@
 // ============================================================================
 // Estaciona — Adaptador de almacenamiento (SQL)
 // ----------------------------------------------------------------------------
-// Hoy usa SQLite INTEGRADO de Node (node:sqlite) — sin dependencias npm, un solo
-// archivo. La interfaz es ASYNC (run/all/get devuelven Promesas) a propósito:
-// el día que se necesite escalar a varios servidores, se cambia este archivo por
-// una implementación de Postgres (pg, que es async) SIN tocar los stores.
+// Dos backends, MISMO contrato async (run/all/get) → los stores no cambian:
 //
-// Si SQLite no estuviera disponible, la app NO se cae: queda `ready=false` y los
-// stores operan en memoria (sin persistencia) avisando en logs.
+//  • PostgreSQL administrado  (si está la env DATABASE_URL): multi-INSTANCIA,
+//    para tráfico nacional / varias copias del server compartiendo una sola DB
+//    (Neon, Supabase, Railway Postgres…). Async nativo (paquete `pg`).
+//  • SQLite integrado de Node (si NO hay DATABASE_URL): sin dependencias, un
+//    archivo, ideal para local y para 1 servidor. Persiste en SQLITE_PATH.
 //
-// Persistencia: env SQLITE_PATH (apuntar al volumen de Railway, ej.
-// /data/estaciona.sqlite); si no, archivo local junto al backend.
+// El SQL "fuente" que escriben los stores está en dialecto SQLite; para Postgres
+// se traduce al vuelo en `toPg()` (placeholders ?→$n, INSERT OR REPLACE/IGNORE
+// → ON CONFLICT, rowid → columna serial `seq`). Los enteros grandes de Postgres
+// (BIGINT/COUNT/SUM) se devuelven como número, no como string, para no romper
+// comparaciones de los stores.
+//
+// Si NINGÚN backend carga, la app NO se cae: queda `ready=false` y los stores
+// operan en memoria (sin persistencia) avisando fuerte en logs y en /api/health.
 // ============================================================================
 
 import { fileURLToPath } from 'node:url';
@@ -18,46 +24,129 @@ import { dirname, join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FILE = process.env.SQLITE_PATH || join(__dirname, '..', 'estaciona.sqlite');
 
-let sdb = null;
 export let ready = false;
+export let backend = 'memoria';   // 'postgres' | 'sqlite' | 'memoria'
 
-try {
-  const { DatabaseSync } = await import('node:sqlite');
-  try { mkdirSync(dirname(FILE), { recursive: true }); } catch { /* dir ya existe / no escribible */ }
-  sdb = new DatabaseSync(FILE);
-  sdb.exec('PRAGMA journal_mode = WAL;');     // mejor concurrencia lectura/escritura
-  sdb.exec('PRAGMA busy_timeout = 4000;');    // espera si está ocupado en vez de fallar
-  sdb.exec(`
-    CREATE TABLE IF NOT EXISTS votos (id TEXT, ok INTEGER, ts INTEGER);
-    CREATE INDEX IF NOT EXISTS ix_votos_ts ON votos(ts);
-    CREATE INDEX IF NOT EXISTS ix_votos_id ON votos(id);
+// Implementaciones concretas (las llena el backend que cargue).
+let _run = async () => ({ changes: 0, lastInsertRowid: 0 });
+let _all = async () => [];
+let _get = async () => null;
 
-    CREATE TABLE IF NOT EXISTS aportes (id TEXT, precio INTEGER, texto TEXT, ts INTEGER);
-    CREATE INDEX IF NOT EXISTS ix_aportes_id ON aportes(id);
+const DATABASE_URL = process.env.DATABASE_URL;
 
-    CREATE TABLE IF NOT EXISTS lugares (id TEXT PRIMARY KEY, ciudad TEXT, nombre TEXT, lat REAL, lng REAL, json TEXT, ts INTEGER);
-    CREATE INDEX IF NOT EXISTS ix_lugares_ciudad ON lugares(ciudad);
+// ---------------------------------------------------------------------------
+// Traductor de dialecto SQLite → PostgreSQL (solo se usa en el backend Postgres)
+// ---------------------------------------------------------------------------
+// Llave primaria de las tablas que usan INSERT OR REPLACE (para el ON CONFLICT).
+const PK = { destacados: ['id'], an_evento: ['tipo'], an_dia: ['dia', 'tipo'], an_ciudad: ['ciudad'] };
 
-    CREATE TABLE IF NOT EXISTS destacados (id TEXT PRIMARY KEY, etiqueta TEXT, premium INTEGER, tagline TEXT, hasta INTEGER, ts INTEGER);
-
-    CREATE TABLE IF NOT EXISTS an_evento (tipo TEXT PRIMARY KEY, n INTEGER);
-    CREATE TABLE IF NOT EXISTS an_dia (dia TEXT, tipo TEXT, n INTEGER, PRIMARY KEY (dia, tipo));
-    CREATE TABLE IF NOT EXISTS an_ciudad (ciudad TEXT PRIMARY KEY, n INTEGER);
-    CREATE TABLE IF NOT EXISTS an_lugar (id TEXT, tipo TEXT, n INTEGER, PRIMARY KEY (id, tipo));
-  `);
-  ready = true;
-  console.log(`  Base de datos: SQLite → ${FILE}`);
-} catch (e) {
-  console.warn(`[db] SQLite no disponible (${e.message}) — los datos NO persisten (modo memoria)`);
+export function toPg(sql) {
+  // INSERT OR REPLACE INTO t(cols) VALUES(...)  →  INSERT ... ON CONFLICT (pk) DO UPDATE SET nonpk=EXCLUDED.nonpk
+  const mRep = sql.match(/^INSERT OR REPLACE INTO (\w+)\s*\(([^)]+)\)/i);
+  if (mRep) {
+    const t = mRep[1];
+    const cols = mRep[2].split(',').map((c) => c.trim());
+    const pk = PK[t] || ['id'];
+    const set = cols.filter((c) => !pk.includes(c)).map((c) => `${c}=EXCLUDED.${c}`).join(', ');
+    sql = sql.replace(/^INSERT OR REPLACE/i, 'INSERT')
+      + (set ? ` ON CONFLICT (${pk.join(', ')}) DO UPDATE SET ${set}` : ` ON CONFLICT (${pk.join(', ')}) DO NOTHING`);
+  } else if (/^INSERT OR IGNORE/i.test(sql)) {
+    // INSERT OR IGNORE → no pisar la fila existente
+    sql = sql.replace(/^INSERT OR IGNORE/i, 'INSERT') + ' ON CONFLICT DO NOTHING';
+  }
+  // `rowid` no existe en Postgres → usamos la columna serial `seq` (poda de votos/aportes).
+  sql = sql.replace(/\browid\b/gi, 'seq');
+  // Placeholders posicionales: ? → $1, $2, ...
+  let i = 0;
+  sql = sql.replace(/\?/g, () => '$' + (++i));
+  return sql;
 }
 
-// Helpers async (envuelven node:sqlite, que es síncrono). Mañana, para Postgres,
-// solo cambian estas 3 funciones por la versión con `pg` (mismo contrato).
-// `run` devuelve el resultado nativo { changes, lastInsertRowid } para que el
-// llamador sepa cuántas filas tocó SIN un segundo query (que tendría una carrera
-// entre requests concurrentes sobre la misma conexión).
-export async function run(sql, params = []) { if (!ready) return { changes: 0, lastInsertRowid: 0 }; return sdb.prepare(sql).run(...params); }
-export async function all(sql, params = []) { if (!ready) return []; return sdb.prepare(sql).all(...params); }
-export async function get(sql, params = []) { if (!ready) return null; return sdb.prepare(sql).get(...params) ?? null; }
+// ---------------------------------------------------------------------------
+// Backend A: PostgreSQL administrado
+// ---------------------------------------------------------------------------
+if (DATABASE_URL) {
+  try {
+    const pg = (await import('pg')).default;
+    // BIGINT / COUNT / SUM (OID 20 = int8) vuelven como string por defecto en pg;
+    // los convertimos a number para que `row.c > 0`, up/down, ts, etc. sigan siendo números.
+    pg.types.setTypeParser(20, (v) => parseInt(v, 10));
+    // Neon/Supabase exigen SSL; en un Postgres local (localhost) va sin SSL.
+    const ssl = /localhost|127\.0\.0\.1|::1/.test(DATABASE_URL) ? false : { rejectUnauthorized: false };
+    const pool = new pg.Pool({ connectionString: DATABASE_URL, ssl, max: 10 });
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS votos (seq BIGSERIAL, id TEXT, ok INTEGER, ts BIGINT);
+      CREATE INDEX IF NOT EXISTS ix_votos_ts ON votos(ts);
+      CREATE INDEX IF NOT EXISTS ix_votos_id ON votos(id);
+
+      CREATE TABLE IF NOT EXISTS aportes (seq BIGSERIAL, id TEXT, precio INTEGER, texto TEXT, ts BIGINT);
+      CREATE INDEX IF NOT EXISTS ix_aportes_id ON aportes(id);
+
+      CREATE TABLE IF NOT EXISTS lugares (id TEXT PRIMARY KEY, ciudad TEXT, nombre TEXT, lat DOUBLE PRECISION, lng DOUBLE PRECISION, json TEXT, ts BIGINT);
+      CREATE INDEX IF NOT EXISTS ix_lugares_ciudad ON lugares(ciudad);
+
+      CREATE TABLE IF NOT EXISTS destacados (id TEXT PRIMARY KEY, etiqueta TEXT, premium INTEGER, tagline TEXT, hasta BIGINT, ts BIGINT);
+
+      CREATE TABLE IF NOT EXISTS an_evento (tipo TEXT PRIMARY KEY, n BIGINT);
+      CREATE TABLE IF NOT EXISTS an_dia (dia TEXT, tipo TEXT, n BIGINT, PRIMARY KEY (dia, tipo));
+      CREATE TABLE IF NOT EXISTS an_ciudad (ciudad TEXT PRIMARY KEY, n BIGINT);
+      CREATE TABLE IF NOT EXISTS an_lugar (id TEXT, tipo TEXT, n BIGINT, PRIMARY KEY (id, tipo));
+    `);
+    _run = async (sql, params = []) => { const r = await pool.query(toPg(sql), params); return { changes: r.rowCount, lastInsertRowid: 0 }; };
+    _all = async (sql, params = []) => (await pool.query(toPg(sql), params)).rows;
+    _get = async (sql, params = []) => (await pool.query(toPg(sql), params)).rows[0] ?? null;
+    ready = true;
+    backend = 'postgres';
+    console.log('  Base de datos: PostgreSQL administrado (multi-instancia)');
+  } catch (e) {
+    console.warn(`[db] PostgreSQL no disponible (${e.message}) — los datos NO persisten (modo memoria). Revisa DATABASE_URL.`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Backend B: SQLite integrado de Node (fallback / local / 1 servidor)
+// ---------------------------------------------------------------------------
+if (!ready) {
+  const FILE = process.env.SQLITE_PATH || join(__dirname, '..', 'estaciona.sqlite');
+  try {
+    const { DatabaseSync } = await import('node:sqlite');
+    try { mkdirSync(dirname(FILE), { recursive: true }); } catch { /* dir ya existe / no escribible */ }
+    const sdb = new DatabaseSync(FILE);
+    sdb.exec('PRAGMA journal_mode = WAL;');     // mejor concurrencia lectura/escritura
+    sdb.exec('PRAGMA busy_timeout = 4000;');    // espera si está ocupado en vez de fallar
+    sdb.exec(`
+      CREATE TABLE IF NOT EXISTS votos (id TEXT, ok INTEGER, ts INTEGER);
+      CREATE INDEX IF NOT EXISTS ix_votos_ts ON votos(ts);
+      CREATE INDEX IF NOT EXISTS ix_votos_id ON votos(id);
+
+      CREATE TABLE IF NOT EXISTS aportes (id TEXT, precio INTEGER, texto TEXT, ts INTEGER);
+      CREATE INDEX IF NOT EXISTS ix_aportes_id ON aportes(id);
+
+      CREATE TABLE IF NOT EXISTS lugares (id TEXT PRIMARY KEY, ciudad TEXT, nombre TEXT, lat REAL, lng REAL, json TEXT, ts INTEGER);
+      CREATE INDEX IF NOT EXISTS ix_lugares_ciudad ON lugares(ciudad);
+
+      CREATE TABLE IF NOT EXISTS destacados (id TEXT PRIMARY KEY, etiqueta TEXT, premium INTEGER, tagline TEXT, hasta INTEGER, ts INTEGER);
+
+      CREATE TABLE IF NOT EXISTS an_evento (tipo TEXT PRIMARY KEY, n INTEGER);
+      CREATE TABLE IF NOT EXISTS an_dia (dia TEXT, tipo TEXT, n INTEGER, PRIMARY KEY (dia, tipo));
+      CREATE TABLE IF NOT EXISTS an_ciudad (ciudad TEXT PRIMARY KEY, n INTEGER);
+      CREATE TABLE IF NOT EXISTS an_lugar (id TEXT, tipo TEXT, n INTEGER, PRIMARY KEY (id, tipo));
+    `);
+    // node:sqlite es síncrono; lo envolvemos en promesas. `run` devuelve el
+    // { changes, lastInsertRowid } nativo (sin un 2º query con carrera).
+    _run = async (sql, params = []) => sdb.prepare(sql).run(...params);
+    _all = async (sql, params = []) => sdb.prepare(sql).all(...params);
+    _get = async (sql, params = []) => sdb.prepare(sql).get(...params) ?? null;
+    ready = true;
+    backend = 'sqlite';
+    console.log(`  Base de datos: SQLite → ${FILE}`);
+  } catch (e) {
+    console.warn(`[db] SQLite no disponible (${e.message}) — los datos NO persisten (modo memoria)`);
+  }
+}
+
+// Contrato público (idéntico para ambos backends).
+export async function run(sql, params = []) { return _run(sql, params); }
+export async function all(sql, params = []) { return _all(sql, params); }
+export async function get(sql, params = []) { return _get(sql, params); }
