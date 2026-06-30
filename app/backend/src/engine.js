@@ -101,9 +101,14 @@ function gratisAhora(e, hora, dia) {
 // Hora y día en zona horaria de Chile (America/Santiago), sin importar dónde
 // corra el servidor (ej. Railway en UTC). Evita estimaciones corridas 3-4 h.
 function nowChile() {
-  const s = new Date().toLocaleString('en-US', { timeZone: 'America/Santiago' });
-  const d = new Date(s);
-  return { hora: d.getHours(), dia: d.getDay() };
+  // Lee hora/día numéricos directo de Intl (no re-parsear un string de fecha, que
+  // en runtimes con ICU recortado daría Invalid Date → NaN → semáforo erróneo).
+  const tz = { timeZone: 'America/Santiago' };
+  const ahora = new Date();
+  const hora = Number(new Intl.DateTimeFormat('en-US', { ...tz, hour: '2-digit', hour12: false }).format(ahora)) % 24;
+  const wd = new Intl.DateTimeFormat('en-US', { ...tz, weekday: 'short' }).format(ahora);
+  const dia = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(wd);
+  return { hora, dia };
 }
 
 // Devuelve el snapshot que consume el frontend.

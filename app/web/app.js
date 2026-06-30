@@ -679,9 +679,9 @@ function listaFiltrada() {
       // "Gratis" = gratis de verdad (no los "🛒 solo clientes", que solo lo son con compra).
       if (filtros.gratis && !(esGratisReal(p) || p.gratisAhora)) return false;
       if (filtros.barato && !(p.precioHora < 1000)) return false;
-      if (filtros.techado && !p.atributos.techado) return false;
-      if (filtros.ev && !p.atributos.ev) return false;
-      if (filtros.accesible && !p.atributos.accesible) return false;
+      if (filtros.techado && !p.atributos?.techado) return false;
+      if (filtros.ev && !p.atributos?.ev) return false;
+      if (filtros.accesible && !p.atributos?.accesible) return false;
       if (filtros.abierto && !p.abierto) return false;
       if (filtros.soloPublicos && p.categoria) return false;   // oculta hospitales/colegios/etc.
       if (filtros.tipo !== 'todos' && p.tipo !== filtros.tipo) return false;
@@ -894,10 +894,10 @@ function openDetalle(id) {
   panselect(p);                 // centrar mapa + resaltar el pin del lugar
 
   const attrs = [];
-  if (p.atributos.techado) attrs.push(ic('home', 14) + ' Techado');
-  if (p.atributos.ev) attrs.push(ic('zap', 14) + ' Cargador EV');
-  if (p.atributos.accesible) attrs.push(ic('access', 14) + ' Accesible');
-  if (p.atributos.camaras) attrs.push(ic('camera', 14) + ' Con cámaras');
+  if (p.atributos?.techado) attrs.push(ic('home', 14) + ' Techado');
+  if (p.atributos?.ev) attrs.push(ic('zap', 14) + ' Cargador EV');
+  if (p.atributos?.accesible) attrs.push(ic('access', 14) + ' Accesible');
+  if (p.atributos?.camaras) attrs.push(ic('camera', 14) + ' Con cámaras');
   if (attrs.length === 0) attrs.push('Sin servicios extra');
 
   const precioLinea = esGratisClientes(p)
@@ -1581,7 +1581,9 @@ window.fijarLugarDireccion = async () => {
     const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
     const arr = await r.json();
     if (!arr.length) { toast('No encontré esa dirección'); return; }
-    guardarLugar(_lugarEdit, parseFloat(arr[0].lat), parseFloat(arr[0].lon), (arr[0].display_name || q).split(',')[0]);
+    const lat = parseFloat(arr[0].lat), lng = parseFloat(arr[0].lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) { toast('Esa dirección no trae coordenadas'); return; }
+    guardarLugar(_lugarEdit, lat, lng, (arr[0].display_name || q).split(',')[0]);
     finLugar();
   } catch { toast('No se pudo buscar la dirección'); }
 };
@@ -1672,6 +1674,7 @@ async function geocodificar(texto) {
     const arr = await r.json();
     if (!arr.length) { toast('No encontré ese lugar — filtro la lista'); renderLista(); return; }
     const lat = parseFloat(arr[0].lat), lng = parseFloat(arr[0].lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) { toast('Esa dirección no trae coordenadas'); renderLista(); return; }
     USER = { lat, lng };
     ciudadPorPunto(USER);                 // salta a la ciudad más cercana
     query = ''; $('#search').value = '';  // limpia la búsqueda para ver esa ciudad
