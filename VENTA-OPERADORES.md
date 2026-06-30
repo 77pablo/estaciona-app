@@ -1,5 +1,7 @@
 # Material de venta — Destacados (piloto Temuco)
 
+**Contacto:** Pablo Espinoza · +56 9 5998 7786 · pdanielespinozavega@gmail.com
+
 > Objetivo: conseguir los primeros 2-3 operadores que aparezcan "Destacados" en Estaciona.
 > Tono: honesto. Estamos partiendo, hay pocos usuarios todavía → la oferta de entrada es
 > **primer mes gratis** y ayudarlos a aparecer impecables (precio real, fotos, datos).
@@ -29,7 +31,7 @@
 
 ## 5. Mensaje de WhatsApp (frío, corto)
 ```
-Hola [nombre] 👋 Soy [tu nombre], de Estaciona, una app que ayuda a la gente
+Hola [nombre] 👋 Soy Pablo Espinoza, de Estaciona, una app que ayuda a la gente
 de Temuco a encontrar estacionamiento. Estoy sumando a los estacionamientos del
 centro para que aparezcan DESTACADOS (primero y con su tarifa real).
 El primer mes es gratis. ¿Te muestro cómo se vería el tuyo? Te dejo el link: 
@@ -42,7 +44,7 @@ Asunto: Aparece destacado en Estaciona (primer mes gratis)
 
 Hola [nombre]:
 
-Soy [tu nombre], de Estaciona (estaciona-app-production.up.railway.app), una app
+Soy Pablo Espinoza, de Estaciona (estaciona-app-production.up.railway.app), una app
 que ayuda a conductores de Temuco a encontrar dónde estacionar: ubicación, precio,
 horario y cómo llegar.
 
@@ -54,7 +56,7 @@ El primer mes es sin costo, para que veas cómo funciona.
 oficial y horario.
 
 Saludos,
-[tu nombre] — [tu teléfono]
+Pablo Espinoza — +56 9 5998 7786
 ```
 
 ## 7. Guion presencial (si vas en persona)
@@ -63,7 +65,7 @@ Saludos,
 3. (Muestra la app en tu teléfono, busca Temuco, muéstrale los estacionamientos.)
 4. "Le ofrezco que el suyo salga **destacado**, primero y con su tarifa real. El primer mes es gratis."
 5. "¿Me confirma su tarifa por hora/minuto y su horario? Lo dejo activo hoy mismo."
-6. Cierras: "Le paso mi número y la próxima semana le muestro cuánta gente lo vio."
+6. Cierras: "Le dejo mi número (+56 9 5998 7786) y la próxima semana le muestro cuánta gente lo vio."
 
 ---
 
