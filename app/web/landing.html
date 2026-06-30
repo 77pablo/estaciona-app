@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🅿️</text></svg>" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
@@ -19,14 +19,14 @@
           ink3:   '#1d2026',   // tarjeta
           bone:   '#f4f2ec',   // texto hueso
           mute:   '#8b8f98',   // gris oxford (texto secundario)
-          signal: '#c9f24e',   // verde/lima eléctrico satinado (acción)
-          go:     '#56c98a',   // semáforo: hay cupo
-          mid:    '#e0b44a',   // semáforo: puede costar
-          stop:   '#e2675a',   // semáforo: difícil
+          signal: '#2dd4bf',   // teal eléctrico (acción) — igual que la app (parkspot)
+          go:     '#2dd4bf',   // semáforo: hay cupo (teal, = --green de la app)
+          mid:    '#f59e0b',   // semáforo: puede costar (ámbar)
+          stop:   '#f4565b',   // semáforo: difícil (rojo)
         },
         fontFamily: {
-          sans: ['Inter', 'system-ui', 'sans-serif'],
-          mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+          sans: ['Urbanist', 'system-ui', 'sans-serif'],
+          mono: ['"Geist Mono"', 'ui-monospace', 'monospace'],
         },
       },
     },
@@ -47,10 +47,10 @@
     background-size: 34px 34px;
   }
   /* Pulso de pin disponible (sutil, no aparatoso). */
-  @keyframes pin-pulse { 0% { box-shadow: 0 0 0 0 rgba(201,242,78,.5); } 70% { box-shadow: 0 0 0 14px rgba(201,242,78,0); } 100% { box-shadow: 0 0 0 0 rgba(201,242,78,0); } }
+  @keyframes pin-pulse { 0% { box-shadow: 0 0 0 0 rgba(45,212,191,.5); } 70% { box-shadow: 0 0 0 14px rgba(45,212,191,0); } 100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); } }
   .pulse { animation: pin-pulse 2.4s ease-out infinite; }
   /* Medidor circular minimalista (disponibilidad). */
-  .gauge { background: conic-gradient(var(--c,#56c98a) calc(var(--p,72) * 1%), rgba(139,143,152,.18) 0); }
+  .gauge { background: conic-gradient(var(--c,#2dd4bf) calc(var(--p,72) * 1%), rgba(139,143,152,.18) 0); }
 
   /* Reveal al entrar en viewport (sutil: sube + aparece). */
   .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s cubic-bezier(.22,.61,.36,1), transform .7s cubic-bezier(.22,.61,.36,1); will-change: opacity, transform; }
@@ -64,11 +64,11 @@
 
   /* Microinteracción: tarjetas del bento se elevan suave al pasar el mouse. */
   .lift { transition: transform .25s ease, border-color .25s ease, background-color .25s ease; }
-  @media (hover: hover) { .lift:hover { transform: translateY(-3px); border-color: rgba(201,242,78,.35); } }
+  @media (hover: hover) { .lift:hover { transform: translateY(-3px); border-color: rgba(45,212,191,.35); } }
 
   /* Brillo del CTA principal al pasar el mouse. */
   .cta-glow { transition: box-shadow .3s ease, transform .15s ease, filter .2s ease; }
-  .cta-glow:hover { box-shadow: 0 8px 30px -8px rgba(201,242,78,.55); }
+  .cta-glow:hover { box-shadow: 0 8px 30px -8px rgba(45,212,191,.55); }
   .cta-glow:active { transform: translateY(1px); }
 
   /* Sin movimiento si el usuario lo pide: todo visible y estático. */
@@ -79,7 +79,7 @@
     html { scroll-behavior: auto; }
   }
   @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
-  ::selection { background: #c9f24e; color: #0e0f12; }
+  ::selection { background: #2dd4bf; color: #062925; }
 </style>
 </head>
 
@@ -137,7 +137,7 @@
         </svg>
         <!-- pin seleccionado (con etiqueta de precio, mono) -->
         <div class="absolute left-[46%] top-[40%]">
-          <div class="pulse flex items-center gap-1 rounded-full bg-signal px-2.5 py-1 font-mono text-xs font-bold text-ink shadow-lg">$900</div>
+          <div class="pulse flex items-center gap-1 rounded-full bg-signal px-2.5 py-1 font-mono text-xs font-bold text-ink shadow-lg">~$900</div>
         </div>
         <!-- pines disponibles -->
         <span class="absolute left-[24%] top-[58%] h-3 w-3 rounded-full border-2 border-ink bg-go"></span>
@@ -149,7 +149,7 @@
         <!-- etiqueta inferior tipo HUD -->
         <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between rounded-lg border border-bone/12 bg-ink/70 px-3 py-2 backdrop-blur">
           <span class="font-mono text-[11px] text-mute">CENTRO DE LA CIUDAD</span>
-          <span class="font-mono text-[11px] text-go">8 con cupo</span>
+          <span class="font-mono text-[11px] text-go">Con cupo</span>
         </div>
       </div>
     </div>
@@ -174,10 +174,11 @@
           </p>
         </div>
         <div class="mt-6 flex items-center gap-5">
-          <div class="gauge grid h-24 w-24 place-items-center rounded-full" style="--p:74;--c:#56c98a">
-            <div class="grid h-[4.6rem] w-[4.6rem] place-items-center rounded-full bg-ink2">
-              <span class="font-mono text-xl font-bold text-go">74%</span>
-            </div>
+          <!-- Indicador CUALITATIVO (semáforo), no un % inventado: la app nunca muestra falsa exactitud. -->
+          <div class="grid h-24 w-24 place-items-center rounded-full border-4 border-go/30" role="img" aria-label="Suele haber cupo">
+            <span class="grid h-12 w-12 place-items-center rounded-full bg-go text-ink">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6.5 9.5 17 4 11.5"/></svg>
+            </span>
           </div>
           <ul class="space-y-2 text-sm">
             <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-go"></span> Suele haber cupo</li>

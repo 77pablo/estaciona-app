@@ -1,10 +1,11 @@
 /* ============================================================================
-   Estaciona — Sistema visual "MOVILIDAD URBANA" (alineado con la landing)
+   Estaciona — Sistema visual "PARKSPOT" (alineado con la landing)
    ----------------------------------------------------------------------------
-   Base oscura profunda + UN acento señal (lima eléctrico) para la acción. El
-   semáforo (verde/ámbar/rojo) se reserva para el DATO de disponibilidad.
-   Tipografía: Inter (UI, títulos font-black) + JetBrains Mono (datos duros).
-   App SIEMPRE oscura (como la landing), con grano y hairlines tipo plano urbano.
+   Base oscura azulada + UN acento señal (teal eléctrico #2dd4bf) para la acción.
+   El semáforo se reserva para el DATO de disponibilidad (disponible=teal · casi
+   lleno=ámbar · completo=rojo).
+   Tipografía: Urbanist (UI, títulos font-black) + Geist Mono (datos duros).
+   App SIEMPRE oscura (como la landing), look limpio parkspot (sin grano).
    Se conservan TODAS las clases/IDs que usa el JS; solo cambia su estilo.
    ============================================================================ */
 :root {
@@ -263,7 +264,8 @@ main, .view { flex: 1; min-height: 0; }
 .card .addr { font-size: 12.5px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .price { text-align: right; flex-shrink: 0; padding-left: 6px; font-family: var(--font-mono); line-height: 1.15; }
 .card .price b { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
-.card .price .precio-est-num { font-size: 16px; font-weight: 500; color: var(--muted); }
+/* Precio estimado: legible (texto principal) — el "est." de al lado ya lo marca como no verificado. */
+.card .price .precio-est-num { font-size: 16px; font-weight: 600; color: var(--text); }
 .card .price small { color: var(--muted); font-size: 11px; display: block; font-family: var(--font-ui); }
 .card .free { color: var(--accent); font-weight: 700; font-family: var(--font-ui); font-size: 14px; }
 
@@ -273,7 +275,7 @@ main, .view { flex: 1; min-height: 0; }
 }
 .card-meta .ic-svg { vertical-align: -2px; opacity: .8; margin-right: 1px; }
 .card-meta .car-eta { font-weight: 600; }
-.card-meta .card-rate { color: var(--amber); }       /* votos de la comunidad (solo si existen) */
+.card-meta .card-rate { color: var(--green); }       /* confirmaciones de cupo de la comunidad (check, no estrella) */
 .card-meta .card-rate .ic-svg { opacity: 1; }
 .badge-disp {
   margin-left: auto; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
@@ -303,7 +305,6 @@ main, .view { flex: 1; min-height: 0; }
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
 .dot.verde { background: var(--green); } .dot.amarillo { background: var(--amber); }
 .dot.rojo { background: var(--red); } .dot.cerrado { background: #5b606b; }
-.badge-free { background: var(--green-bg); color: var(--accent); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: var(--r); }
 
 /* Tarjeta expandida (al seleccionar): features + acciones (estilo parkspot) */
 .card-expand { display: none; }
@@ -404,7 +405,7 @@ main, .view { flex: 1; min-height: 0; }
 }
 .det-top button:hover { background: var(--surface-2); }
 .det-top button:active { transform: scale(.92); }
-.det-top .det-fav.on { color: var(--accent); }   /* estrella lima cuando es favorito */
+.det-top .det-fav.on { color: var(--accent); }   /* estrella teal cuando es favorito */
 .det-top .t { flex: 1; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
 .det-body { padding: 18px; }
 /* Hero del detalle: panel surface, nombre gigante Inter, sin degradado */
@@ -421,9 +422,9 @@ main, .view { flex: 1; min-height: 0; }
 /* Píldora del semáforo: el estado se lee de un vistazo con su color de fondo. */
 .disp-pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px 6px 11px; border-radius: 999px; border: 1px solid var(--line); line-height: 1; }
 .disp-pill .dot { width: 9px; height: 9px; margin: 0; }
-.disp-pill.verde { color: var(--green); background: var(--green-bg); border-color: rgba(86,201,138,.32); }
-.disp-pill.amarillo { color: var(--amber); background: var(--amber-bg); border-color: rgba(224,180,74,.32); }
-.disp-pill.rojo { color: var(--red); background: rgba(226,103,90,.14); border-color: rgba(226,103,90,.32); }
+.disp-pill.verde { color: var(--green); background: var(--green-bg); border-color: rgba(45,212,191,.32); }
+.disp-pill.amarillo { color: var(--amber); background: var(--amber-bg); border-color: rgba(245,158,11,.32); }
+.disp-pill.rojo { color: var(--red); background: rgba(244,86,91,.14); border-color: rgba(244,86,91,.32); }
 .disp-pill.cerrado { color: var(--muted); background: var(--surface-2); border-color: var(--line-2); }
 .det-row { display: flex; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 14px; align-items: center; }
 .det-row .k { color: var(--muted); width: 22px; text-align: center; }
@@ -437,10 +438,10 @@ main, .view { flex: 1; min-height: 0; }
 .calc select { font-size: 15px; padding: 7px 10px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--bg); color: var(--text); font-family: var(--font-ui); }
 /* Options legibles en fondo oscuro (Safari/Firefox no heredan al popup). */
 .calc select option, .sheet-head select option, .loc-select option { background: var(--surface-2); color: var(--text); }
-/* Slider de distancia en tema (acento lima en track/thumb). */
+/* Slider de distancia en tema (acento teal en track/thumb). */
 .modal input[type="range"] { width: 100%; accent-color: var(--accent); }
 .calc .total { font-size: 30px; font-weight: 700; color: var(--accent); margin-top: 10px; letter-spacing: -0.02em; }
-.disclaimer { font-size: 12px; color: var(--amber); background: var(--amber-bg); border: 1px solid rgba(224,180,74,.3); border-radius: var(--r); padding: 11px 13px; margin-top: 14px; line-height: 1.45; }
+.disclaimer { font-size: 12px; color: var(--amber); background: var(--amber-bg); border: 1px solid rgba(245,158,11,.3); border-radius: var(--r); padding: 11px 13px; margin-top: 14px; line-height: 1.45; }
 /* Barra de acciones fija al fondo: "Llévame" siempre alcanzable aunque el
    detalle sea largo (calculadora, fotos, comunidad). */
 .det-actions {
@@ -527,11 +528,11 @@ main, .view { flex: 1; min-height: 0; }
 .ma-stat .lbl { display: flex; align-items: center; gap: 5px; }
 
 /* Punto "en vivo" que late junto al cronómetro. */
-.ma-live { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(86,201,138,.55); animation: maPulse 1.9s ease-out infinite; }
+.ma-live { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(45,212,191,.55); animation: maPulse 1.9s ease-out infinite; }
 @keyframes maPulse {
-  0% { box-shadow: 0 0 0 0 rgba(86,201,138,.5); }
-  70% { box-shadow: 0 0 0 7px rgba(86,201,138,0); }
-  100% { box-shadow: 0 0 0 0 rgba(86,201,138,0); }
+  0% { box-shadow: 0 0 0 0 rgba(45,212,191,.5); }
+  70% { box-shadow: 0 0 0 7px rgba(45,212,191,0); }
+  100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); }
 }
 
 .ma-foot { display: flex; flex-direction: column; gap: 9px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
@@ -557,15 +558,18 @@ main, .view { flex: 1; min-height: 0; }
   position: absolute; top: 64px; left: 14px; right: 14px; background: var(--surface-2); color: var(--text);
   padding: 14px 16px; border-radius: var(--r); font-weight: 500; z-index: 80; box-shadow: var(--shadow);
   display: none; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px;
-  border: 1px solid var(--line-2); border-left: 3px solid var(--red);
+  border: 1px solid var(--line-2); border-left: 3px solid var(--accent);
 }
+#banner.urgent { border-left-color: var(--red); }   /* solo la alarma anti-multa */
 #banner.show { display: flex; }
 #banner button { background: rgba(244,242,236,.12); border: none; color: var(--text); border-radius: var(--r); padding: 6px 12px; cursor: pointer; font-family: var(--font-ui); }
 #toast {
   position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
   background: var(--surface-2); color: var(--text); padding: 11px 18px; border-radius: var(--r); font-size: 13.5px;
-  opacity: 0; transition: all .25s; z-index: 90; pointer-events: none; white-space: nowrap; box-shadow: var(--shadow);
+  opacity: 0; transition: all .25s; z-index: 90; pointer-events: none; box-shadow: var(--shadow);
   border: 1px solid var(--line-2);
+  /* No cortar mensajes largos en pantallas chicas: envuelve dentro del ancho del viewport. */
+  max-width: calc(100% - 28px); white-space: normal; text-align: center; line-height: 1.35;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -690,7 +694,7 @@ main, .view { flex: 1; min-height: 0; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-/* Accesibilidad: foco en lima señal */
+/* Accesibilidad: foco en teal señal */
 :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; border-radius: 4px; }
 .card:focus-visible, .fav-item:focus-visible { outline-offset: -3px; }
 
@@ -709,15 +713,14 @@ main, .view { flex: 1; min-height: 0; }
 .free-cli {
   display: inline-block; background: var(--amber-bg); color: var(--amber);
   font-weight: 700; font-size: 11px; padding: 3px 8px; border-radius: var(--r);
-  white-space: nowrap; border: 1px solid rgba(224,180,74,.3);
+  white-space: nowrap; border: 1px solid rgba(245,158,11,.3);
 }
-.badge-cli { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(224,180,74,.3); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: var(--r); }
 /* Etiqueta de categoría (hospital, colegio, etc.): pill discreta */
 .cat-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; color: var(--muted); border: 1px solid var(--line-2); border-radius: var(--r); padding: 1px 6px; white-space: nowrap; vertical-align: middle; }
 /* Etiqueta "precio estimado / sin verificar" */
 .precio-est { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--amber); }
 .precio-fuente { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 600; color: var(--green); }
-.aviso-cli { background: var(--amber-bg); border: 1px solid rgba(224,180,74,.3); color: var(--amber); border-radius: var(--r); padding: 12px 14px; margin: 12px 0; font-size: 13px; line-height: 1.45; }
+.aviso-cli { background: var(--amber-bg); border: 1px solid rgba(245,158,11,.3); color: var(--amber); border-radius: var(--r); padding: 12px 14px; margin: 12px 0; font-size: 13px; line-height: 1.45; }
 .aviso-cli b { color: var(--amber); }
 
 .modal input[type="text"] {
@@ -730,14 +733,11 @@ main, .view { flex: 1; min-height: 0; }
 .fav-item.lugar.fijada .ic { color: var(--accent); opacity: 1; }
 .lugar-main { display: flex; align-items: center; gap: 12px; flex: 1; cursor: pointer; min-width: 0; }
 /* Pill "Sin fijar": deja claro que Casa/Trabajo aún apunta a un sector por defecto. */
-.lugar-tag { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--amber); background: var(--amber-bg); border: 1px solid rgba(224,180,74,.3); border-radius: var(--r); padding: 1px 6px; }
+.lugar-tag { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--amber); background: var(--amber-bg); border: 1px solid rgba(245,158,11,.3); border-radius: var(--r); padding: 1px 6px; }
 .lugar-edit { border: 1px solid var(--line-2); background: transparent; border-radius: var(--r); padding: 9px 12px; font-size: 16px; cursor: pointer; flex-shrink: 0; color: var(--text); transition: border-color .14s, color .14s, transform .14s; }
 .lugar-edit:hover { border-color: var(--accent); color: var(--accent); }
 .lugar-edit:active { transform: scale(.95); }
 
-.estado { font-weight: 700; font-size: 11px; font-family: var(--font-ui); }
-.estado.abierto { color: var(--green); }
-.estado.cerrado-lbl { color: var(--red); }
 
 .calc-nota { font-size: 12px; color: var(--muted); margin-top: 7px; }
 .calc-nota:empty { display: none; }
@@ -790,12 +790,12 @@ main, .view { flex: 1; min-height: 0; }
 .me-dot { position: relative; }
 .me-dot::after {
   content: ""; position: absolute; inset: -3px; border-radius: 50%;
-  box-shadow: 0 0 0 0 rgba(201,242,78,.45); animation: mePulse 2.2s ease-out infinite;
+  box-shadow: 0 0 0 0 rgba(45,212,191,.45); animation: mePulse 2.2s ease-out infinite;
 }
 @keyframes mePulse {
-  0% { box-shadow: 0 0 0 0 rgba(201,242,78,.45); }
-  70% { box-shadow: 0 0 0 12px rgba(201,242,78,0); }
-  100% { box-shadow: 0 0 0 0 rgba(201,242,78,0); }
+  0% { box-shadow: 0 0 0 0 rgba(45,212,191,.45); }
+  70% { box-shadow: 0 0 0 12px rgba(45,212,191,0); }
+  100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); }
 }
 
 /* ============================================================================

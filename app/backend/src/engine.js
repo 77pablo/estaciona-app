@@ -1,10 +1,10 @@
 // ============================================================================
-// Estaciona — Motor de disponibilidad (en vivo)
+// Estaciona — Motor de disponibilidad (estimación honesta)
 // ----------------------------------------------------------------------------
-// - Privados: simula cupos libres que cambian con el tiempo (como si vinieran
-//   del sistema de barrera del operador). Dato "en vivo".
-// - Calle: NO inventa un número exacto (sería mentir). Calcula una ESTIMACIÓN
-//   tipo semáforo según la hora del día y la demanda base de esa calle.
+// NO inventa "cupos en vivo" (sería mentir: no tenemos acceso a las barreras de
+// los operadores). Para TODOS los lugares —privados y calle— calcula una
+// ESTIMACIÓN tipo semáforo (verde/amarillo/rojo) según la hora del día y la
+// demanda base de esa zona. El front lo rotula siempre como estimación.
 // ============================================================================
 
 import { ESTACIONAMIENTOS } from './data.js';

@@ -43,7 +43,8 @@ let orden = 'cercania';            // orden de la lista: 'cercania' | 'precio'
 let cargado = false;
 let cargaSeq = 0;                  // contador de cargas: descarta respuestas viejas (carrera)
 let sinConexionAvisado = false;    // evita spamear el toast "Sin conexión" cada 6s
-let _focoPrevio = null;            // foco previo, para restaurarlo al cerrar un diálogo
+let _focoPrevio = null;            // foco previo del detalle, para restaurarlo al cerrarlo
+let _focoModal = null;             // foco previo del modal (separado: un modal puede abrirse SOBRE el detalle)
 let detalleAbiertoId = null;
 let filtros = {
   gratis: false, barato: false, techado: false, abierto: false,
@@ -171,7 +172,7 @@ async function etaReal(p) {
 const CAT_ICON = { Salud: 'access', Colegio: 'home', Estadio: 'starOutline', Municipal: 'home', Camiones: 'truck', Terminal: 'car', Cultura: 'home' };
 function catBadge(p) {
   if (!p.categoria) return '';
-  const name = CAT_ICON[p.categoria] === 'star' ? 'starOutline' : (CAT_ICON[p.categoria] || 'pin');
+  const name = CAT_ICON[p.categoria] || 'pin';
   return `<span class="cat-badge">${ic(name, 12)} ${esc(p.categoria)}</span>`;
 }
 const esGratisClientes = (p) => p.precioHora === 0 && /cliente/i.test(p.gratisInfo || '');
@@ -244,11 +245,6 @@ function costoTranscurrido(a) {
   }
   return Math.round(costo);
 }
-
-// Etiqueta "Abierto / Cerrado" para la lista.
-const estadoHTML = (p) => p.abierto
-  ? '<span class="estado abierto">● Abierto</span>'
-  : '<span class="estado cerrado-lbl">● Cerrado</span>';
 
 // --- Zonas / ciudades de la región ------------------------------------------
 // Ciudad de la región más cercana a un punto (para detectar dónde estás).
@@ -724,8 +720,9 @@ function renderLista() {
       : nivel === 'amarillo' ? 'Casi lleno' : 'Completo';
     // La barra es un VISUAL del semáforo (no un conteo inventado de cupos).
     const barPct = nivel === 'verde' ? 82 : nivel === 'amarillo' ? 45 : nivel === 'rojo' ? 15 : 6;
-    // "Rating" solo si hay datos REALES de la comunidad (votos de las últimas 3 h).
-    const votos = p.votos ? `<span class="card-rate" title="Votos de la comunidad">${ic('starFull', 12)} ${p.votos.up}</span>` : '';
+    // Confirmaciones REALES de la comunidad (cupo confirmado en las últimas 3 h).
+    // Check verde — NO una estrella dorada (eso parecería un rating inventado).
+    const votos = p.votos ? `<span class="card-rate" title="${p.votos.up} confirmaron cupo (últimas 3 h)">${ic('check', 12)} ${p.votos.up}</span>` : '';
     return `
       <div class="card ${nivel}${p.id === selectedId ? ' sel' : ''}" data-id="${p.id}" role="button" tabindex="0" aria-label="${esc(p.nombre)}, ver detalle">
         <div class="card-main">
@@ -737,7 +734,7 @@ function renderLista() {
         </div>
         <div class="card-meta">
           <span>${ic('walk', 12)} ${walkMin(p.dist)} min</span>
-          <span class="car-eta" style="color:${trafColor}" title="En auto · tráfico ${traf.nivel}">${ic('car', 12)} ${carMin(p.dist)} min</span>
+          <span class="car-eta" style="color:${trafColor}" title="En auto · tráfico est. ${traf.nivel}">${ic('car', 12)} ${carMin(p.dist)} min</span>
           <span>${Math.round(p.dist)} m</span>
           ${votos}
           <span class="badge-disp ${nivel}">${estadoTxt}</span>
@@ -809,7 +806,7 @@ function abrirMapCard(id) {
   const barPct = nivel === 'verde' ? 82 : nivel === 'amarillo' ? 45 : nivel === 'rojo' ? 15 : 6;
   const tipoTxt = p.tipo === 'calle' ? 'En la calle' : (p.atributos?.techado ? 'Techado' : 'Privado');
   const dist = Math.round(haversine(USER, p));   // DATA no trae dist (se calcula en la lista)
-  const votos = p.votos ? `${ic('starFull', 12)} ${p.votos.up} · ` : '';
+  const votos = p.votos ? `${ic('check', 12)} ${p.votos.up} confirman · ` : '';
   const el = $('#mapcard');
   el.innerHTML = `
     <button class="mapcard-x" onclick="cerrarMapCard()" aria-label="Cerrar">${ic('x', 16)}</button>
@@ -1697,18 +1694,19 @@ function syncChips() {
 
 // --- Modales ----------------------------------------------------------------
 function abrirModal() {
-  _focoPrevio = document.activeElement;
+  _focoModal = document.activeElement;   // foco propio: NO pisa el del detalle si el modal se abre encima
   $('#modal-bg').classList.add('open');
   const m = $('#modal'); m.setAttribute('tabindex', '-1'); m.focus();
 }
 window.cerrarModal = () => {
   $('#modal-bg').classList.remove('open');
-  if (_focoPrevio?.focus) _focoPrevio.focus();
+  if (_focoModal?.focus) _focoModal.focus();
 };
 
 // Diálogo abierto en este momento (modal de filtros/aportes tiene prioridad
 // sobre el overlay de detalle). Devuelve el contenedor o null.
 function dialogoAbierto() {
+  if ($('#onboard').classList.contains('show')) return $('#onboard');
   if ($('#modal-bg').classList.contains('open')) return $('#modal');
   if ($('#detalle').classList.contains('open')) return $('#detalle');
   return null;
@@ -1724,7 +1722,8 @@ function enfocables(c) {
 // pierdan detrás del overlay.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    if ($('#modal-bg').classList.contains('open')) window.cerrarModal();
+    if ($('#onboard').classList.contains('show')) window.cerrarBienvenida();
+    else if ($('#modal-bg').classList.contains('open')) window.cerrarModal();
     else if ($('#detalle').classList.contains('open')) window.cerrarDetalle();
     return;
   }
@@ -1765,7 +1764,7 @@ function chequearAlarma() {
     a.alarmaSonó = true; LS.setAuto(a);
     const b = $('#banner');
     b.innerHTML = `<span>${ic('clock', 16)} ¡Revisa tu estacionamiento! (${esc(a.nombre)})</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
-    b.classList.add('show');
+    b.classList.add('show', 'urgent');   // alarma anti-multa = urgente (borde rojo)
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification('Estaciona ⏰', { body: `Revisa tu estacionamiento en ${a.nombre}` });
     }
@@ -1827,7 +1826,7 @@ function chequearRecordatorios() {
       r.sono = true; cambió = true;
       const b = $('#banner');
       b.innerHTML = `<span>${ic('clock', 16)} Revisa ${esc(r.nombre)} — ¿hay cupo ahora?</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
-      b.classList.add('show');
+      b.classList.remove('urgent'); b.classList.add('show');   // recordatorio amigable (borde teal)
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification('Estaciona 🅿️', { body: `Revisa ${r.nombre} — ¿encontraste cupo?` });
       }
@@ -1849,7 +1848,7 @@ function chequearRecordatorioAuto() {
   const fecha = inicio.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' });
   const b = $('#banner');
   b.innerHTML = `<span>${ic('car', 16)} ¿Sigues con tu auto en ${esc(a.nombre)}? Lo guardaste el ${fecha}</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
-  b.classList.add('show');
+  b.classList.remove('urgent'); b.classList.add('show');   // recordatorio amigable (borde teal)
 }
 
 // --- Bottom sheet arrastrable (solo móvil): mini / medio / completo ----------
@@ -2043,7 +2042,11 @@ async function init() {
     setTimeout(() => geocodificar(qInicial), 400);   // deja cargar el mapa primero
   }
   chequearRecordatorioAuto();   // aviso "¿sigues con tu auto?" si quedó de otro día
-  setInterval(cargar, 6000);
+  // Refresco periódico SOLO si vale la pena: pestaña visible y vista del mapa activa.
+  // (No reconstruir #lista en segundo plano ni mientras estás en "Mi auto"/"Favoritos".)
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && $('#view-buscar').classList.contains('active')) cargar();
+  }, 6000);
   setInterval(() => { if ($('#view-miauto').classList.contains('active')) actualizarMiAutoVivo(); }, 1000);
   setInterval(chequearAlarma, 1000);
   setInterval(chequearRecordatorios, 1000);   // avisos "Avísame"
