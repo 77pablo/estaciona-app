@@ -60,6 +60,33 @@ export const PRECIOS_REALES = [
   { id: 'la-florida-3', precioMin: 15, horario: '07:00–21:00', fuente: 'cencomalls.cl (Florida Center)' }, // Mall Florida Center (3)
   // Mall Arauco Maipú: estacionamiento GRATIS (autos/motos/bicis). Fuente araucomaipu.cl.
   { id: 'maipu-2', precioHora: 0, gratis: 'Estacionamiento gratis', horario: '09:30–20:30', fuente: 'araucomaipu.cl' }, // Mall Arauco Maipu
+
+  // ── Mallplaza (tarifario OFICIAL 2025, cobro 24h, 15 min de tolerancia) ──
+  // Fuente: mallplaza.com/cl/tarifario-parking-mallplaza (imagen leída por Claude).
+  { id: 'nunoa-4',           precioMin: 28, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Egaña
+  { id: 'la-serena-2',       precioMin: 28, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza La Serena
+  { id: 'conchali-1',        precioMin: 25, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Norte
+  { id: 'conchali-2',        precioMin: 25, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Norte (2)
+  { id: 'lo-espejo-1',       precioMin: 25, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Oeste
+  { id: 'lo-espejo-4',       precioMin: 25, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Oeste (2)
+  { id: 'lo-espejo-5',       precioMin: 25, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Oeste (3)
+  { id: 'lo-espejo-6',       precioMin: 25, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Oeste (4)
+  { id: 'lo-espejo-7',       precioMin: 25, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Oeste (5)
+  { id: 'lo-espejo-8',       precioMin: 25, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Oeste (6)
+  { id: 'lo-espejo-9',       precioMin: 25, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Oeste (7)
+  { id: 'la-florida-7',      precioMin: 23, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Vespucio
+  { id: 'la-florida-8',      precioMin: 23, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Vespucio (2)
+  { id: 'iquique-6',         precioMin: 23, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Iquique
+  { id: 'puente-alto-8',     precioMin: 20, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Tobalaba
+  { id: 'puente-alto-10',    precioMin: 20, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Tobalaba (2)
+  { id: 'san-bernardo-1',    precioMin: 20, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Sur
+  { id: 'san-bernardo-2',    precioMin: 20, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Sur (2)
+  { id: 'san-bernardo-3',    precioMin: 20, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Sur (3)
+  { id: 'calera-de-tango-1', precioMin: 20, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Sur (Calera de Tango)
+  { id: 'antofagasta-7',     precioMin: 28, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Antofagasta
+  { id: 'antofagasta-12',    precioMin: 28, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Antofagasta (2)
+  { id: 'calama-3',          precioMin: 23, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Calama
+  { id: 'los-angeles-23',    precioMin: 27, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Los Ángeles
 ];
 
 // Devuelve un mapa id -> override, con precioHora derivado de precioMin si falta.

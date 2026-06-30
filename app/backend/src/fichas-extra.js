@@ -161,8 +161,8 @@ export const FICHAS_EXTRA = [
   {
     id: 'x-concepcion-mirador', tipo: 'privado', ciudad: 'Concepción', region: 'Biobío',
     categoria: null, nombre: 'Mallplaza Mirador Biobío', direccion: 'Av. 21 de Mayo, Concepción',
-    lat: -36.829681, lng: -73.063334, precioMin: 16, precioHora: 960, fraccion: null,
-    gratis: null, horario: '10:00–21:00', verificado: true, fuente: 'biobiochile.cl (nov-2023; cobro por minuto)',
+    lat: -36.829681, lng: -73.063334, precioMin: 20, precioHora: 1200, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'mallplaza.com (tarifario 2025, "Mallplaza Bío Bío")',
     atributos: { techado: true, ev: false, accesible: true, camaras: true },
   },
   {
@@ -172,5 +172,42 @@ export const FICHAS_EXTRA = [
     gratis: '20:00–08:30 y domingos', horario: 'Parquímetro 08:30–20:00', demandaBase: 0.82,
     verificado: true, fuente: 'encancha.cl (E Santiago, $420 por cada 20 min, mar-2024)',
     atributos: { techado: false, ev: false, accesible: false, camaras: false },
+  },
+
+  // ── Mallplaza que NO están en OSM (tarifario oficial 2025, cobro 24h) ──
+  {
+    id: 'x-talcahuano-trebol', tipo: 'privado', ciudad: 'Talcahuano', region: 'Biobío',
+    categoria: null, nombre: 'Mallplaza Trébol', direccion: 'Av. Jorge Alessandri 3177, Talcahuano',
+    lat: -36.792134, lng: -73.068140, precioMin: 28, precioHora: 1680, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'mallplaza.com (tarifario 2025)',
+    atributos: { techado: true, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-copiapo-mallplaza', tipo: 'privado', ciudad: 'Copiapó', region: 'Atacama',
+    categoria: null, nombre: 'Mall Plaza Copiapó', direccion: 'Av. Maipú 109, Copiapó',
+    lat: -27.369225, lng: -70.339391, precioMin: 21, precioHora: 1260, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'mallplaza.com (tarifario 2025)',
+    atributos: { techado: true, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-arica-mallplaza', tipo: 'privado', ciudad: 'Arica', region: 'Arica y Parinacota',
+    categoria: null, nombre: 'Mallplaza Arica', direccion: 'Av. Diego Portales 640, Arica',
+    lat: -18.469142, lng: -70.308501, precioMin: 23, precioHora: 1380, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'mallplaza.com (tarifario 2025)',
+    atributos: { techado: true, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-estacioncentral-alameda', tipo: 'privado', ciudad: 'Estación Central', region: 'Metropolitana',
+    categoria: null, nombre: 'Mallplaza Alameda', direccion: 'Alameda 3470, Estación Central',
+    lat: -33.452957, lng: -70.682209, precioMin: 35, precioHora: 2100, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'mallplaza.com (tarifario 2025)',
+    atributos: { techado: true, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-lascondes-dominicos', tipo: 'privado', ciudad: 'Las Condes', region: 'Metropolitana',
+    categoria: null, nombre: 'Mallplaza Los Dominicos', direccion: 'Av. Padre Hurtado Sur 875, Las Condes',
+    lat: -33.415593, lng: -70.539816, precioMin: 25, precioHora: 1500, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'mallplaza.com (tarifario 2025)',
+    atributos: { techado: true, ev: false, accesible: true, camaras: true },
   },
 ];
