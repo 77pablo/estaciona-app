@@ -1,117 +1,74 @@
 // ============================================================================
-// Estaciona — Analítica de uso ANÓNIMA y agregada (privacy-friendly)
+// Estaciona — Analítica de uso ANÓNIMA y agregada — ahora en SQLite (db.js).
 // ----------------------------------------------------------------------------
-// Solo CONTEOS: cuántas veces ocurre cada evento (abrir app, buscar, ver
-// detalle, reportar…), por día y por ciudad. NO guarda IP, NI cookies, NI nada
-// que identifique a una persona. Pensado para saber si la app se usa y mejorarla.
-//
-// Persistencia: env ANALYTICS_PATH (volumen Railway) o archivo local. Para no
-// golpear el disco en cada evento, se acumula en memoria y se vuelca cada pocos
-// segundos (se puede perder algún conteo si el proceso muere justo antes; es
-// aceptable para estadística).
+// Solo CONTEOS por evento/día/ciudad. Sin IP, sin cookies. Migra automáticamente
+// analytics.json si existe.
 // ============================================================================
 
-import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { ready, run, all, get } from './db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FILE = process.env.ANALYTICS_PATH || join(__dirname, '..', 'analytics.json');
-let _dirOk = false, _avisoFallo = false;
 
-// Eventos permitidos (lista blanca: ignora cualquier otro que llegue).
 const EVENTOS = new Set([
-  'pageview',        // se abrió la app
-  'search',          // se usó el buscador
-  'ciudad',          // se cambió de ciudad
-  'detalle',         // se abrió el detalle de un lugar
-  'comollegar',      // se tocó "Cómo llegar"
-  'reporte_lugar',   // se reportó un lugar nuevo
-  'reporte_precio',  // se reportó un precio
-  'comentario',      // se dejó un comentario
-  'foto',            // se subió una foto
-  'voto',            // se votó disponibilidad
+  'pageview', 'search', 'ciudad', 'detalle', 'comollegar',
+  'reporte_lugar', 'reporte_precio', 'comentario', 'foto', 'voto',
 ]);
-const MAX_DIAS = 120;       // poda: conserva ~4 meses de historial diario
-const MAX_CIUDADES = 600;   // tope defensivo del mapa por ciudad
 
-let datos = null;           // { total, porEvento, porDia, porCiudad }
-let cargaPromise = null;
-let _cola = Promise.resolve();
-let _dirty = false, _flushTimer = null;
-
-function vacio() { return { total: 0, porEvento: {}, porDia: {}, porCiudad: {} }; }
-
-function cargar() {
-  return cargaPromise ??= readFile(FILE, 'utf8')
-    .then((txt) => { datos = JSON.parse(txt) || vacio(); })
-    .catch(() => { datos = vacio(); });
-}
-
-// Fecha local de Chile (YYYY-MM-DD) sin depender de la zona del servidor.
 function hoyChile() {
-  const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-  return p; // en-CA da "YYYY-MM-DD"
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
-// Vuelca a disco como mucho cada ~4 s (escritura atómica .tmp + rename, serializada).
-function programarFlush() {
-  if (_flushTimer) return;
-  _flushTimer = setTimeout(() => { _flushTimer = null; if (_dirty) { _dirty = false; guardar(); } }, 4000);
-  if (_flushTimer.unref) _flushTimer.unref();   // no mantener vivo el proceso solo por esto
-}
-function guardar() {
-  _cola = _cola.then(escribir, escribir);
-  return _cola;
-}
-async function escribir() {
-  const tmp = `${FILE}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
-  const txt = JSON.stringify(datos);
+let _migrado = false;
+async function migrar() {
+  if (_migrado || !ready) return; _migrado = true;
+  const row = await get('SELECT COUNT(*) AS c FROM an_evento');
+  if (row && row.c > 0) return;
   try {
-    if (!_dirOk) { await mkdir(dirname(FILE), { recursive: true }); _dirOk = true; }
-    await writeFile(tmp, txt); await rename(tmp, FILE);
-  } catch (e) {
-    if (!_avisoFallo) { _avisoFallo = true; console.warn(`[analytics] no pude escribir en ${FILE}: ${e.message} — las estadísticas NO persisten`); }
-  }
+    const j = JSON.parse(await readFile(process.env.ANALYTICS_PATH || join(__dirname, '..', 'analytics.json'), 'utf8'));
+    for (const [tipo, n] of Object.entries(j.porEvento || {})) await run('INSERT OR REPLACE INTO an_evento(tipo, n) VALUES(?, ?)', [tipo, n]);
+    for (const [dia, obj] of Object.entries(j.porDia || {})) for (const [tipo, n] of Object.entries(obj || {})) await run('INSERT OR REPLACE INTO an_dia(dia, tipo, n) VALUES(?, ?, ?)', [dia, tipo, n]);
+    for (const [ciudad, n] of Object.entries(j.porCiudad || {})) await run('INSERT OR REPLACE INTO an_ciudad(ciudad, n) VALUES(?, ?)', [ciudad, n]);
+    console.log('[analytics] migrado desde JSON a SQLite');
+  } catch { /* sin JSON: nada que migrar */ }
 }
 
-// Registra un evento anónimo. `ciudad` es opcional (solo para conteo por ciudad).
+// Registra un evento anónimo. `ciudad` opcional (para el conteo por ciudad).
 export async function registrarEvento(tipo, ciudad) {
-  await cargar();
+  await migrar();
   if (!EVENTOS.has(tipo)) return;
   const dia = hoyChile();
-  datos.total++;
-  datos.porEvento[tipo] = (datos.porEvento[tipo] || 0) + 1;
-  (datos.porDia[dia] || (datos.porDia[dia] = {}))[tipo] = (datos.porDia[dia][tipo] || 0) + 1;
+  await run('INSERT INTO an_evento(tipo, n) VALUES(?, 1) ON CONFLICT(tipo) DO UPDATE SET n = n + 1', [tipo]);
+  await run('INSERT INTO an_dia(dia, tipo, n) VALUES(?, ?, 1) ON CONFLICT(dia, tipo) DO UPDATE SET n = n + 1', [dia, tipo]);
   if (ciudad && typeof ciudad === 'string') {
     const c = ciudad.slice(0, 60);
-    if (datos.porCiudad[c] != null || Object.keys(datos.porCiudad).length < MAX_CIUDADES) {
-      datos.porCiudad[c] = (datos.porCiudad[c] || 0) + 1;
-    }
+    await run('INSERT INTO an_ciudad(ciudad, n) VALUES(?, 1) ON CONFLICT(ciudad) DO UPDATE SET n = n + 1', [c]);
   }
-  // Poda de días viejos.
-  const dias = Object.keys(datos.porDia).sort();
-  if (dias.length > MAX_DIAS) for (const d of dias.slice(0, dias.length - MAX_DIAS)) delete datos.porDia[d];
-  _dirty = true; programarFlush();
 }
 
-// Resumen para el panel /admin: totales, hoy, últimos 7 días y top ciudades.
+// Resumen para el panel /admin.
 export async function resumenAnalytics() {
-  await cargar();
+  await migrar();
+  const evRows = await all('SELECT tipo, n FROM an_evento');
+  const porEvento = {}; let total = 0;
+  for (const r of evRows) { porEvento[r.tipo] = r.n; total += r.n; }
+  const diaRows = await all('SELECT dia, tipo, n FROM an_dia');
+  const porDia = {};
+  for (const r of diaRows) (porDia[r.dia] || (porDia[r.dia] = {}))[r.tipo] = r.n;
   const hoy = hoyChile();
-  const dias = Object.keys(datos.porDia).sort();
-  const ultimos7 = dias.slice(-7);
+  const dias = Object.keys(porDia).sort();
+  const ultimos7keys = dias.slice(-7);
   const sum = (obj) => Object.values(obj || {}).reduce((a, b) => a + b, 0);
-  const hoyTotal = sum(datos.porDia[hoy]);
-  const semanaTotal = ultimos7.reduce((a, d) => a + sum(datos.porDia[d]), 0);
-  const topCiudades = Object.entries(datos.porCiudad).sort((a, b) => b[1] - a[1]).slice(0, 12);
-  const serie = ultimos7.map((d) => ({ dia: d, total: sum(datos.porDia[d]), detalle: datos.porDia[d] }));
+  const ultimos7 = ultimos7keys.map((d) => ({ dia: d, total: sum(porDia[d]), detalle: porDia[d] }));
+  const ciuRows = await all('SELECT ciudad, n FROM an_ciudad ORDER BY n DESC LIMIT 12');
   return {
-    total: datos.total,
-    porEvento: datos.porEvento,
-    hoy: { dia: hoy, total: hoyTotal, detalle: datos.porDia[hoy] || {} },
-    semana: semanaTotal,
-    ultimos7: serie,
-    topCiudades,
+    total,
+    porEvento,
+    hoy: { dia: hoy, total: sum(porDia[hoy]), detalle: porDia[hoy] || {} },
+    semana: ultimos7keys.reduce((a, d) => a + sum(porDia[d]), 0),
+    ultimos7,
+    topCiudades: ciuRows.map((r) => [r.ciudad, r.n]),
   };
 }

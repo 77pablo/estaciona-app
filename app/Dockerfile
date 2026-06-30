@@ -3,7 +3,7 @@
 # App de Node puro (node:http), SIN dependencias externas → build muy simple.
 # Railway entrega el puerto por la variable PORT; el server.js ya la respeta.
 # ============================================================================
-FROM node:20-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 

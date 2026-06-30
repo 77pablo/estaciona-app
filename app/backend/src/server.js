@@ -309,15 +309,12 @@ server.listen(PORT, () => {
   console.log('  🅿️  Estaciona  🅿️');
   console.log(`  Abre la app en:  http://localhost:${PORT}`);
   console.log('  Ctrl+C para detener.');
-  // Dónde persiste cada cosa: si la env var del volumen NO está, se usa el disco
-  // efímero del contenedor y se borra en cada redeploy (útil para verlo en Railway).
+  // Persistencia: votos/aportes/lugares/destacados/analítica viven en SQLite
+  // (define SQLITE_PATH al volumen, ej. /data/estaciona.sqlite). Las fotos siguen
+  // como archivos (define FOTOS_DIR al volumen).
   const persist = (env) => process.env[env] ? `${process.env[env]}  (persiste)` : `local efímero — SE BORRA en redeploy (define ${env})`;
   console.log('  Persistencia:');
-  console.log(`   · votos   → ${persist('VOTOS_PATH')}`);
-  console.log(`   · aportes → ${persist('APORTES_PATH')}`);
-  console.log(`   · fotos   → ${persist('FOTOS_DIR')}`);
-  console.log(`   · lugares → ${persist('LUGARES_PATH')}`);
-  console.log(`   · stats   → ${persist('ANALYTICS_PATH')}`);
-  console.log(`   · destac. → ${persist('DESTACADOS_PATH')}`);
+  console.log(`   · base de datos → ${persist('SQLITE_PATH')}`);
+  console.log(`   · fotos         → ${persist('FOTOS_DIR')}`);
   console.log('');
 });

@@ -29,3 +29,7 @@ admin.key
 sightengine.key
 # Códigos de Estaciona Pro para correr en local (en Railway: PRO_CODES)
 pro-codes.key
+# Base de datos SQLite local (en Railway: volumen + SQLITE_PATH)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

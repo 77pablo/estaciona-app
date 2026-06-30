@@ -1,75 +1,57 @@
 // ============================================================================
-// Estaciona — Votos de la gente ("¿había cupo aquí?") — crowdsource simple.
+// Estaciona — Votos de la gente ("¿había cupo aquí?") — ahora en SQLite (db.js).
 // ----------------------------------------------------------------------------
-// Guarda cada 👍/👎 en un archivo JSON y entrega un conteo reciente por lugar,
-// para que la app muestre señales reales de disponibilidad de otros usuarios.
-//
-// NOTA: en Railway sin volumen, el archivo se reinicia en cada redeploy. Para
-// que persista de verdad, montar un volumen y apuntar VOTOS_PATH ahí (como en
-// la app de la iglesia con DB_PATH).
+// Persiste en la base de datos (SQLite vía node:sqlite). La primera vez migra
+// automáticamente el votos.json antiguo si existe (para no perder datos).
 // ============================================================================
 
-import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { ready, run, all, get } from './db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FILE = process.env.VOTOS_PATH || join(__dirname, '..', 'votos.json');
-let _dirOk = false, _avisoFallo = false;
-
-let votos = [];
-let cargaPromise = null;
-let _cola = Promise.resolve();   // serializa escrituras (sin carreras sobre el archivo)
-
-// id válido = slug del dataset (sin comillas/símbolos) → evita corromper el JSON
-// y cierra inyección por id en el panel admin.
 const ID_OK = (id) => typeof id === 'string' && /^[a-z0-9-]{1,64}$/.test(id);
 
-// Carga idempotente: se cachea la promesa, así dos votos casi simultáneos en el
-// primer arranque comparten la MISMA carga (sin ventana de carrera que pierda votos).
-function cargar() {
-  return cargaPromise ??= readFile(FILE, 'utf8')
-    .then((txt) => { votos = JSON.parse(txt) || []; })
-    .catch(() => { votos = []; });
-}
-// Cola: cada escritura corre DESPUÉS de la anterior (aunque alguna falle), con
-// .tmp ÚNICO por escritura → evita JSON corrupto → catch→[] → pérdida total.
-function guardar() { _cola = _cola.then(escribir, escribir); return _cola; }
-async function escribir() {
-  const tmp = `${FILE}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
-  const datos = JSON.stringify(votos);
+// Importa una sola vez el JSON antiguo si la tabla está vacía.
+let _migrado = false;
+async function migrar() {
+  if (_migrado || !ready) return; _migrado = true;
+  const row = await get('SELECT COUNT(*) AS c FROM votos');
+  if (row && row.c > 0) return;
   try {
-    if (!_dirOk) { await mkdir(dirname(FILE), { recursive: true }); _dirOk = true; }   // crea el dir del volumen si falta
-    await writeFile(tmp, datos); await rename(tmp, FILE);
-  } catch (e) {
-    if (!_avisoFallo) { _avisoFallo = true; console.warn(`[votos] no pude escribir en ${FILE}: ${e.message} — los votos NO persisten`); }
-  }
+    const arr = JSON.parse(await readFile(process.env.VOTOS_PATH || join(__dirname, '..', 'votos.json'), 'utf8'));
+    for (const v of arr) if (v && ID_OK(v.id)) await run('INSERT INTO votos(id, ok, ts) VALUES(?, ?, ?)', [v.id, v.ok ? 1 : 0, v.ts || Date.now()]);
+    console.log(`[votos] migrados ${arr.length} desde JSON a SQLite`);
+  } catch { /* no había JSON: nada que migrar */ }
 }
 
 // Registra un voto (ok = true → "había cupo"; false → "no había").
 export async function registrarVoto(id, ok) {
-  await cargar();
+  await migrar();
   if (!ID_OK(id)) return;
-  votos.push({ id, ok: !!ok, ts: Date.now() });
-  if (votos.length > 5000) votos = votos.slice(-5000); // poda para no crecer infinito
-  await guardar();
+  await run('INSERT INTO votos(id, ok, ts) VALUES(?, ?, ?)', [id, ok ? 1 : 0, Date.now()]);
+  // Poda: conserva los 5000 más recientes.
+  await run('DELETE FROM votos WHERE rowid NOT IN (SELECT rowid FROM votos ORDER BY ts DESC LIMIT 5000)');
 }
 
-// Total de votos acumulados (para el contador del panel admin / monitoreo).
+// Total de votos acumulados (contador del panel admin).
 export async function contarVotos() {
-  await cargar();
-  return votos.length;
+  await migrar();
+  const r = await get('SELECT COUNT(*) AS c FROM votos');
+  return r ? r.c : 0;
 }
 
-// Conteo de votos por lugar en las últimas `horas` horas: { [id]: {up, down} }.
+// Conteo por lugar en las últimas `horas` horas: { [id]: {up, down} }.
 export async function tallyReciente(horas = 3) {
-  await cargar();
+  await migrar();
   const desde = Date.now() - horas * 3600000;
+  const rows = await all(
+    `SELECT id,
+            SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END) AS up,
+            SUM(CASE WHEN ok = 0 THEN 1 ELSE 0 END) AS down
+     FROM votos WHERE ts >= ? GROUP BY id`, [desde]);
   const map = {};
-  for (const v of votos) {
-    if (v.ts < desde) continue;
-    const m = map[v.id] || (map[v.id] = { up: 0, down: 0 });
-    if (v.ok) m.up++; else m.down++;
-  }
+  for (const r of rows) map[r.id] = { up: r.up, down: r.down };
   return map;
 }

@@ -1,80 +1,57 @@
 // ============================================================================
-// Estaciona — Destacados (estacionamientos patrocinados / publicidad)
+// Estaciona — Destacados (patrocinados / publicidad) — ahora en SQLite (db.js).
 // ----------------------------------------------------------------------------
-// Monetización del piloto: un operador paga y su estacionamiento aparece
-// DESTACADO (arriba de la lista + pin e insignia "Destacado"). Lo gestiona Abel
-// desde /admin (agregar/quitar, con vencimiento opcional). SIEMPRE marcado como
-// publicidad, de forma honesta (no altera la disponibilidad ni el precio real).
-//
-// Persistencia: env DESTACADOS_PATH (volumen Railway) o archivo local.
+// Migra automáticamente destacados.json si existe. premium + tagline opcional.
 // ============================================================================
 
-import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { ready, run, all, get } from './db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FILE = process.env.DESTACADOS_PATH || join(__dirname, '..', 'destacados.json');
-let _dirOk = false, _avisoFallo = false;
 
-let destacados = [];          // [{ id, etiqueta, hasta:ts|null, ts }]
-let cargaPromise = null;
-let _cola = Promise.resolve();
-
-function cargar() {
-  return cargaPromise ??= readFile(FILE, 'utf8')
-    .then((txt) => { destacados = JSON.parse(txt) || []; })
-    .catch(() => { destacados = []; });
-}
-function guardar() { _cola = _cola.then(escribir, escribir); return _cola; }
-async function escribir() {
-  const tmp = `${FILE}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
-  const txt = JSON.stringify(destacados);
+let _migrado = false;
+async function migrar() {
+  if (_migrado || !ready) return; _migrado = true;
+  const row = await get('SELECT COUNT(*) AS c FROM destacados');
+  if (row && row.c > 0) return;
   try {
-    if (!_dirOk) { await mkdir(dirname(FILE), { recursive: true }); _dirOk = true; }
-    await writeFile(tmp, txt); await rename(tmp, FILE);
-  } catch (e) {
-    if (!_avisoFallo) { _avisoFallo = true; console.warn(`[destacados] no pude escribir en ${FILE}: ${e.message} — NO persiste`); }
-  }
+    const arr = JSON.parse(await readFile(process.env.DESTACADOS_PATH || join(__dirname, '..', 'destacados.json'), 'utf8'));
+    for (const d of arr) if (d && typeof d.id === 'string') await run('INSERT OR REPLACE INTO destacados(id, etiqueta, premium, tagline, hasta, ts) VALUES(?, ?, ?, ?, ?, ?)', [d.id, d.etiqueta || 'Destacado', d.premium ? 1 : 0, d.tagline || null, d.hasta || null, d.ts || Date.now()]);
+    console.log(`[destacados] migrados ${arr.length} desde JSON a SQLite`);
+  } catch { /* sin JSON: nada que migrar */ }
 }
 
-const activo = (d) => !d.hasta || d.hasta > Date.now();
-
-// Agrega o actualiza un destacado. dias>0 => vence en N días; si no, sin vencimiento.
-// premium=true => nivel Premium (operador) con `tagline` (frase corta) opcional.
+// Agrega o actualiza un destacado. dias>0 => vence en N días; premium + tagline opcional.
 export async function agregarDestacado(id, etiqueta, dias, premium, tagline) {
-  await cargar();
+  await migrar();
   if (!id || typeof id !== 'string' || !/^[a-z0-9-]{1,64}$/.test(id)) return { ok: false, error: 'id' };
   const et = String(etiqueta || 'Destacado').trim().slice(0, 40) || 'Destacado';
   const n = Number(dias);
   const hasta = Number.isFinite(n) && n > 0 ? Date.now() + n * 86400000 : null;
-  const pre = !!premium;
   const tag = String(tagline || '').trim().slice(0, 80) || null;
-  const ex = destacados.find((d) => d.id === id);
-  if (ex) { ex.etiqueta = et; ex.hasta = hasta; ex.premium = pre; ex.tagline = tag; ex.ts = Date.now(); }
-  else destacados.push({ id, etiqueta: et, hasta, premium: pre, tagline: tag, ts: Date.now() });
-  await guardar();
+  await run('INSERT OR REPLACE INTO destacados(id, etiqueta, premium, tagline, hasta, ts) VALUES(?, ?, ?, ?, ?, ?)', [id, et, premium ? 1 : 0, tag, hasta, Date.now()]);
   return { ok: true };
 }
 export async function quitarDestacado(id) {
-  await cargar();
-  const antes = destacados.length;
-  destacados = destacados.filter((d) => d.id !== id);
-  if (destacados.length === antes) return false;
-  await guardar();
-  return true;
+  await migrar();
+  await run('DELETE FROM destacados WHERE id = ?', [id]);
+  const r = await get('SELECT changes() AS c');
+  return !!(r && r.c > 0);
 }
-// Mapa id -> {etiqueta, premium, tagline} de los destacados ACTIVOS (para el snapshot).
+// Mapa id -> {etiqueta, premium, tagline} de los ACTIVOS (para el snapshot).
 export async function mapaDestacados() {
-  await cargar();
+  await migrar();
+  const rows = await all('SELECT id, etiqueta, premium, tagline FROM destacados WHERE hasta IS NULL OR hasta > ?', [Date.now()]);
   const m = {};
-  for (const d of destacados) if (activo(d)) m[d.id] = { etiqueta: d.etiqueta || 'Destacado', premium: !!d.premium, tagline: d.tagline || null };
+  for (const d of rows) m[d.id] = { etiqueta: d.etiqueta || 'Destacado', premium: !!d.premium, tagline: d.tagline || null };
   return m;
 }
-// Lista para el panel admin (con estado activo/vencido y fecha).
+// Lista para el panel admin (con estado activo/vencido).
 export async function listarDestacados() {
-  await cargar();
-  return destacados.slice().sort((a, b) => b.ts - a.ts).map((d) => ({
-    id: d.id, etiqueta: d.etiqueta || 'Destacado', premium: !!d.premium, tagline: d.tagline || null, hasta: d.hasta || null, activo: activo(d),
-  }));
+  await migrar();
+  const ahora = Date.now();
+  const rows = await all('SELECT id, etiqueta, premium, tagline, hasta FROM destacados ORDER BY ts DESC');
+  return rows.map((d) => ({ id: d.id, etiqueta: d.etiqueta || 'Destacado', premium: !!d.premium, tagline: d.tagline || null, hasta: d.hasta || null, activo: !d.hasta || d.hasta > ahora }));
 }

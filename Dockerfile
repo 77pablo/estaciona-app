@@ -3,8 +3,9 @@
 # encuentre sin configurar Root Directory).
 # App de Node puro (node:http), SIN dependencias externas → build muy simple.
 # Railway entrega el puerto por la variable PORT; el server.js ya la respeta.
+# Node 24: trae SQLite integrado (node:sqlite) que usa la base de datos.
 # ============================================================================
-FROM node:20-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
