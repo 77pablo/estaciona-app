@@ -17,21 +17,31 @@ const MAX_BYTES = 700 * 1024;     // ~700KB por foto (ya viene comprimida del cl
 const MAX_POR_LUGAR = 8;          // máximo de fotos por estacionamiento
 const slugId = (id) => String(id || '').replace(/[^a-z0-9-]/gi, '');   // evita path traversal
 
-// Guarda una foto (data URL base64). Devuelve la URL pública o null si inválida.
-export async function guardarFoto(id, dataUrl) {
-  const sid = slugId(id);
-  if (!sid || typeof dataUrl !== 'string') return null;
+// Valida el data URL (formato de imagen + tamaño decodificado). Devuelve
+// { buf, ext } si es válida, o null. Se usa también en server.js para RECHAZAR
+// antes de gastar una llamada de moderación (Sightengine) en algo inválido/pesado.
+export function validarFoto(dataUrl) {
+  if (typeof dataUrl !== 'string') return null;
   const m = dataUrl.match(/^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
   if (!m) return null;
   const buf = Buffer.from(m[2], 'base64');
   if (buf.length < 500 || buf.length > MAX_BYTES) return null;
+  return { buf, ext: m[1] === 'png' ? 'png' : m[1] === 'webp' ? 'webp' : 'jpg' };
+}
+
+// Guarda una foto (data URL base64). Devuelve la URL pública o null si inválida.
+export async function guardarFoto(id, dataUrl) {
+  const sid = slugId(id);
+  if (!sid) return null;
+  const v = validarFoto(dataUrl);
+  if (!v) return null;
+  const buf = v.buf;
   const dir = join(FOTOS_DIR, sid);
   await mkdir(dir, { recursive: true });
   // Si ya hay el máximo, borra la(s) más antigua(s).
   const files = (await readdir(dir).catch(() => [])).filter((f) => /\.(jpg|png|webp)$/i.test(f)).sort();
   while (files.length >= MAX_POR_LUGAR) { await rm(join(dir, files.shift())).catch(() => {}); }
-  const ext = m[1] === 'png' ? 'png' : m[1] === 'webp' ? 'webp' : 'jpg';
-  const name = `${Date.now()}.${ext}`;
+  const name = `${Date.now()}.${v.ext}`;
   await writeFile(join(dir, name), buf);
   return `/fotos/${sid}/${name}`;
 }

@@ -17,7 +17,7 @@ import { snapshotCiudad, shapeFichas } from './engine.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
-import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto } from './fotos.js';
+import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto, validarFoto } from './fotos.js';
 import { registrarLugar, lugaresDe, lugaresRecientes, eliminarLugar, contarLugares } from './lugares.js';
 import { registrarEvento, resumenAnalytics, vistasLugar } from './analytics.js';
 import { agregarDestacado, quitarDestacado, mapaDestacados, listarDestacados } from './destacados.js';
@@ -75,6 +75,21 @@ const MIME = {
 function sendJSON(res, status, data) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(data));
+}
+
+// Lee el cuerpo de un POST acumulando Buffers y decodificando UTF-8 UNA sola vez.
+// (Con `body += chunk` cada chunk se decodifica solo, así que un carácter multibyte
+// —ñ, tilde, emoji— partido entre dos chunks TCP se corrompe.) Drena SIEMPRE hasta
+// 'end' y resuelve ahí; NUNCA destruye el socket a mitad de subida (eso provoca un
+// reset y el cliente no recibe la respuesta). `maxBytes` corta lo que se almacena
+// (no la lectura), y se reporta con `tooBig` para responder 413 en el handler.
+function readBody(req, maxBytes) {
+  return new Promise((resolve) => {
+    const chunks = []; let size = 0, tooBig = false;
+    req.on('data', (c) => { if (tooBig) return; size += c.length; if (size > maxBytes) { tooBig = true; return; } chunks.push(c); });
+    req.on('end', () => resolve({ tooBig, body: Buffer.concat(chunks).toString('utf8') }));
+    req.on('error', () => resolve({ tooBig: false, body: '' }));
+  });
 }
 
 // Rate-limit simple en memoria por IP (ventana deslizante). Defensa anti-spam del
@@ -171,17 +186,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/aporte' && req.method === 'POST') {
       const okRate = rateLimit(req, 20, 600000);   // máx 20 aportes / 10 min por IP (anti-spam)
-      let body = '', tooBig = false;
-      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 20000) tooBig = true; });   // marca y drena; responde en 'end'
-      req.on('end', async () => {
-        if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
-        if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
-        try {
-          const { id, precio, texto } = JSON.parse(body || '{}');
-          const ok = await registrarAporte(id, precio, texto);
-          sendJSON(res, ok ? 200 : 400, { ok });
-        } catch { sendJSON(res, 400, { error: 'json inválido' }); }
-      });
+      const { tooBig, body } = await readBody(req, 20000);
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
+      try {
+        const { id, precio, texto } = JSON.parse(body || '{}');
+        const ok = await registrarAporte(id, precio, texto);
+        sendJSON(res, ok ? 200 : 400, { ok });
+      } catch { sendJSON(res, 400, { error: 'json inválido' }); }
       return;
     }
     if (url.pathname === '/api/aportes' && req.method === 'GET') {
@@ -190,19 +202,19 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/foto' && req.method === 'POST') {
       const okRate = rateLimit(req, 15, 600000);   // máx 15 fotos / 10 min por IP (anti-spam; suben pesadas)
-      let body = '', tooBig = false;
-      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 3_000_000) tooBig = true; });   // tope ~3MB; responde en 'end' (el cliente muestra "muy pesada")
-      req.on('end', async () => {
-        if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
-        if (tooBig) return sendJSON(res, 413, { ok: false });
-        try {
-          const { id, dataUrl } = JSON.parse(body || '{}');
-          const rev = await revisarFoto(dataUrl);     // moderación automática (Sightengine)
-          if (!rev.ok) { sendJSON(res, 422, { ok: false, motivo: rev.motivo }); return; }
-          const foto = await guardarFoto(id, dataUrl);
-          sendJSON(res, foto ? 200 : 400, { ok: !!foto, url: foto });
-        } catch { sendJSON(res, 400, { ok: false }); }
-      });
+      const { tooBig, body } = await readBody(req, 3_000_000);   // tope ~3MB (el cliente muestra "muy pesada")
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { id, dataUrl } = JSON.parse(body || '{}');
+        // Validar formato + tamaño ANTES de moderar: así una imagen inválida o
+        // >700KB no gasta una llamada de Sightengine (cuota gratis ~2.000/mes).
+        if (!validarFoto(dataUrl)) { sendJSON(res, 400, { ok: false }); return; }
+        const rev = await revisarFoto(dataUrl);     // moderación automática (Sightengine)
+        if (!rev.ok) { sendJSON(res, 422, { ok: false, motivo: rev.motivo }); return; }
+        const foto = await guardarFoto(id, dataUrl);
+        sendJSON(res, foto ? 200 : 400, { ok: !!foto, url: foto });
+      } catch { sendJSON(res, 400, { ok: false }); }
       return;
     }
     if (url.pathname === '/api/fotos' && req.method === 'GET') {
@@ -229,66 +241,54 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/mod/borrar' && req.method === 'POST') {
       if (adminBloqueado(req)) return sendJSON(res, 429, { error: 'demasiados intentos' });
       if (!esAdmin(req, url)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
-      let body = '', tooBig = false;
-      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 10000) tooBig = true; });
-      req.on('end', async () => {
-        if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
-        try {
-          const { tipo, id, ts, file } = JSON.parse(body || '{}');
-          let ok = false;
-          if (tipo === 'comentario') ok = (await eliminarAporte(id, ts)) > 0;
-          else if (tipo === 'foto') ok = await eliminarFoto(id, file);
-          else if (tipo === 'lugar') ok = await eliminarLugar(id);
-          sendJSON(res, ok ? 200 : 400, { ok });
-        } catch { sendJSON(res, 400, { ok: false }); }
-      });
+      const { tooBig, body } = await readBody(req, 10000);
+      if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
+      try {
+        const { tipo, id, ts, file } = JSON.parse(body || '{}');
+        let ok = false;
+        if (tipo === 'comentario') ok = (await eliminarAporte(id, ts)) > 0;
+        else if (tipo === 'foto') ok = await eliminarFoto(id, file);
+        else if (tipo === 'lugar') ok = await eliminarLugar(id);
+        sendJSON(res, ok ? 200 : 400, { ok });
+      } catch { sendJSON(res, 400, { ok: false }); }
       return;
     }
     if (url.pathname === '/api/mod/destacado' && req.method === 'POST') {
       if (adminBloqueado(req)) return sendJSON(res, 429, { error: 'demasiados intentos' });
       if (!esAdmin(req, url)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
-      let body = '', tooBig = false;
-      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 4000) tooBig = true; });
-      req.on('end', async () => {
-        if (tooBig) return sendJSON(res, 413, { ok: false });
-        try {
-          const { accion, id, etiqueta, dias, premium, tagline } = JSON.parse(body || '{}');
-          let r;
-          if (accion === 'remove') r = { ok: await quitarDestacado(id) };
-          else r = await agregarDestacado(id, etiqueta, dias, premium, tagline);
-          sendJSON(res, r.ok ? 200 : 400, r);
-        } catch { sendJSON(res, 400, { ok: false }); }
-      });
+      const { tooBig, body } = await readBody(req, 4000);
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { accion, id, etiqueta, dias, premium, tagline } = JSON.parse(body || '{}');
+        let r;
+        if (accion === 'remove') r = { ok: await quitarDestacado(id) };
+        else r = await agregarDestacado(id, etiqueta, dias, premium, tagline);
+        sendJSON(res, r.ok ? 200 : 400, r);
+      } catch { sendJSON(res, 400, { ok: false }); }
       return;
     }
     if (url.pathname === '/api/voto' && req.method === 'POST') {
       const okRate = rateLimit(req, 40, 600000);   // máx 40 votos / 10 min por IP (anti-spam)
-      let body = '', tooBig = false;
-      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 10000) tooBig = true; });
-      req.on('end', async () => {
-        if (!okRate) return sendJSON(res, 429, { error: 'rate' });
-        if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
-        try {
-          const { id, ok } = JSON.parse(body || '{}');
-          await registrarVoto(id, ok);
-          sendJSON(res, 200, { ok: true });
-        } catch { sendJSON(res, 400, { error: 'json inválido' }); }
-      });
+      const { tooBig, body } = await readBody(req, 10000);
+      if (!okRate) return sendJSON(res, 429, { error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
+      try {
+        const { id, ok } = JSON.parse(body || '{}');
+        await registrarVoto(id, ok);
+        sendJSON(res, 200, { ok: true });
+      } catch { sendJSON(res, 400, { error: 'json inválido' }); }
       return;
     }
     if (url.pathname === '/api/lugar' && req.method === 'POST') {
       // Reportar un estacionamiento que falta (crowdsource estilo Waze).
       const okRate = rateLimit(req, 12, 600000);   // máx 12 reportes / 10 min por IP
-      let body = '', tooBig = false;
-      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 4000) tooBig = true; });
-      req.on('end', async () => {
-        if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
-        if (tooBig) return sendJSON(res, 413, { ok: false, error: 'cuerpo demasiado grande' });
-        try {
-          const r = await registrarLugar(JSON.parse(body || '{}'));
-          sendJSON(res, r.ok ? 200 : 400, r);
-        } catch { sendJSON(res, 400, { ok: false, error: 'json inválido' }); }
-      });
+      const { tooBig, body } = await readBody(req, 4000);
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false, error: 'cuerpo demasiado grande' });
+      try {
+        const r = await registrarLugar(JSON.parse(body || '{}'));
+        sendJSON(res, r.ok ? 200 : 400, r);
+      } catch { sendJSON(res, 400, { ok: false, error: 'json inválido' }); }
       return;
     }
     if (url.pathname === '/api/track' && req.method === 'POST') {
@@ -296,30 +296,24 @@ const server = http.createServer(async (req, res) => {
       // Rate-limit por IP para que los números NO se puedan inflar (defienden la
       // analítica que se le muestra a un operador). Al exceder, se descarta en silencio.
       const okRate = rateLimit(req, 120, 60000);   // máx 120 eventos / min por IP
-      let body = '', tooBig = false;
-      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 1000) tooBig = true; });
-      req.on('end', async () => {
-        if (okRate && !tooBig) {
-          try { const { tipo, ciudad, id } = JSON.parse(body || '{}'); await registrarEvento(tipo, ciudad, id); } catch { /* ignora payloads inválidos */ }
-        }
-        res.writeHead(204); res.end();   // sin contenido: es fire-and-forget
-      });
+      const { tooBig, body } = await readBody(req, 1000);
+      if (okRate && !tooBig) {
+        try { const { tipo, ciudad, id } = JSON.parse(body || '{}'); await registrarEvento(tipo, ciudad, id); } catch { /* ignora payloads inválidos */ }
+      }
+      res.writeHead(204); res.end();   // sin contenido: es fire-and-forget
       return;
     }
     if (url.pathname === '/api/pro/activar' && req.method === 'POST') {
       // Activar Estaciona Pro con un código (lo entrega Abel tras cobrar). Sin pasarela.
       const okRate = rateLimit(req, 20, 600000);   // freno anti fuerza-bruta de códigos
-      let body = '', tooBig = false;
-      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 500) tooBig = true; });
-      req.on('end', () => {
-        if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
-        if (tooBig) return sendJSON(res, 413, { ok: false });
-        try {
-          const { codigo } = JSON.parse(body || '{}');
-          const ok = PRO_CODES.size > 0 && PRO_CODES.has(String(codigo || '').trim().toLowerCase());
-          sendJSON(res, ok ? 200 : 400, { ok });
-        } catch { sendJSON(res, 400, { ok: false }); }
-      });
+      const { tooBig, body } = await readBody(req, 500);
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { codigo } = JSON.parse(body || '{}');
+        const ok = PRO_CODES.size > 0 && PRO_CODES.has(String(codigo || '').trim().toLowerCase());
+        sendJSON(res, ok ? 200 : 400, { ok });
+      } catch { sendJSON(res, 400, { ok: false }); }
       return;
     }
     if (url.pathname === '/api/config' && req.method === 'GET') {

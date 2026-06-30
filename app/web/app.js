@@ -801,10 +801,11 @@ function renderLista() {
   const trafColor = traf.nivel === 'fluido' ? 'var(--green)' : traf.nivel === 'medio' ? 'var(--amber)' : 'var(--red)';
   $('#lista').innerHTML = lista.map((p) => {
     const d = p.disponibilidad || {}, nivel = d.nivel || 'cerrado';   // defensivo: nunca tumbar la lista
-    // Disponibilidad = estimación honesta (sin número falso de "cupos en vivo").
+    // Disponibilidad = estimación honesta tipo semáforo (NO ocupación real en vivo).
+    // Mismo lenguaje que el detalle ("Suele haber/Puede costar/Difícil"), versión corta.
     const estadoTxt = nivel === 'cerrado' ? 'Cerrado'
-      : nivel === 'verde' ? 'Disponible'
-      : nivel === 'amarillo' ? 'Casi lleno' : 'Completo';
+      : nivel === 'verde' ? 'Suele haber'
+      : nivel === 'amarillo' ? 'Puede costar' : 'Difícil';
     // La barra es un VISUAL del semáforo (no un conteo inventado de cupos).
     const barPct = nivel === 'verde' ? 82 : nivel === 'amarillo' ? 45 : nivel === 'rojo' ? 15 : 6;
     // Confirmaciones REALES de la comunidad (cupo confirmado en las últimas 3 h).
@@ -871,7 +872,16 @@ function featuresHTML(p) {
 function seleccionarCard(id, card) {
   const yaSel = card.classList.contains('sel');
   $('#lista').querySelectorAll('.card.sel').forEach((c) => c.classList.remove('sel'));
-  if (yaSel) return;
+  if (yaSel) {
+    // Colapsar: limpiar la selección (si no, renderLista del auto-refresh de 6 s la
+    // re-expande sola por `p.id === selectedId`) y devolver el pin a su estilo normal.
+    const prev = selectedId; selectedId = null;
+    if (prev && markers[prev]) {
+      const pp = DATA.find((x) => x.id === prev);
+      if (pp) { markers[prev].setIcon(L.divIcon({ className: '', html: iconHtml(pp), iconSize: [0, 0] })); markers[prev].setZIndexOffset(zOffset(pp)); }
+    }
+    return;
+  }
   card.classList.add('sel');
   card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   const p = DATA.find((x) => x.id === id);
@@ -893,8 +903,9 @@ function abrirMapCard(id) {
   panselect(p);                                                  // centra el mapa + resalta el pin
   $('#lista').querySelectorAll('.card.sel').forEach((c) => c.classList.remove('sel'));  // colapsa la lista
   const d = p.disponibilidad, nivel = d.nivel;
+  // Estimación semáforo honesta (NO ocupación real en vivo), igual que la lista/detalle.
   const estadoTxt = nivel === 'cerrado' ? 'Cerrado'
-    : nivel === 'verde' ? 'Disponible' : nivel === 'amarillo' ? 'Casi lleno' : 'Completo';
+    : nivel === 'verde' ? 'Suele haber' : nivel === 'amarillo' ? 'Puede costar' : 'Difícil';
   const barPct = nivel === 'verde' ? 82 : nivel === 'amarillo' ? 45 : nivel === 'rojo' ? 15 : 6;
   const tipoTxt = p.tipo === 'calle' ? 'En la calle' : (p.atributos?.techado ? 'Techado' : 'Privado');
   const dist = Math.round(haversine(USER, p));   // DATA no trae dist (se calcula en la lista)
@@ -1057,7 +1068,7 @@ function openDetalle(id) {
         <select id="calc-horas">
           ${[1, 2, 3, 4, 6, 8].map((h) => `<option value="${h}">${h} hora${h > 1 ? 's' : ''}</option>`).join('')}
         </select>
-        <div class="total" id="calc-total">${CLP(p.precioHora)}</div>
+        <div class="total" id="calc-total">${p.verificado ? '' : '~'}${CLP(p.precioHora)}</div>
         <div class="calc-nota" id="calc-nota"></div>
       </div>` : ''}
       <div class="det-row"><span class="k">${ic('users')}</span>
@@ -1097,7 +1108,7 @@ function openDetalle(id) {
   if (sel) {
     const upd = () => {
       const { total, libres } = costoEstimado(p, Number(sel.value));
-      $('#calc-total').textContent = total === 0 ? 'Gratis' : CLP(total);
+      $('#calc-total').textContent = total === 0 ? 'Gratis' : (p.verificado ? '' : '~') + CLP(total);
       const nota = $('#calc-nota');
       if (nota) nota.textContent = libres > 0 ? `Incluye ${libres} h sin cobro (gratis o cerrado).` : '';
     };
@@ -1357,7 +1368,20 @@ window.cerrarDetalle = () => {
   $('#detalle').classList.remove('open');
   if (_focoPrevio?.focus) _focoPrevio.focus();    // devuelve el foco a donde estaba
 };
-window.toggleFavDetalle = (id) => { const p = DATA.find((x) => x.id === id); if (p) LS.toggleFav(p); openDetalle(id); renderLista(); };
+window.toggleFavDetalle = (id) => {
+  const p = DATA.find((x) => x.id === id);
+  if (!p) return;
+  LS.toggleFav(p);
+  // Alternar la estrella EN SITIO: re-abrir el detalle re-descargaba comentarios/fotos
+  // y saltaba el scroll al tope solo por marcar un favorito.
+  const fav = LS.isFav(id), btn = $('#detalle .det-fav');
+  if (btn) {
+    btn.classList.toggle('on', fav);
+    btn.setAttribute('aria-label', fav ? 'Quitar de favoritos' : 'Guardar en favoritos');
+    btn.innerHTML = fav ? ic('starFull', 20) : ic('starOutline', 20);
+  }
+  renderLista();   // refresca la estrellita en la tarjeta de la lista
+};
 window.confirmarCupo = (id, ok) => {
   track('voto', ciudadActual);
   toast(ok ? '¡Gracias! Confirmado 👍' : 'Gracias, lo anotamos 👎');
@@ -1611,7 +1635,7 @@ function renderMiAuto() {
       </div>
       <div class="ma-stats">
         <div class="ma-stat">
-          <div class="lbl">Llevas <span class="ma-live" title="En vivo" aria-hidden="true"></span></div>
+          <div class="lbl">Llevas <span class="ma-live" title="en curso" aria-hidden="true"></span></div>
           <div class="big" id="ma-tiempo">—</div>
         </div>
         <div class="ma-stat">
