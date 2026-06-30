@@ -392,6 +392,7 @@ function satTileLayer() {
 // --- Capa del mapa: calle <-> satélite ---
 let baseLayer = null;
 let mapModo = 'calle';   // 'calle' | 'satelite'
+let _zoomSimplif = null; // ¿está el mapa en modo "punto" (zoom < 15)? para no redibujar de más
 function capaPara(modo) {
   return (modo === 'satelite' && MAPTILER_KEY) ? satTileLayer() : baseTileLayer();
 }
@@ -403,8 +404,17 @@ function setCapaMapa(modo) {
   layer.addTo(map);
   if (layer.bringToBack) layer.bringToBack();
   baseLayer = layer;
-  // Respaldo a OSM si MapTiler falla (solo en vista calle).
-  if (MAPTILER_KEY && modo !== 'satelite') {
+  if (MAPTILER_KEY && modo === 'satelite') {
+    // El satélite (hybrid) no tiene equivalente OSM: si falla (key sin permiso/cuota),
+    // volvemos a calles para que el mapa NUNCA quede gris.
+    let errs = 0;
+    layer.on('tileerror', () => {
+      if (++errs < 5) return;
+      layer.off('tileerror');
+      if (baseLayer === layer) { toast('Vista satélite no disponible'); setCapaMapa('calle'); }
+    });
+  } else if (MAPTILER_KEY) {
+    // Calle: respaldo a OSM si MapTiler falla.
     let errs = 0;
     layer.on('tileerror', () => {
       if (++errs < 4) return;
@@ -413,7 +423,7 @@ function setCapaMapa(modo) {
     });
   }
   const btn = document.querySelector('.leaflet-sat-btn');
-  if (btn) { btn.innerHTML = ic('layers', 20); btn.title = modo === 'satelite' ? 'Ver calles' : 'Ver satélite'; }
+  if (btn) { btn.classList.toggle('on', modo === 'satelite'); btn.title = modo === 'satelite' ? 'Ver calles' : 'Ver satélite'; }
 }
 
 // Agrega la capa base a un mapa (usado por el mini-mapa). Si es MapTiler y los
@@ -512,16 +522,30 @@ function initMap() {
     options: { position: 'bottomleft' },
     onAdd() {
       const d = L.DomUtil.create('div', 'mapa-leyenda');
+      d.setAttribute('role', 'button');
+      d.setAttribute('tabindex', '0');
+      d.setAttribute('aria-label', 'Leyenda de disponibilidad — plegar o desplegar');
+      d.setAttribute('aria-expanded', 'true');
       d.innerHTML = '<b class="leyenda-tit">Disponibilidad</b><span><i class="dot verde"></i>Suele haber</span><span><i class="dot amarillo"></i>Puede costar</span><span><i class="dot rojo"></i>Difícil</span>';
-      // Plegable en pantallas chicas para no tapar el mapa: toca para abrir/cerrar.
-      d.addEventListener('click', () => d.classList.toggle('plegada'));
+      // Plegable en pantallas chicas para no tapar el mapa: toca/Enter para abrir/cerrar.
+      const toggle = () => { const pleg = d.classList.toggle('plegada'); d.setAttribute('aria-expanded', pleg ? 'false' : 'true'); };
+      d.addEventListener('click', toggle);
+      d.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+      L.DomEvent.disableClickPropagation(d);
       return d;
     },
   });
   map.addControl(new LegendCtrl());
 
-  // Al cambiar el zoom: re-renderiza iconos (pines se simplifican si está lejos).
-  map.on('zoomend', () => updateMarkers(listaFiltrada()));
+  // Al cambiar el zoom los pines se simplifican a punto bajo zoom 15. Solo
+  // re-renderizamos si se CRUZA ese umbral (con zoomSnap 0.5, evita redibujar
+  // todos los pines en cada medio nivel cuando su aspecto no cambia).
+  map.on('zoomend', () => {
+    const simpl = map.getZoom() < 15;
+    if (simpl === _zoomSimplif) return;
+    _zoomSimplif = simpl;
+    updateMarkers(listaFiltrada());
+  });
   // Al mover el mapa: si el centro se aleja del usuario, ofrece "Buscar en esta zona".
   map.on('moveend', onMapMove);
 }
@@ -603,21 +627,27 @@ function zOffset(p) {
 
 function updateMarkers(lista) {
   if (!map) return;
+  const simpl = map.getZoom() < 15;
   const vistos = new Set();
   for (const p of lista) {
     vistos.add(p.id);
-    const icon = L.divIcon({ className: '', html: iconHtml(p), iconSize: [0, 0] });
-    if (markers[p.id]) {
-      markers[p.id].setIcon(icon);
-      markers[p.id].nivelEstaciona = p.disponibilidad.nivel;   // para colorear el clúster
+    const nivel = p.disponibilidad.nivel, sel = p.id === selectedId;
+    // Firma de lo que afecta el aspecto del pin: si no cambió, no re-seteamos el
+    // icono (cada setIcon fuerza refresco del clúster → caro cada 6 s).
+    const sig = `${nivel}|${sel ? 's' : ''}|${simpl && !sel ? 'd' : 'p'}`;
+    let mk = markers[p.id];
+    if (mk) {
+      if (mk._sig !== sig) { mk.setIcon(L.divIcon({ className: '', html: iconHtml(p), iconSize: [0, 0] })); mk._sig = sig; }
+      mk.nivelEstaciona = nivel;                 // para colorear el clúster
     } else {
-      const mk = L.marker([p.lat, p.lng], { icon });
-      mk.nivelEstaciona = p.disponibilidad.nivel;
+      mk = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: '', html: iconHtml(p), iconSize: [0, 0] }) });
+      mk._sig = sig;
+      mk.nivelEstaciona = nivel;
       mk.on('click', () => abrirMapCard(p.id));
       markers[p.id] = mk;
       markerLayer.addLayer(mk);                  // al clúster (o al mapa, si no hay lib)
     }
-    markers[p.id].setZIndexOffset(zOffset(p));
+    mk.setZIndexOffset(zOffset(p));
   }
   for (const id of Object.keys(markers)) {
     if (!vistos.has(id)) { markerLayer.removeLayer(markers[id]); delete markers[id]; }
@@ -923,7 +953,7 @@ function openDetalle(id) {
       </div>
     </div>
     <div class="det-actions">
-      <button class="btn btn-primary" onclick="llevame('${p.id}')">${ic('compass', 17)} Llévame</button>
+      <button class="btn btn-primary" onclick="llevame('${p.id}')">${ic('compass', 17)} Cómo llegar</button>
       <div class="det-actions-row">
         <button class="btn btn-second" onclick="avisarme('${p.id}')">${ic('clock', 16)} Avísame</button>
         <button class="btn btn-second" onclick="abrirEstacione('${p.id}')">${ic('car', 16)} Estacioné aquí</button>
@@ -1583,6 +1613,10 @@ function iniciarSeguimiento() {
     { enableHighAccuracy: true, maximumAge: 5000 }
   );
 }
+// Libera el GPS (watchPosition consume batería) cuando no estás mirando el mapa.
+function detenerSeguimiento() {
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+}
 
 // --- Estado visible del buscador (X para limpiar + spinner "buscando…") ------
 // Muestra/oculta la "X" de limpiar según haya texto (y nunca durante una búsqueda).
@@ -1791,6 +1825,8 @@ document.addEventListener('keydown', (e) => {
 function irA(view) {
   cerrarMapCard();                              // oculta la card flotante del mapa al cambiar de vista
   if (view !== 'miauto') destruirMiniMapa();   // libera el mini-mapa al salir
+  // GPS solo mientras miras el mapa: lo pausa al salir y lo reanuda al volver (si ya estaba activo).
+  if (view === 'buscar') { if (userReal) iniciarSeguimiento(); } else { detenerSeguimiento(); }
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
   $('#view-' + view).classList.add('active');
   document.querySelectorAll('.bottomnav .nav').forEach((b) => b.classList.toggle('active', b.dataset.view === view));

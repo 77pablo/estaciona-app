@@ -809,7 +809,7 @@ main, .view { flex: 1; min-height: 0; }
 .traffic-tiles .leaflet-tile, .traffic-tiles.leaflet-tile { filter: none !important; }
 /* Botones de capa (satélite/tráfico) en la esquina sup. derecha. */
 .leaflet-sat-btn, .leaflet-traffic-btn { margin: 10px 10px 0 0 !important; }
-.leaflet-traffic-btn.on { background: var(--accent); color: var(--on-accent); }
+.leaflet-traffic-btn.on, .leaflet-sat-btn.on { background: var(--accent); color: var(--on-accent); }
 
 /* Leyenda del semáforo en el mapa */
 .mapa-leyenda {
