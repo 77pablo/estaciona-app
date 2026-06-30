@@ -32,14 +32,14 @@ export const PRECIOS_REALES = [
   // Cobro 07:00–21:00 (fuera de ese tramo no se cobra). Fuente: cencomalls.cl + prensa (nov-2025).
   { id: 'temuco-1', precioMin: 20, horario: '07:00–21:00', fuente: 'cencomalls.cl (Cenco Temuco, nov-2025; promo 1er año)' }, // Portal Temuco
 
-  // Calles del centro con cobro vía app Parksur: $30/min (vía pública, Ley 20.967).
-  // L-V 08:30–20:00 (Sáb 09:00–14:00 no se modela); gratis de noche y domingos.
-  // Fuente: parksur.cl. NOTA: tarifa de la app Parksur para vía pública en Temuco;
-  // el operador exacto por calle puede variar (parquímetro municipal vs Parksur).
-  { id: 'temuco-calle-1', precioMin: 30, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30 y domingos', fuente: 'parksur.cl (app vía pública Temuco)' }, // Arturo Prat
-  { id: 'temuco-calle-2', precioMin: 30, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30 y domingos', fuente: 'parksur.cl (app vía pública Temuco)' }, // Claro Solar
-  { id: 'temuco-calle-3', precioMin: 30, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30 y domingos', fuente: 'parksur.cl (app vía pública Temuco)' }, // Vicuña Mackenna
-  { id: 'temuco-calle-4', precioMin: 30, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30 y domingos', fuente: 'parksur.cl (app vía pública Temuco)' }, // Antonio Varas
+  // Calles del centro: concesionario municipal Chile Parking = $27/min o fracción
+  // (vía pública, Ley 20.967). L-V 08:30–20:00, Sáb 09:00–14:00, domingos gratis.
+  // Fuente: chileparkinglimitada.cl (la prensa lo nombra concesionario del municipio
+  // de Temuco). Parksur publica $30/min para algunas calles; se usa el municipal $27.
+  { id: 'temuco-calle-1', precioMin: 27, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30, sábados tarde y domingos', fuente: 'chileparkinglimitada.cl (Chile Parking, concesionario municipal)' }, // Arturo Prat
+  { id: 'temuco-calle-2', precioMin: 27, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30, sábados tarde y domingos', fuente: 'chileparkinglimitada.cl (Chile Parking, concesionario municipal)' }, // Claro Solar
+  { id: 'temuco-calle-3', precioMin: 27, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30, sábados tarde y domingos', fuente: 'chileparkinglimitada.cl (Chile Parking, concesionario municipal)' }, // Vicuña Mackenna
+  { id: 'temuco-calle-4', precioMin: 27, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30, sábados tarde y domingos', fuente: 'chileparkinglimitada.cl (Chile Parking, concesionario municipal)' }, // Antonio Varas
 
   // ── Santiago / Las Condes — malls grandes (fuente oficial del operador) ──
   // Parque Arauco Kennedy (Las Condes): $25/min general, cobro 07:00–00:00. Fuente parquearauco.cl.
