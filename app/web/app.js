@@ -41,6 +41,7 @@ let selectedId = null;
 let watchId = null;                 // seguimiento de ubicación (watchPosition)
 let query = '';
 let orden = 'cercania';            // orden de la lista: 'cercania' | 'precio'
+let comparar = [];                 // ids seleccionados para comparar lado a lado (máx 3)
 let cargado = false;
 let cargaSeq = 0;                  // contador de cargas: descarta respuestas viejas (carrera)
 let sinConexionAvisado = false;    // evita spamear el toast "Sin conexión" cada 6s
@@ -50,7 +51,8 @@ let _onCerrarModal = null;         // callback opcional al cerrar el modal (p.ej
 let detalleAbiertoId = null;
 let filtros = {
   gratis: false, barato: false, techado: false, abierto: false,
-  ev: false, accesible: false, soloPublicos: false, tipo: 'todos', distMax: 0,
+  ev: false, accesible: false, camaras: false, verificado: false,
+  soloPublicos: false, tipo: 'todos', distMax: 0,
 };
 
 // Lugares de Favoritos (Casa/Trabajo). Por defecto son sectores de Temuco, pero
@@ -122,6 +124,9 @@ const ICONS = {
   traffic:'<rect x="8" y="2.5" width="8" height="19" rx="3"/><circle cx="12" cy="7" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="17" r="1.5"/>',
   x:'<path d="M18 6 6 18M6 6l12 12"/>',
   users:'<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.3a3 3 0 0 1 0 5.7"/><path d="M15.4 20a5.5 5.5 0 0 0-1.5-3.8"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  pinPlus:'<path d="M19 11c0 4.5-7 10-7 10s-7-5.5-7-10a7 7 0 0 1 13.2-3.2"/><path d="M16 4.5h5M18.5 2v5"/>',
+  compare:'<path d="M3 8h14l-3.5-3.5M21 16H7l3.5 3.5"/>',
 };
 // Devuelve un <svg> inline del ícono pedido (hereda color y se alinea al texto).
 function ic(name, size = 18) {
@@ -186,6 +191,7 @@ const esGratisReal = (p) => p.precioHora === 0 && !esGratisClientes(p);
 function precioCorto(p) {
   if (p.gratisAhora || esGratisReal(p)) return 'Gratis';
   if (esGratisClientes(p)) return 'Clientes';
+  if (p.precioHora == null) return 'Pago';        // pago, precio aún sin dato (lugar reportado)
   return (p.verificado ? '' : '~') + CLP(p.precioHora);
 }
 // HTML del precio para la lista / favoritos (consciente del tipo de "gratis").
@@ -194,6 +200,7 @@ function precioHTML(p) {
   if (p.gratisAhora) return '<span class="free">Gratis ahora</span>';
   if (esGratisReal(p)) return '<span class="free">Gratis</span>';
   if (esGratisClientes(p)) return `<span class="free-cli">${ic('cart', 12)} Solo clientes</span>`;
+  if (p.precioHora == null) return `<b class="precio-est-num">Pago</b><small>sin dato</small>`;
   if (p.verificado) return `<b>${CLP(p.precioHora)}</b><small>/hr</small>`;
   return `<b class="precio-est-num">~${CLP(p.precioHora)}</b><small>est.</small>`;
 }
@@ -303,6 +310,7 @@ function cambiarCiudad(nombre, mover = true) {
     if (map) { map.setView([z.lat, z.lng], 15); meMarker?.setLatLng([z.lat, z.lng]); }
   }
   DATA = [];                 // limpia mientras llega la ciudad nueva
+  comparar = []; actualizarBarraComparar();      // la comparación es por ciudad cargada
   $('#lista').innerHTML = skeletonHtml();        // feedback inmediato (no dejar las tarjetas viejas)
   $('#sheet-count').textContent = 'Cargando…';
   return cargar();           // trae los estacionamientos de esa ciudad (devuelve la promesa)
@@ -337,6 +345,9 @@ const LS = {
   // Recordatorios "Avísame": avisos locales para revisar un lugar a cierta hora.
   getRecs: () => { try { return JSON.parse(localStorage.getItem('estaciona_recs') || '[]'); } catch { return []; } },
   setRecs: (r) => lsSet('estaciona_recs', JSON.stringify(r)),
+  // Historial: estacionamientos pasados (se guarda al "Terminar" un auto).
+  getHist: () => { try { return JSON.parse(localStorage.getItem('estaciona_historial') || '[]'); } catch { return []; } },
+  setHist: (h) => lsSet('estaciona_historial', JSON.stringify(h)),
 };
 
 // --- Mapa -------------------------------------------------------------------
@@ -565,7 +576,7 @@ function initMap() {
 
 // Muestra/oculta el botón "Buscar en esta zona" según cuánto se alejó el centro.
 function onMapMove() {
-  if (!map) return;
+  if (!map || _reportando) return;   // en modo "reportar lugar" el centro es el pin, no ofrecemos "buscar aquí"
   const c = map.getCenter();
   const d = haversine({ lat: c.lat, lng: c.lng }, USER);
   const btn = $('#btn-zona');
@@ -633,7 +644,9 @@ function panselect(p) {
 function zOffset(p) {
   let z = (p.gratisAhora || p.precioHora === 0)
     ? 1500
-    : Math.max(0, 1200 - Math.min(p.precioHora, 1200));
+    : p.precioHora == null
+      ? 0                                              // pago sin dato: no lo priorizamos como si fuera barato
+      : Math.max(0, 1200 - Math.min(p.precioHora, 1200));
   if (p.id === selectedId) z += 5000;
   return Math.round(z);
 }
@@ -678,10 +691,12 @@ function listaFiltrada() {
       if (q && !(norm(p.nombre).includes(q) || norm(p.direccion).includes(q) || norm(p.ciudad).includes(q))) return false;
       // "Gratis" = gratis de verdad (no los "🛒 solo clientes", que solo lo son con compra).
       if (filtros.gratis && !(esGratisReal(p) || p.gratisAhora)) return false;
-      if (filtros.barato && !(p.precioHora < 1000)) return false;
+      if (filtros.barato && !(p.precioHora != null && p.precioHora < 1000)) return false;   // null = pago sin dato: no cuenta como "barato"
       if (filtros.techado && !p.atributos?.techado) return false;
       if (filtros.ev && !p.atributos?.ev) return false;
       if (filtros.accesible && !p.atributos?.accesible) return false;
+      if (filtros.camaras && !p.atributos?.camaras) return false;
+      if (filtros.verificado && !p.verificado) return false;   // solo precios confirmados
       if (filtros.abierto && !p.abierto) return false;
       if (filtros.soloPublicos && p.categoria) return false;   // oculta hospitales/colegios/etc.
       if (filtros.tipo !== 'todos' && p.tipo !== filtros.tipo) return false;
@@ -691,9 +706,13 @@ function listaFiltrada() {
     .sort((a, b) => {
       if (orden === 'precio') {
         // Precio efectivo: gratis (o gratis ahora) cuenta como 0. Empate → cercanía.
-        const pa = (a.gratisAhora || a.precioHora === 0) ? 0 : a.precioHora;
-        const pb = (b.gratisAhora || b.precioHora === 0) ? 0 : b.precioHora;
+        const pa = (a.gratisAhora || a.precioHora === 0) ? 0 : (a.precioHora == null ? Infinity : a.precioHora);
+        const pb = (b.gratisAhora || b.precioHora === 0) ? 0 : (b.precioHora == null ? Infinity : b.precioHora);
         if (pa !== pb) return pa - pb;
+      } else if (orden === 'disponible') {
+        // Mejor disponibilidad estimada primero (verde > amarillo > rojo > cerrado). Empate → cercanía.
+        const ra = NIVEL_RANK[a.disponibilidad.nivel] ?? 0, rb = NIVEL_RANK[b.disponibilidad.nivel] ?? 0;
+        if (ra !== rb) return rb - ra;
       }
       return a.dist - b.dist;
     });
@@ -702,7 +721,7 @@ function listaFiltrada() {
 // Cuenta filtros activos para el badge del botón ⚙️.
 function contarFiltros() {
   let n = 0;
-  for (const k of ['gratis', 'barato', 'techado', 'abierto', 'ev', 'accesible', 'soloPublicos']) if (filtros[k]) n++;
+  for (const k of ['gratis', 'barato', 'techado', 'abierto', 'ev', 'accesible', 'camaras', 'verificado', 'soloPublicos']) if (filtros[k]) n++;
   if (filtros.tipo !== 'todos') n++;
   if (filtros.distMax > 0) n++;
   return n;
@@ -749,7 +768,8 @@ function renderLista() {
       $('#lista').innerHTML = `<div class="empty-big">
         <span class="em">${ic('pin', 44)}</span>
         <div class="empty-tit">Aún no tenemos datos de ${esc(ciudadActual)}</div>
-        <p>Todavía no cargamos estacionamientos en esta ciudad. Vamos sumando zonas de a poco — prueba con otra ciudad desde el selector de arriba.</p>
+        <p>Todavía no cargamos estacionamientos en esta ciudad. Vamos sumando zonas de a poco — prueba con otra ciudad desde el selector de arriba, o agrega uno que conozcas.</p>
+        <button class="btn btn-primary" style="margin-top:14px" onclick="reportarLugar()">${ic('pinPlus', 16)} Agregar un estacionamiento</button>
       </div>`;
     }
     return;
@@ -791,7 +811,10 @@ function renderLista() {
             <button class="btn-reservar" onclick="event.stopPropagation();llevame('${p.id}')">${ic('compass', 16)} Cómo llegar</button>
             <button class="card-vermas" onclick="event.stopPropagation();avisarme('${p.id}')">${ic('clock', 15)} Avísame</button>
           </div>
-          <button class="card-detalle" onclick="event.stopPropagation();openDetalle('${p.id}')">Ver detalle completo</button>
+          <div class="card-bottom">
+            <button class="card-detalle" onclick="event.stopPropagation();openDetalle('${p.id}')">Ver detalle completo</button>
+            <button class="card-cmp${comparar.includes(p.id) ? ' on' : ''}" onclick="event.stopPropagation();toggleComparar('${p.id}')" aria-pressed="${comparar.includes(p.id) ? 'true' : 'false'}" title="Comparar este lugar" aria-label="Agregar a comparación">${ic('compare', 15)}</button>
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -838,6 +861,7 @@ function seleccionarCard(id, card) {
 function precioGrande(p) {
   if (p.gratisAhora || esGratisReal(p)) return `<b class="free">Gratis</b>`;
   if (esGratisClientes(p)) return `<b class="free-cli">${ic('cart', 13)} Solo clientes</b>`;
+  if (p.precioHora == null) return `<b>Pago</b><small>precio sin dato</small>`;
   return `<b>${p.verificado ? '' : '~'}${CLP(p.precioHora)}</b><small>por hora${p.verificado ? '' : ' · est.'}</small>`;
 }
 function abrirMapCard(id) {
@@ -877,6 +901,72 @@ window.cerrarMapCard = function () {
   if (el) { el.classList.remove('show'); el.hidden = true; }
 };
 
+// --- Comparar 2-3 estacionamientos lado a lado ------------------------------
+window.toggleComparar = (id) => {
+  const i = comparar.indexOf(id);
+  if (i >= 0) comparar.splice(i, 1);
+  else { if (comparar.length >= 3) { toast('Puedes comparar hasta 3 a la vez'); return; } comparar.push(id); }
+  renderLista();                 // refresca el estado "on" de los toggles
+  actualizarBarraComparar();
+};
+function actualizarBarraComparar() {
+  const bar = $('#comparar-bar');
+  if (!bar) return;
+  if (!comparar.length) { bar.classList.remove('show'); return; }
+  const c = bar.querySelector('.cmp-count');
+  if (c) c.textContent = `${comparar.length} seleccionado${comparar.length === 1 ? '' : 's'}`;
+  bar.classList.add('show');
+}
+window.limpiarComparar = () => { comparar = []; renderLista(); actualizarBarraComparar(); };
+// Texto de precio compacto para la tabla de comparación.
+function precioCmp(p) {
+  if (p.gratisAhora || esGratisReal(p)) return '<b class="free">Gratis</b>';
+  if (esGratisClientes(p)) return 'Solo clientes';
+  if (p.precioHora == null) return 'Pago <small>s/dato</small>';
+  return `${p.verificado ? '' : '~'}${CLP(p.precioHora)}`;
+}
+const _estadoTxt = (nivel) => nivel === 'cerrado' ? 'Cerrado' : nivel === 'verde' ? 'Disponible' : nivel === 'amarillo' ? 'Casi lleno' : 'Completo';
+window.abrirComparar = () => {
+  if (comparar.length < 2) { toast('Elige al menos 2 lugares para comparar'); return; }
+  const items = comparar.map((id) => DATA.find((p) => p.id === id)).filter(Boolean);
+  if (items.length < 2) { toast('Esos lugares ya no están disponibles'); return; }
+  const cols = items.length;
+  const filas = [
+    ['Precio/hr', items.map((p) => precioCmp(p))],
+    ['Disponible', items.map((p) => `<span class="badge-disp ${p.disponibilidad.nivel}">${_estadoTxt(p.disponibilidad.nivel)}</span>`)],
+    ['Ahora', items.map((p) => p.abierto ? '<b style="color:var(--green)">Abierto</b>' : '<b style="color:var(--red)">Cerrado</b>')],
+    ['Distancia', items.map((p) => `${Math.round(haversine(USER, p))} m`)],
+    ['Caminando', items.map((p) => `${walkMin(haversine(USER, p))} min`)],
+    ['En auto', items.map((p) => `${carMin(haversine(USER, p))} min`)],
+    ['Tipo', items.map((p) => p.tipo === 'calle' ? 'Calle' : 'Privado')],
+    ['Techado', items.map((p) => p.atributos?.techado ? 'Sí' : '—')],
+    ['Accesible', items.map((p) => p.atributos?.accesible ? 'Sí' : '—')],
+  ];
+  const gridCols = `92px repeat(${cols}, minmax(96px, 1fr))`;
+  $('#detalle').innerHTML = `
+    <div class="det-top">
+      <button onclick="cerrarDetalle()" title="Volver" aria-label="Volver">${ic('arrowLeft', 20)}</button>
+      <div class="t">${ic('compare', 18)} Comparar ${items.length}</div>
+      <span style="width:40px"></span>
+    </div>
+    <div class="det-body">
+      <div class="cmp-grid" style="grid-template-columns:${gridCols}">
+        <div class="cmp-corner"></div>
+        ${items.map((p) => `<div class="cmp-head">${esc(p.nombre)}</div>`).join('')}
+        ${filas.map(([lbl, celdas]) => `<div class="cmp-label">${lbl}</div>${celdas.map((c) => `<div class="cmp-cell">${c}</div>`).join('')}`).join('')}
+        <div class="cmp-label"></div>
+        ${items.map((p) => `<div class="cmp-cell"><button class="btn btn-primary cmp-go" onclick="llevame('${p.id}')" aria-label="Cómo llegar a ${esc(p.nombre)}">${ic('compass', 14)}</button></div>`).join('')}
+      </div>
+      <p class="disclaimer">${ic('bulb', 15)} Los precios son estimados salvo los confirmados. Disponibilidad = estimación por hora. Confírmalo en el lugar.</p>
+    </div>`;
+  detalleAbiertoId = null;                          // no es un detalle individual
+  cerrarMapCard();
+  const det = $('#detalle');
+  det.classList.add('open');
+  _focoPrevio = document.activeElement;
+  det.setAttribute('tabindex', '-1'); det.focus();
+};
+
 // --- Detalle ----------------------------------------------------------------
 function lineaDisponibilidad(p) {
   const d = p.disponibilidad, nivel = d.nivel;
@@ -904,6 +994,8 @@ function openDetalle(id) {
     ? 'Gratis para clientes (con compra)'
     : p.precioHora === 0
       ? 'Gratis'
+      : p.precioHora == null
+      ? 'Pago · precio sin dato — ¿lo sabes? Repórtalo abajo'
       : p.verificado
         ? (p.precioMin
             ? `${CLP(p.precioMin)} / min · equivale a ≈${CLP(p.precioHora)}/hora${p.fuente ? ` <span class="precio-fuente">fuente: ${esc(p.fuente)}</span>` : ''}`
@@ -921,6 +1013,7 @@ function openDetalle(id) {
     <div class="det-body">
       <div class="det-hero"><span class="hero-ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 30)}</span><span class="hero-nm">${esc(p.nombre)}</span></div>
       <div class="det-status" id="det-status-line">${lineaDisponibilidad(p)}</div>
+      ${p.reportado ? `<div class="aviso-com">${ic('users', 16)} Estacionamiento <b>aportado por la comunidad</b> — gracias por sumar. Si algo está mal, coméntalo abajo.</div>` : ''}
       ${p.categoria ? `<div class="aviso-cli">${catBadge(p)} Es un estacionamiento de <b>${esc(p.categoria.toLowerCase())}</b> — puede ser de uso restringido, no público general.</div>` : ''}
       <div class="det-row precio-row"><span class="k">${ic('wallet')}</span><span class="precio-val">${precioLinea}</span></div>
       ${esGratisClientes(p)
@@ -947,7 +1040,7 @@ function openDetalle(id) {
           <button class="vote-no" onclick="confirmarCupo('${p.id}',false)" aria-label="No había cupo">${ic('x', 16)} No</button>
         </span></div>
       ${p.votos ? `<div class="votos-info">${ic('users', 14)} Últimas 3 h: <b>${p.votos.up}</b> dijeron que había cupo · <b>${p.votos.down}</b> que no</div>` : ''}
-      <p class="disclaimer">${ic('bulb', 15)} ${p.verificado ? 'Precio confirmado.' : '<b>Precio estimado, sin verificar.</b> Es una referencia generada automáticamente — confirma la tarifa real en el lugar.'}</p>
+      <p class="disclaimer">${ic('bulb', 15)} ${p.verificado ? 'Precio confirmado.' : p.reportado ? '<b>Lugar aportado por la comunidad, sin verificar.</b> Confirma la tarifa y los datos en el lugar.' : '<b>Precio estimado, sin verificar.</b> Es una referencia generada automáticamente — confirma la tarifa real en el lugar.'}</p>
 
       <div class="fotos-sec">
         <h4>${ic('camera', 15)} Fotos de la gente</h4>
@@ -1259,9 +1352,8 @@ function refrescarDetalle() {
 
 // --- Llévame / Compartir ----------------------------------------------------
 let _rutaDest = null;
-window.llevame = (id) => {
-  const auto = LS.getAuto();
-  const p = DATA.find((x) => x.id === id) || LUGARES[id] || (auto && auto.id === id ? auto : null);
+// Abre el modal "¿con qué app te llevo?" para un destino con lat/lng/nombre.
+function abrirRuta(p) {
   if (!p) return;
   _rutaDest = p;
   $('#modal').innerHTML = `
@@ -1273,7 +1365,13 @@ window.llevame = (id) => {
       <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
     </div>`;
   abrirModal();
+}
+window.llevame = (id) => {
+  const auto = LS.getAuto();
+  abrirRuta(DATA.find((x) => x.id === id) || LUGARES[id] || (auto && auto.id === id ? auto : null));
 };
+// Cómo llegar a un episodio del historial (por índice en la lista guardada).
+window.llevameHist = (i) => abrirRuta(LS.getHist()[i]);
 window.irRuta = (app) => {
   const p = _rutaDest;
   if (!p) return;
@@ -1361,7 +1459,7 @@ window.guardarEstacione = () => {
     }
   }
   LS.setAuto({
-    id: p.id, nombre: p.nombre, direccion: p.direccion, lat: p.lat, lng: p.lng,
+    id: p.id, nombre: p.nombre, direccion: p.direccion, ciudad: p.ciudad, lat: p.lat, lng: p.lng,
     precioHora: p.precioHora, gratisInfo: p.gratisInfo, horario: p.horario, inicio: Date.now(),
     alarmaTs: min > 0 ? Date.now() + min * 60000 : null, alarmaSonó: false,
   });
@@ -1406,6 +1504,40 @@ function crearMiniMapa(a) {
   setTimeout(() => miniMap && miniMap.invalidateSize(), 60);
 }
 
+// Sección "Historial": estacionamientos pasados (volver fácil a los habituales).
+function fmtDur(ms) {
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60), mm = m % 60;
+  return mm ? `${h}h ${mm}min` : `${h}h`;
+}
+function historialHTML() {
+  const h = LS.getHist();
+  if (!h.length) return '';
+  return `<div class="hist-sec">
+    <div class="hist-head">
+      <h2 style="font-size:15px;margin:0">${ic('clock', 18)} Historial</h2>
+      <button class="hist-clear" onclick="limpiarHistorial()">${ic('x', 13)} Borrar</button>
+    </div>
+    ${h.map((e, i) => `
+      <div class="hist-item">
+        <span class="ic">${ic(e.tipo === 'calle' ? 'road' : 'car', 19)}</span>
+        <div class="hist-info">
+          <div class="nm">${esc(e.nombre)}</div>
+          <div class="sub">${fechaCorta(e.fin)} · ${fmtDur(e.dur)}${e.ciudad ? ' · ' + esc(e.ciudad) : ''}</div>
+        </div>
+        <div class="hist-right">
+          <div class="hist-costo">${e.precioHora == null ? '—' : !e.precioHora ? 'Gratis' : e.costo === 0 ? 'Gratis' : CLP(e.costo)}</div>
+          <button class="hist-go" onclick="llevameHist(${i})" title="Cómo llegar" aria-label="Cómo llegar a ${esc(e.nombre)}">${ic('compass', 15)}</button>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+window.limpiarHistorial = () => {
+  if (!confirm('¿Borrar todo el historial de estacionamientos?')) return;
+  lsRemove('estaciona_historial'); renderMiAuto(); toast('Historial borrado');
+};
+
 // Estructura de la vista (se construye al entrar o al cambiar el auto guardado).
 function renderMiAuto() {
   const a = LS.getAuto(), v = $('#view-miauto');
@@ -1416,7 +1548,7 @@ function renderMiAuto() {
       <div class="empty-tit">Aún no estás estacionado</div>
       <p>Cuando dejes el auto, abre un lugar y toca <b>"Estacioné aquí"</b>. Te guardo dónde quedó, con cronómetro y costo estimado.</p>
       <button class="btn btn-primary" style="margin-top:18px" onclick="irA('buscar')">${ic('search', 16)} Buscar dónde estacionar</button>
-    </div></div>`;
+    </div>${historialHTML()}</div>`;
     return;
   }
   v.innerHTML = `<div class="simple">
@@ -1451,7 +1583,7 @@ function renderMiAuto() {
       <button class="btn btn-primary" onclick="llevame('${a.id}')">${ic('compass', 17)} Volver a mi auto</button>
       <button class="btn btn-second" onclick="compartir('${a.id}')">${ic('share', 16)} Compartir ubicación</button>
       <button class="btn btn-ghost" onclick="terminarAuto()">${ic('check', 16)} Terminar</button>
-    </div></div>`;
+    </div>${historialHTML()}</div>`;
   crearMiniMapa(a);
   actualizarMiAutoVivo();             // rellena tiempo/costo/alarma/ETA
 }
@@ -1484,6 +1616,17 @@ function actualizarMiAutoVivo() {
 }
 window.terminarAuto = () => {
   if (!confirm('¿Terminar y olvidar dónde dejaste tu auto?')) return;   // acción sin retorno
+  const a = LS.getAuto();
+  if (a) {
+    // Guarda el episodio en el historial (para volver fácil a los habituales).
+    const h = LS.getHist();
+    h.unshift({
+      id: a.id, nombre: a.nombre, direccion: a.direccion, ciudad: a.ciudad || ciudadActual,
+      lat: a.lat, lng: a.lng, precioHora: a.precioHora, gratisInfo: a.gratisInfo, horario: a.horario,
+      inicio: a.inicio, fin: Date.now(), costo: costoTranscurrido(a), dur: Date.now() - a.inicio,
+    });
+    LS.setHist(h.slice(0, 30));   // tope 30 episodios
+  }
   LS.clearAuto(); renderMiAuto(); toast('¡Listo, buen viaje! 🚗');
 };
 
@@ -1691,6 +1834,136 @@ async function geocodificar(texto) {
 }
 window.buscarComoDireccion = () => geocodificar($('#search')?.value || query);
 
+// --- Reportar un lugar nuevo (crowdsource estilo Waze) ----------------------
+// Flujo: 1) el usuario mueve el mapa para apuntar el lugar con un crosshair;
+// 2) confirma la ubicación; 3) llena un formulario corto (nombre, tipo, pago/gratis);
+// 4) se envía y aparece en el mapa como aporte de la comunidad (sin verificar).
+let _reportando = false, _reportePos = null, _repTipo = 'privado', _repGratis = false;
+
+window.reportarLugar = () => {
+  if (!map) { toast('El mapa no está disponible para marcar el lugar'); return; }
+  irA('buscar');
+  cerrarModal(); cerrarMapCard(); if (detalleAbiertoId) cerrarDetalle();
+  _reportando = true;
+  $('#crosshair')?.removeAttribute('hidden');
+  $('#reportar-bar')?.classList.add('show');
+  $('#btn-zona')?.classList.remove('show');
+  toast('Mueve el mapa para apuntar el lugar exacto');
+  setTimeout(() => map && map.invalidateSize(), 60);
+};
+function salirModoReporte() {
+  _reportando = false;
+  $('#crosshair')?.setAttribute('hidden', '');
+  $('#reportar-bar')?.classList.remove('show');
+}
+window.cancelarReporte = () => salirModoReporte();
+window.confirmarUbicacionReporte = () => {
+  if (!map) return;
+  const c = map.getCenter();
+  _reportePos = { lat: c.lat, lng: c.lng };
+  salirModoReporte();
+  abrirFormularioReporte();
+};
+
+function abrirFormularioReporte() {
+  _repTipo = 'privado'; _repGratis = false;
+  $('#modal').innerHTML = `
+    <h3>${ic('pinPlus', 18)} Agregar estacionamiento</h3>
+    <p>Lo sumas a <b>${esc(ciudadActual)}</b>, en el punto que marcaste. Aparecerá en el mapa como aporte de la comunidad (sin verificar).</p>
+    <label class="rep-lbl" for="rep-nombre">Nombre del lugar</label>
+    <input id="rep-nombre" type="text" maxlength="80" placeholder="Ej: Estacionamiento Plaza Centro" aria-label="Nombre del lugar" />
+    <label class="rep-lbl">Tipo</label>
+    <div class="opts" id="rep-tipo" role="group" aria-label="Tipo de estacionamiento">
+      <button type="button" data-v="privado" class="on" aria-pressed="true">${ic('parking', 14)} Privado</button>
+      <button type="button" data-v="calle" aria-pressed="false">${ic('road', 14)} En la calle</button>
+    </div>
+    <label class="rep-lbl">¿Es pago o gratis?</label>
+    <div class="opts" id="rep-pago" role="group" aria-label="Pago o gratis">
+      <button type="button" data-v="pago" class="on" aria-pressed="true">${ic('wallet', 14)} Pago</button>
+      <button type="button" data-v="gratis" aria-pressed="false">${ic('tag', 14)} Gratis</button>
+    </div>
+    <div id="rep-precio-wrap">
+      <label class="rep-lbl" for="rep-precio">Precio aproximado <span class="rep-opt">(opcional)</span></label>
+      <div class="precio-field"><span class="precio-pesos">$</span>
+        <input id="rep-precio" type="number" inputmode="numeric" min="1" max="20000" placeholder="1000" aria-label="Precio por hora aproximado" />
+        <span class="precio-hora">/ hora</span></div>
+    </div>
+    <label class="rep-lbl" for="rep-dir">Dirección <span class="rep-opt">(opcional)</span></label>
+    <input id="rep-dir" type="text" maxlength="120" placeholder="Calle y número…" aria-label="Dirección" />
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
+      <button class="btn btn-primary" onclick="enviarLugar()">Agregar al mapa</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
+  // Selector de tipo (uno solo activo).
+  $('#rep-tipo').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    $('#rep-tipo').querySelectorAll('button').forEach((x) => { x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); });
+    b.classList.add('on'); b.setAttribute('aria-pressed', 'true'); _repTipo = b.dataset.v;
+  }));
+  // Pago / gratis (oculta el campo de precio si es gratis).
+  $('#rep-pago').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    $('#rep-pago').querySelectorAll('button').forEach((x) => { x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); });
+    b.classList.add('on'); b.setAttribute('aria-pressed', 'true'); _repGratis = b.dataset.v === 'gratis';
+    const w = $('#rep-precio-wrap'); if (w) w.style.display = _repGratis ? 'none' : '';
+  }));
+  abrirModal();
+  setTimeout(() => $('#rep-nombre')?.focus(), 60);
+  prefillDireccionReporte();   // mejor esfuerzo: sugiere la dirección del punto marcado
+}
+
+// Rellena la dirección con geocodificación inversa (Nominatim), si responde.
+async function prefillDireccionReporte() {
+  if (!_reportePos) return;
+  try {
+    const u = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${_reportePos.lat}&lon=${_reportePos.lng}&accept-language=es&zoom=18`;
+    const r = await fetch(u, { headers: { 'Accept': 'application/json' } });
+    const j = await r.json();
+    const inp = $('#rep-dir');
+    if (inp && !inp.value && j && j.display_name) inp.value = j.display_name.split(',').slice(0, 2).join(',').trim();
+  } catch { /* sin dirección sugerida: el usuario la escribe o se deja vacía */ }
+}
+
+window.enviarLugar = async () => {
+  const nombre = ($('#rep-nombre')?.value || '').trim();
+  if (nombre.length < 2) { toast('Ponle un nombre al lugar'); $('#rep-nombre')?.focus(); return; }
+  if (!_reportePos) { toast('Falta marcar la ubicación'); return; }
+  let precioHora = null;
+  const precioRaw = $('#rep-precio')?.value;
+  if (!_repGratis && precioRaw) {
+    const v = Math.round(Number(precioRaw));
+    if (Number.isFinite(v) && v > 0) {
+      if (v > 20000) { toast('Ese precio parece muy alto (máx $20.000/hr)'); return; }
+      precioHora = v;
+    }
+  }
+  const direccion = ($('#rep-dir')?.value || '').trim();
+  const body = { nombre, lat: _reportePos.lat, lng: _reportePos.lng, ciudad: ciudadActual, tipo: _repTipo, gratis: _repGratis, precioHora, direccion };
+  // Bloquea los botones del modal mientras envía (evita doble envío en redes lentas).
+  const btns = [...($('#modal')?.querySelectorAll('button') || [])];
+  const primary = $('#modal')?.querySelector('.btn-primary');
+  const txtPrev = primary?.textContent;
+  btns.forEach((b) => (b.disabled = true));
+  if (primary) primary.textContent = 'Agregando…';
+  const rehabilitar = () => { btns.forEach((b) => (b.disabled = false)); if (primary && txtPrev) primary.textContent = txtPrev; };
+  try {
+    const r = await fetch('/api/lugar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (j.ok) {
+      cerrarModal(); toast('¡Gracias! Lo agregamos al mapa 📍');
+      _reportePos = null;
+      await cargar();
+      if (j.id && DATA.some((p) => p.id === j.id)) openDetalle(j.id);   // abre el lugar recién creado
+    } else {
+      const msg = {
+        ciudad: 'No pude ubicar la ciudad', nombre: 'Ponle un nombre válido',
+        ubicacion: 'Esa ubicación está fuera de Chile', duplicado: 'Ese lugar ya está reportado aquí',
+        rate: 'Demasiados reportes seguidos — espera un momento',
+      }[j.error] || 'No se pudo agregar el lugar';
+      toast(msg);
+      rehabilitar();
+    }
+  } catch { toast('Sin conexión'); rehabilitar(); }
+};
+
 // --- Panel de filtros -------------------------------------------------------
 // Formato del rótulo de distancia: metros bajo 1 km, km (es-CL) sobre 1 km.
 function distLabel(m) {
@@ -1730,6 +2003,7 @@ function abrirFiltros() {
         <button type="button" data-k="techado" class="${chip(f.techado)}" aria-pressed="${press(f.techado)}">${ic('home', 14)} Techado</button>
         <button type="button" data-k="ev" class="${chip(f.ev)}" aria-pressed="${press(f.ev)}">${ic('zap', 14)} Cargador EV</button>
         <button type="button" data-k="accesible" class="${chip(f.accesible)}" aria-pressed="${press(f.accesible)}">${ic('access', 14)} Accesible</button>
+        <button type="button" data-k="camaras" class="${chip(f.camaras)}" aria-pressed="${press(f.camaras)}">${ic('camera', 14)} Cámaras</button>
       </div>
     </div>
 
@@ -1738,8 +2012,9 @@ function abrirFiltros() {
       <div class="opts" id="f-otros" role="group" aria-labelledby="f-otros-lbl">
         <button type="button" data-k="abierto" class="${chip(f.abierto)}" aria-pressed="${press(f.abierto)}">${ic('clock', 14)} Abierto ahora</button>
         <button type="button" data-k="soloPublicos" class="${chip(f.soloPublicos)}" aria-pressed="${press(f.soloPublicos)}">${ic('check', 14)} Solo públicos</button>
+        <button type="button" data-k="verificado" class="${chip(f.verificado)}" aria-pressed="${press(f.verificado)}">${ic('bulb', 14)} Precio confirmado</button>
       </div>
-      <p class="f-hint">"Solo públicos" oculta hospitales, colegios y otros de uso restringido.</p>
+      <p class="f-hint">"Solo públicos" oculta hospitales, colegios y otros de uso restringido. "Precio confirmado" muestra solo tarifas verificadas.</p>
     </div>
 
     <div class="f-group">
@@ -1775,7 +2050,7 @@ function abrirFiltros() {
 }
 window.aplicarFiltros = () => { _onCerrarModal = null; cerrarModal(); syncChips(); actualizarBadgeFiltros(); renderLista(); };
 window.limpiarFiltros = () => {
-  filtros = { gratis: false, barato: false, techado: false, abierto: false, ev: false, accesible: false, soloPublicos: false, tipo: 'todos', distMax: 0 };
+  filtros = { gratis: false, barato: false, techado: false, abierto: false, ev: false, accesible: false, camaras: false, verificado: false, soloPublicos: false, tipo: 'todos', distMax: 0 };
   _onCerrarModal = null;   // ya aplicamos el "limpiar": no revertir al cerrar
   cerrarModal(); syncChips(); actualizarBadgeFiltros(); renderLista(); toast('Filtros limpiados');
 };
@@ -1841,6 +2116,8 @@ document.addEventListener('keydown', (e) => {
 // --- Navegación entre vistas ------------------------------------------------
 function irA(view) {
   cerrarMapCard();                              // oculta la card flotante del mapa al cambiar de vista
+  if (view !== 'buscar') { if (_reportando) salirModoReporte(); $('#comparar-bar')?.classList.remove('show'); }
+  else actualizarBarraComparar();              // al volver al mapa, restaura la barra si hay selección
   if (view !== 'miauto') destruirMiniMapa();   // libera el mini-mapa al salir
   // GPS solo mientras miras el mapa: lo pausa al salir y lo reanuda al volver (si ya estaba activo).
   if (view === 'buscar') { if (userReal) iniciarSeguimiento(); } else { detenerSeguimiento(); }
@@ -2095,6 +2372,8 @@ async function init() {
   $('#chips').querySelectorAll('.chip').forEach((c) =>
     c.addEventListener('click', () => { const f = c.dataset.f; filtros[f] = !filtros[f]; c.classList.toggle('on', filtros[f]); c.setAttribute('aria-pressed', filtros[f] ? 'true' : 'false'); actualizarBadgeFiltros(); renderLista(); }));
   $('#btn-filtros').addEventListener('click', abrirFiltros);
+  // Botón "Agregar lugar" (crowdsource): entra al modo de marcar ubicación.
+  $('#btn-reportar')?.addEventListener('click', () => window.reportarLugar());
   // Cerrar cualquier modal tocando el fondo oscuro (no el contenido del modal).
   $('#modal-bg').addEventListener('click', (e) => { if (e.target.id === 'modal-bg') cerrarModal(); });
   actualizarBadgeFiltros();

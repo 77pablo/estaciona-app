@@ -13,11 +13,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
-import { getEstacionamientos } from './engine.js';
+import { snapshotCiudad, shapeFichas } from './engine.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
 import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto } from './fotos.js';
+import { registrarLugar, lugaresDe, lugaresRecientes, eliminarLugar, contarLugares } from './lugares.js';
 import { revisarFoto } from './modera-foto.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -68,6 +69,20 @@ function sendJSON(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+// Rate-limit simple en memoria por IP (ventana deslizante). Defensa anti-spam del
+// endpoint que escribe al mapa público (reportar lugar). No es a prueba de balas
+// (la moderación en /admin es la última línea), pero frena floods accidentales/básicos.
+const _ipHits = new Map();
+function rateLimit(req, max, ventanaMs) {
+  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'x';
+  const ahora = Date.now();
+  const arr = (_ipHits.get(ip) || []).filter((t) => ahora - t < ventanaMs);
+  arr.push(ahora);
+  _ipHits.set(ip, arr);
+  if (_ipHits.size > 5000) for (const [k, v] of _ipHits) if (!v.some((t) => ahora - t < ventanaMs)) _ipHits.delete(k);   // poda entradas viejas
+  return arr.length <= max;
+}
+
 // Rutas "bonitas": la landing es la portada (/), la app vive en /app.
 const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html' };
 
@@ -108,7 +123,9 @@ const server = http.createServer(async (req, res) => {
       // Nacional: se devuelve SOLO la ciudad pedida (o Temuco por defecto), para
       // no enviar miles de registros. Las zonas (ligeras) van siempre.
       const ciudad = url.searchParams.get('ciudad') || CENTRO.nombre;
-      const lista = getEstacionamientos().filter((e) => e.ciudad === ciudad);
+      const base = snapshotCiudad(ciudad);                       // solo esa ciudad (filtra antes de dar forma)
+      const reportados = shapeFichas(await lugaresDe(ciudad));   // lugares aportados por la gente
+      const lista = [...base, ...reportados];
       const tally = await tallyReciente(3);            // votos de las últimas 3 h
       const com = await resumenAportes();              // precios/comentarios de la gente
       for (const e of lista) {
@@ -161,7 +178,9 @@ const server = http.createServer(async (req, res) => {
         comentarios: await comentariosRecientes(),
         fotos: await fotosRecientes(),
         precios: await preciosReportados(),
+        lugares: await lugaresRecientes(),
         nVotos: await contarVotos(),
+        nLugares: await contarLugares(),
       });
     }
     if (url.pathname === '/api/mod/borrar' && req.method === 'POST') {
@@ -175,6 +194,7 @@ const server = http.createServer(async (req, res) => {
           let ok = false;
           if (tipo === 'comentario') ok = (await eliminarAporte(id, ts)) > 0;
           else if (tipo === 'foto') ok = await eliminarFoto(id, file);
+          else if (tipo === 'lugar') ok = await eliminarLugar(id);
           sendJSON(res, ok ? 200 : 400, { ok });
         } catch { sendJSON(res, 400, { ok: false }); }
       });
@@ -190,6 +210,21 @@ const server = http.createServer(async (req, res) => {
           await registrarVoto(id, ok);
           sendJSON(res, 200, { ok: true });
         } catch { sendJSON(res, 400, { error: 'json inválido' }); }
+      });
+      return;
+    }
+    if (url.pathname === '/api/lugar' && req.method === 'POST') {
+      // Reportar un estacionamiento que falta (crowdsource estilo Waze).
+      const okRate = rateLimit(req, 12, 600000);   // máx 12 reportes / 10 min por IP
+      let body = '', tooBig = false;
+      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 4000) tooBig = true; });
+      req.on('end', async () => {
+        if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+        if (tooBig) return sendJSON(res, 413, { ok: false, error: 'cuerpo demasiado grande' });
+        try {
+          const r = await registrarLugar(JSON.parse(body || '{}'));
+          sendJSON(res, r.ok ? 200 : 400, r);
+        } catch { sendJSON(res, 400, { ok: false, error: 'json inválido' }); }
       });
       return;
     }
@@ -222,5 +257,6 @@ server.listen(PORT, () => {
   console.log(`   · votos   → ${persist('VOTOS_PATH')}`);
   console.log(`   · aportes → ${persist('APORTES_PATH')}`);
   console.log(`   · fotos   → ${persist('FOTOS_DIR')}`);
+  console.log(`   · lugares → ${persist('LUGARES_PATH')}`);
   console.log('');
 });

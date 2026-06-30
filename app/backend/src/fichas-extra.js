@@ -210,4 +210,113 @@ export const FICHAS_EXTRA = [
     gratis: null, horario: '24h', verificado: true, fuente: 'mallplaza.com (tarifario 2025)',
     atributos: { techado: true, ev: false, accesible: true, camaras: true },
   },
+
+  // ── Aeropuertos (tarifa oficial del operador/aeropuerto, 2025-2026). Categoría
+  // ── "Terminal" (no son parking público general). Los aeropuertos no están en el
+  // ── dataset OSM. Se asignan a la ciudad principal que sirven (puede quedar lejos
+  // ── del centro). Cobro por minuto; primeros ~10 min liberados. ──
+  {
+    id: 'x-aero-temuco', tipo: 'privado', ciudad: 'Temuco', region: 'La Araucanía',
+    categoria: 'Terminal', nombre: 'Aeropuerto La Araucanía (estacionamiento)', direccion: 'Aeropuerto La Araucanía, Freire',
+    lat: -38.926, lng: -72.651, precioMin: 34, precioHora: 2040, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'aeropuertoaraucania.cl (máx $12.200/día)',
+    atributos: { techado: false, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-aero-concepcion', tipo: 'privado', ciudad: 'Concepción', region: 'Biobío',
+    categoria: 'Terminal', nombre: 'Aeropuerto Carriel Sur (estacionamiento)', direccion: 'Aeropuerto Carriel Sur, Talcahuano',
+    lat: -36.7727, lng: -73.0631, precioMin: 39, precioHora: 2340, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'aeropuertocarrielsur.cl (máx $14.000/día, feb-2026)',
+    atributos: { techado: false, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-aero-iquique', tipo: 'privado', ciudad: 'Iquique', region: 'Tarapacá',
+    categoria: 'Terminal', nombre: 'Aeropuerto Diego Aracena (estacionamiento)', direccion: 'Aeropuerto Diego Aracena, Iquique',
+    lat: -20.5352, lng: -70.1813, precioMin: 43, precioHora: 2580, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'aeropuertodiegoaracena.cl (máx $15.400/día)',
+    atributos: { techado: false, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-aero-laserena', tipo: 'privado', ciudad: 'La Serena', region: 'Coquimbo',
+    categoria: 'Terminal', nombre: 'Aeropuerto La Florida (estacionamiento)', direccion: 'Aeropuerto La Florida, La Serena',
+    lat: -29.9162, lng: -71.1995, precioMin: 73, precioHora: 4380, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'aeropuertolaserena.cl (máx $26.280/día)',
+    atributos: { techado: false, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-aero-calama', tipo: 'privado', ciudad: 'Calama', region: 'Antofagasta',
+    categoria: 'Terminal', nombre: 'Aeropuerto El Loa (estacionamiento)', direccion: 'Aeropuerto El Loa, Calama',
+    lat: -22.4982, lng: -68.9036, precioMin: 51, precioHora: 3060, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'aeropuertoelloa.cl (tope ~6 h/día)',
+    atributos: { techado: false, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-aero-arica', tipo: 'privado', ciudad: 'Arica', region: 'Arica y Parinacota',
+    categoria: 'Terminal', nombre: 'Aeropuerto Chacalluta (estacionamiento)', direccion: 'Aeropuerto Chacalluta, Arica',
+    lat: -18.3485, lng: -70.3387, precioMin: 35, precioHora: 2100, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'aeropuertoarica.cl (6-24 h $12.600)',
+    atributos: { techado: false, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-aero-santiago-exp', tipo: 'privado', ciudad: 'Pudahuel', region: 'Metropolitana',
+    categoria: 'Terminal', nombre: 'Aeropuerto Santiago — Express (cercano)', direccion: 'Aeropuerto A. Merino Benítez, Pudahuel',
+    lat: -33.3928, lng: -70.7858, precioMin: null, precioHora: 2970, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'nuevopudahuel.cl ($1.485/30min · máx $29.700/día)',
+    atributos: { techado: false, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-aero-santiago-eco', tipo: 'privado', ciudad: 'Pudahuel', region: 'Metropolitana',
+    categoria: 'Terminal', nombre: 'Aeropuerto Santiago — Patagua/Pehuén (económico)', direccion: 'Aeropuerto A. Merino Benítez, Pudahuel',
+    lat: -33.3922, lng: -70.7864, precioMin: null, precioHora: 1288, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'nuevopudahuel.cl ($644/30min · máx $12.900/día)',
+    atributos: { techado: false, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-aero-puertomontt', tipo: 'privado', ciudad: 'Puerto Montt', region: 'Los Lagos',
+    categoria: 'Terminal', nombre: 'Aeropuerto El Tepual (estacionamiento)', direccion: 'Aeropuerto El Tepual, Puerto Montt',
+    lat: -41.4389, lng: -73.0940, precioMin: 50, precioHora: 3000, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'aeropuertodepuertomontt.cl (máx $16.560/día, mar-2026)',
+    atributos: { techado: false, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-aero-antofagasta', tipo: 'privado', ciudad: 'Antofagasta', region: 'Antofagasta',
+    categoria: 'Terminal', nombre: 'Aeropuerto Andrés Sabella (estacionamiento)', direccion: 'Aeropuerto Andrés Sabella, Antofagasta',
+    lat: -23.4456, lng: -70.4451, precioMin: 41, precioHora: 2460, fraccion: null,
+    gratis: null, horario: '07:30–21:30', verificado: true, fuente: 'aeropuertoandressabella.cl (máx $14.760/día)',
+    atributos: { techado: false, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-aero-copiapo', tipo: 'privado', ciudad: 'Copiapó', region: 'Atacama',
+    categoria: 'Terminal', nombre: 'Aeropuerto Desierto de Atacama (estacionamiento)', direccion: 'Aeropuerto Desierto de Atacama, Caldera',
+    lat: -27.2617, lng: -70.7792, precioMin: 41, precioHora: 2460, fraccion: null,
+    gratis: null, horario: '07:30–21:30', verificado: true, fuente: 'aeropuertodesiertodeatacama.cl (máx $14.760/día)',
+    atributos: { techado: false, ev: false, accesible: true, camaras: true },
+  },
+
+  // ── Recintos privados de Santiago Centro (fuente oficial del operador) ──
+  {
+    id: 'x-stgo-gam', tipo: 'privado', ciudad: 'Santiago', region: 'Metropolitana',
+    categoria: null, nombre: 'Estacionamiento GAM (Centro Gabriela Mistral)', direccion: 'Acceso por Villavicencio 354, Santiago',
+    lat: -33.43847, lng: -70.63743, precioMin: 30, precioHora: 1800, fraccion: null,
+    gratis: null, horario: '07:00–00:00', verificado: true, fuente: 'gam.cl (máx $12.600/24h; 1ª hora gratis con ticket de evento)',
+    atributos: { techado: true, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-stgo-sanfrancisco75', tipo: 'privado', ciudad: 'Santiago', region: 'Metropolitana',
+    categoria: null, nombre: 'Estacionamiento San Francisco 75', direccion: 'San Francisco 75, Santiago',
+    lat: -33.44000, lng: -70.64450, precioMin: 50, precioHora: 3000, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'sanfrancisco75.cl (máx $15.000/día)',
+    atributos: { techado: true, ev: false, accesible: false, camaras: true },
+  },
+
+  // ── Parquímetro municipal de calle (concesión vigente 2025-2026). Coords = sector
+  // ── central. El PRECIO es el verificado; horario/gratis aproximan la ventana de cobro. ──
+  {
+    id: 'x-vinadelmar-calle', tipo: 'calle', ciudad: 'Viña del Mar', region: 'Valparaíso',
+    categoria: null, nombre: 'Parquímetros centro (Estero Marga Marga)', direccion: 'Centro de Viña del Mar',
+    lat: -33.0245, lng: -71.5518, precioMin: 33, precioHora: 1980, fraccion: null,
+    gratis: '21:00–08:00 y domingos', horario: 'Parquímetro 08:00–21:00', demandaBase: 0.78,
+    verificado: true, fuente: 'munivina.cl (Cuerpo de Bomberos Viña, 2025)',
+    atributos: { techado: false, ev: false, accesible: false, camaras: false },
+  },
 ];

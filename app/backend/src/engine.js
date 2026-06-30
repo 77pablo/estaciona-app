@@ -126,11 +126,12 @@ function nowChile() {
   return { hora, dia };
 }
 
-// Devuelve el snapshot que consume el frontend.
-export function getEstacionamientos() {
+// Da forma al snapshot que consume el frontend para un conjunto de fichas
+// (el dataset base o lugares reportados por la gente — mismo shape).
+export function shapeFichas(fichas) {
   const { hora, dia } = nowChile();
 
-  return FICHAS.map((e) => {
+  return fichas.map((e) => {
     const abierto = abiertoAhora(e, hora);
     const gratis = gratisAhora(e, hora, dia);
     const base = {
@@ -138,6 +139,7 @@ export function getEstacionamientos() {
       lat: e.lat, lng: e.lng, precioHora: e.precioHora, precioMin: e.precioMin, fraccion: e.fraccion,
       gratisInfo: e.gratis, gratisAhora: gratis, horario: e.horario,
       abierto, verificado: e.verificado, fuente: e.fuente, atributos: e.atributos,
+      reportado: e.reportado || false,   // true = aportado por la comunidad (sin verificar)
     };
 
     {
@@ -153,4 +155,15 @@ export function getEstacionamientos() {
       };
     }
   });
+}
+
+// Snapshot del dataset completo (compat; el servidor usa snapshotCiudad).
+export function getEstacionamientos() {
+  return shapeFichas(FICHAS);
+}
+
+// Snapshot solo de una ciudad: filtra ANTES de dar forma (no recorre las ~1700
+// fichas nacionales en cada request).
+export function snapshotCiudad(ciudad) {
+  return shapeFichas(FICHAS.filter((e) => e.ciudad === ciudad));
 }

@@ -393,7 +393,7 @@ main, .view { flex: 1; min-height: 0; }
 /* Overlay de detalle */
 .overlay {
   position: absolute; inset: 0; background: var(--bg); background-image: var(--grain);
-  z-index: 50; transform: translateY(100%); transition: transform .3s cubic-bezier(.2,.7,.2,1);
+  z-index: 58; transform: translateY(100%); transition: transform .3s cubic-bezier(.2,.7,.2,1);   /* sobre la barra de comparar (55), bajo modales/mapcard (60) */
   overflow-y: auto; display: flex; flex-direction: column;
 }
 .overlay.open { transform: translateY(0); }
@@ -896,3 +896,113 @@ main, .view { flex: 1; min-height: 0; }
   /* Bienvenida (onboarding): mismo respeto al notch en pantallas muy chicas. */
   .onboard { padding: 16px; }
 }
+
+/* ── Reportar lugar nuevo (crowdsource estilo Waze) ───────────────────────── */
+/* Chip de acción "Agregar lugar" (en la fila de chips; NO es un filtro). */
+.chip-add {
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; cursor: pointer;
+  border: 1px dashed var(--accent); background: transparent; color: var(--accent);
+  padding: 7px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+  font-family: var(--font-ui); flex-shrink: 0;
+}
+.chip-add:hover { background: var(--green-bg); }
+.chip-add .ic-svg { color: var(--accent); }
+
+/* Mira central: marca el centro exacto del mapa (= map.getCenter()). */
+.crosshair {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -100%);
+  z-index: 800; pointer-events: none; color: var(--accent);
+  filter: drop-shadow(0 2px 5px rgba(0,0,0,.7));
+}
+.crosshair[hidden] { display: none; }
+.crosshair svg { width: 40px; height: 40px; }
+
+/* Barra de confirmación del modo "reportar" (flota sobre el mapa). */
+.reportar-bar {
+  position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
+  z-index: 1000; display: none; flex-direction: column; gap: 10px;
+  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-lg);
+  padding: 12px 14px; box-shadow: var(--shadow); width: min(330px, calc(100% - 28px)); text-align: center;
+}
+.reportar-bar.show { display: flex; }
+.rep-bar-txt { font-size: 13px; color: var(--text); font-weight: 600; line-height: 1.35; }
+.rep-bar-btns { display: flex; gap: 8px; }
+.rep-bar-btns .btn { flex: 1; padding: 11px; font-size: 14px; }
+
+/* Formulario de reporte (dentro del modal): etiquetas y marca "(opcional)". */
+.rep-lbl { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin: 14px 0 6px; }
+.rep-lbl:first-of-type { margin-top: 4px; }
+.rep-opt { font-weight: 500; color: var(--muted); opacity: .8; }
+#rep-precio-wrap { margin-top: 2px; }
+
+/* Aviso "aportado por la comunidad" (mismo molde que .aviso-cli, pero teal). */
+.aviso-com {
+  background: var(--green-bg); border: 1px solid rgba(45,212,191,.3); color: var(--accent);
+  border-radius: var(--r); padding: 12px 14px; margin: 12px 0; font-size: 13px; line-height: 1.45;
+}
+.aviso-com b { color: var(--accent); }
+
+/* ── Historial de estacionamientos (vista Mi auto) ────────────────────────── */
+.hist-sec { margin-top: 22px; }
+.hist-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.hist-clear {
+  display: inline-flex; align-items: center; gap: 4px; background: transparent; border: none;
+  color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font-ui); padding: 4px 6px;
+}
+.hist-clear:hover { color: var(--red); }
+.hist-item {
+  display: flex; align-items: center; gap: 12px; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: var(--r); padding: 11px 13px; margin-bottom: 8px;
+}
+.hist-item .ic { color: var(--muted); flex-shrink: 0; }
+.hist-info { flex: 1; min-width: 0; }
+.hist-info .nm { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist-info .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.hist-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.hist-costo { font-family: var(--font-mono); font-weight: 600; font-size: 14px; color: var(--text); }
+.hist-go {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-2); cursor: pointer;
+  background: transparent; color: var(--accent); display: flex; align-items: center; justify-content: center;
+}
+.hist-go:hover { background: var(--green-bg); border-color: var(--accent); }
+
+/* ── Comparar 2-3 estacionamientos ────────────────────────────────────────── */
+/* Fila inferior de la tarjeta expandida: "Ver detalle" + toggle comparar. */
+.card-bottom { display: flex; gap: 10px; margin-top: 10px; }
+.card-bottom .card-detalle { margin-top: 0; width: auto; flex: 1; }
+.card-cmp {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 46px; background: transparent; border: 1px solid var(--line-2); color: var(--muted);
+  border-radius: var(--r-lg); cursor: pointer; font-family: var(--font-ui);
+}
+.card-cmp:hover { color: var(--text); border-color: var(--accent); }
+.card-cmp.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.card-cmp.on .ic-svg { color: var(--on-accent); }
+
+/* Barra flotante de comparación (sobre la bottomnav). */
+.comparar-bar {
+  position: absolute; left: 14px; right: 14px; bottom: 74px; z-index: 55;
+  display: none; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-lg);
+  padding: 10px 12px 10px 16px; box-shadow: var(--shadow);
+}
+.comparar-bar.show { display: flex; animation: cardExpand .2s ease; }
+.comparar-bar .cmp-count { font-weight: 700; font-size: 13.5px; color: var(--text); }
+.cmp-bar-btns { display: flex; align-items: center; gap: 8px; }
+.cmp-bar-clear {
+  width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line-2);
+  background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.cmp-bar-clear:hover { color: var(--red); border-color: var(--red); }
+.cmp-bar-go { width: auto; padding: 10px 16px; font-size: 14px; }
+
+/* Tabla de comparación (en el overlay de detalle). */
+.cmp-grid { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin: 6px 0 4px; }
+.cmp-corner { background: var(--surface); }
+.cmp-head { background: var(--surface); padding: 12px 10px; font-weight: 800; font-size: 13px; line-height: 1.25; }
+.cmp-label { background: var(--surface); padding: 11px 10px; font-size: 12px; color: var(--muted); font-weight: 600; display: flex; align-items: center; }
+.cmp-cell { background: var(--surface-2); padding: 11px 10px; font-size: 13.5px; font-family: var(--font-mono); display: flex; align-items: center; }
+.cmp-cell .badge-disp { font-family: var(--font-ui); }
+.cmp-cell .free { color: var(--accent); }
+.cmp-cell small { color: var(--muted); font-size: 10px; margin-left: 3px; }
+.cmp-go { width: 100%; padding: 8px; }

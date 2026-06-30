@@ -87,6 +87,17 @@ export const PRECIOS_REALES = [
   { id: 'antofagasta-12',    precioMin: 28, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Antofagasta (2)
   { id: 'calama-3',          precioMin: 23, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Calama
   { id: 'los-angeles-23',    precioMin: 27, horario: '24h', fuente: 'mallplaza.com (tarifario 2025)' }, // Mallplaza Los Ángeles
+
+  // ── Cenco Malls / Portal (fuente oficial cencomalls.cl, cobro 07:00–21:00, 15 min gracia) ──
+  { id: 'lo-barnechea-30', precioMin: 21, horario: '07:00–21:00', fuente: 'cencomalls.cl (Portal La Dehesa)' }, // Portal de La Dehesa
+  { id: 'lo-barnechea-31', precioMin: 21, horario: '07:00–21:00', fuente: 'cencomalls.cl (Portal La Dehesa)' }, // Portal de La Dehesa (2)
+  { id: 'nunoa-3',         precioMin: 15, horario: '07:00–21:00', fuente: 'cencomalls.cl (Cenco Ñuñoa)' },      // Mall Cenco Ñuñoa
+
+  // ── Otros (centro) ──
+  // Plaza Prat (subterráneo, centro de Iquique) — operado por Cuerpo de Bomberos.
+  // Día $25/min (08:00–20:00), noche $15/min (20:00–08:00). Bomberos no publica
+  // tarifa en línea; cifras confirmadas por prensa local (Vilas Radio, 2024).
+  { id: 'iquique-1', precioMin: 25, horario: '24h', fuente: 'prensa local (Bomberos Iquique): $25/min día, $15/min noche' }, // Plaza Prat
 ];
 
 // Devuelve un mapa id -> override, con precioHora derivado de precioMin si falta.
