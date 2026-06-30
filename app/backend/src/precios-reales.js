@@ -26,17 +26,20 @@ export const PRECIOS_REALES = [
   { id: 'santiago-34',    precioMin: 57, fuente: 'autopase.cl (Saba)' }, // Paseo Bulnes
   { id: 'valparaiso-1',   precioMin: 57, fuente: 'autopase.cl (Saba)' }, // Bellavista Saba
 
-  // ── Temuco (por confirmar en terreno) ──
-  // Ejemplo simple:   { id: "temuco-1", precioHora: 1200, fuente: "en terreno" },  // Portal Temuco
-  // Ejemplo completo (todos los campos opcionales que puedes confirmar):
-  //   {
-  //     id: "temuco-1",
-  //     precioHora: 1200,            // precio por hora en pesos (o usa precioMin)
-  //     horario: "08:00–22:00",      // horario real (usa guion largo "–")
-  //     gratis: "primeros 15 min",   // texto si hay tramo/condición gratis
-  //     capacidad: 350,              // n.º de plazas, si lo sabes
-  //     fuente: "en terreno",        // de dónde salió el dato (web, cartel, etc.)
-  //   },
+  // ── Temuco ──
+  // Portal Temuco (Cenco Temuco, operador Cenco Malls): $20/min. OJO: es la tarifa
+  // PROMOCIONAL del 1er año; la base es $25/min y sube ~nov-2026 (revisar entonces).
+  // Cobro 07:00–21:00 (fuera de ese tramo no se cobra). Fuente: cencomalls.cl + prensa (nov-2025).
+  { id: 'temuco-1', precioMin: 20, horario: '07:00–21:00', fuente: 'cencomalls.cl (Cenco Temuco, nov-2025; promo 1er año)' }, // Portal Temuco
+
+  // Calles del centro con cobro vía app Parksur: $30/min (vía pública, Ley 20.967).
+  // L-V 08:30–20:00 (Sáb 09:00–14:00 no se modela); gratis de noche y domingos.
+  // Fuente: parksur.cl. NOTA: tarifa de la app Parksur para vía pública en Temuco;
+  // el operador exacto por calle puede variar (parquímetro municipal vs Parksur).
+  { id: 'temuco-calle-1', precioMin: 30, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30 y domingos', fuente: 'parksur.cl (app vía pública Temuco)' }, // Arturo Prat
+  { id: 'temuco-calle-2', precioMin: 30, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30 y domingos', fuente: 'parksur.cl (app vía pública Temuco)' }, // Claro Solar
+  { id: 'temuco-calle-3', precioMin: 30, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30 y domingos', fuente: 'parksur.cl (app vía pública Temuco)' }, // Vicuña Mackenna
+  { id: 'temuco-calle-4', precioMin: 30, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30 y domingos', fuente: 'parksur.cl (app vía pública Temuco)' }, // Antonio Varas
 ];
 
 // Devuelve un mapa id -> override, con precioHora derivado de precioMin si falta.
