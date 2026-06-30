@@ -11,6 +11,16 @@
 const $ = (s) => document.querySelector(s);
 const API = '/api/estacionamientos';
 
+// Estadística de uso ANÓNIMA (fire-and-forget). Solo manda el tipo de evento y la
+// ciudad mirada; NO datos personales. Nunca debe romper la app (todo en try/catch).
+function track(tipo, ciudad) {
+  try {
+    const body = JSON.stringify({ tipo, ciudad });
+    if (navigator.sendBeacon) { navigator.sendBeacon('/api/track', new Blob([body], { type: 'application/json' })); return; }
+    fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
+  } catch { /* la analítica jamás interrumpe el uso */ }
+}
+
 // Antirrebote: agrupa ráfagas de llamadas (p. ej. teclear en el buscador) en una
 // sola tras `ms` de calma. Evita re-filtrar la lista y redibujar los pines del
 // mapa en cada pulsación. Devuelve la función envuelta (misma firma).
@@ -303,6 +313,7 @@ function cambiarCiudad(nombre, mover = true) {
   const z = ZONAS.find((x) => x.nombre === nombre);
   if (!z) return;
   ciudadActual = nombre;
+  track('ciudad', nombre);
   const sel = $('#ciudad-select');
   if (sel) { sel.value = nombre; sel.title = `Ciudad: ${nombre}`; }
   if (mover) {
@@ -981,6 +992,7 @@ function openDetalle(id) {
   const p = DATA.find((x) => x.id === id);
   if (!p) { toast('Este lugar ya no está disponible'); return; }
   detalleAbiertoId = id;
+  track('detalle', p.ciudad);
   panselect(p);                 // centrar mapa + resaltar el pin del lugar
 
   const attrs = [];
@@ -1204,7 +1216,7 @@ async function enviarAporte(id, body) {
   try {
     const r = await fetch('/api/aporte', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) });
     const j = await r.json();
-    if (j.ok) { cerrarModal(); toast('¡Gracias por tu aporte!'); if (detalleAbiertoId === id) refrescarComunidad(id); else cargar(); }
+    if (j.ok) { track(body.precio != null ? 'reporte_precio' : 'comentario', ciudadActual); cerrarModal(); toast('¡Gracias por tu aporte!'); if (detalleAbiertoId === id) refrescarComunidad(id); else cargar(); }
     else { toast('No se pudo enviar el aporte'); rehabilitar(); }
   } catch { toast('Sin conexión'); rehabilitar(); }
 }
@@ -1308,7 +1320,7 @@ window.subirFoto = (id) => {
       toast('Subiendo foto…');
       const r = await fetch('/api/foto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, dataUrl }) });
       const j = await r.json();
-      if (j.ok) { toast('¡Foto subida! Gracias 📷'); cargarFotos(id); }
+      if (j.ok) { track('foto', ciudadActual); toast('¡Foto subida! Gracias 📷'); cargarFotos(id); }
       else if (j.motivo) toast('🚫 Foto bloqueada (' + j.motivo + '). No se subió.');
       else toast('No se pudo subir (muy pesada o formato no válido)');
     } catch { toast('Sin conexión'); }
@@ -1332,6 +1344,7 @@ window.cerrarDetalle = () => {
 };
 window.toggleFavDetalle = (id) => { const p = DATA.find((x) => x.id === id); if (p) LS.toggleFav(p); openDetalle(id); renderLista(); };
 window.confirmarCupo = (id, ok) => {
+  track('voto', ciudadActual);
   toast(ok ? '¡Gracias! Confirmado 👍' : 'Gracias, lo anotamos 👎');
   fetch('/api/voto', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1356,6 +1369,7 @@ let _rutaDest = null;
 function abrirRuta(p) {
   if (!p) return;
   _rutaDest = p;
+  track('comollegar', p.ciudad);
   $('#modal').innerHTML = `
     <h3>${ic('compass', 18)} ¿Con qué app te llevo?</h3>
     <p>${esc(p.nombre || 'Tu auto')}${p.direccion ? ' · ' + esc(p.direccion) : ''}</p>
@@ -1649,6 +1663,9 @@ function renderFavoritos() {
       <div class="empty-tit">Aún no guardas lugares</div>
       <p>Toca la ${ic('starOutline', 14)} de un estacionamiento para guardarlo aquí y volver rápido.</p>
     </div>`}
+    <div class="app-legal">
+      <a href="/terminos" target="_blank" rel="noopener">Términos</a> · <a href="/privacidad" target="_blank" rel="noopener">Privacidad</a>
+    </div>
   </div>`;
   $('#view-favoritos').querySelectorAll('.fav-item[data-id]').forEach((el) =>
     el.addEventListener('click', () => irAFav(el.dataset.id)));
@@ -1809,6 +1826,7 @@ async function geocodificar(texto) {
   const q = texto.trim();
   if (!q) { renderLista(); return; }
   setBuscando(true);
+  track('search', ciudadActual);
   toast('Buscando “' + q + '”…');
   try {
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=cl&limit=1&accept-language=es`;
@@ -1948,6 +1966,7 @@ window.enviarLugar = async () => {
     const r = await fetch('/api/lugar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await r.json();
     if (j.ok) {
+      track('reporte_lugar', ciudadActual);
       cerrarModal(); toast('¡Gracias! Lo agregamos al mapa 📍');
       _reportePos = null;
       await cargar();
@@ -2325,6 +2344,7 @@ function mostrarBienvenida() {
       <li>${ic('starOutline', 16)} <span>Funciona <b>sin cuenta</b>: favoritos y tu auto se guardan solo en este teléfono.</span></li>
     </ul>
     <button class="btn btn-primary" onclick="cerrarBienvenida()">Entendido</button>
+    <p class="onboard-legal">Al continuar aceptas los <a href="/terminos" target="_blank" rel="noopener">Términos</a> y la <a href="/privacidad" target="_blank" rel="noopener">Privacidad</a>.</p>
   </div>`;
   o.classList.add('show');
   setTimeout(() => o.querySelector('.btn-primary')?.focus(), 60);   // foco al botón (lector de pantalla)
@@ -2418,6 +2438,7 @@ async function init() {
   window.addEventListener('resize', () => map && map.invalidateSize());
 
   cargar();
+  track('pageview', ciudadActual);   // estadística de uso anónima
   // Si llegó desde la landing con ?q=… (buscador de la portada), busca eso al abrir.
   const qInicial = new URLSearchParams(location.search).get('q');
   if (qInicial) {

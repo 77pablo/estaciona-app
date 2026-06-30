@@ -19,6 +19,7 @@ import { registrarVoto, tallyReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
 import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto } from './fotos.js';
 import { registrarLugar, lugaresDe, lugaresRecientes, eliminarLugar, contarLugares } from './lugares.js';
+import { registrarEvento, resumenAnalytics } from './analytics.js';
 import { revisarFoto } from './modera-foto.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -84,7 +85,7 @@ function rateLimit(req, max, ventanaMs) {
 }
 
 // Rutas "bonitas": la landing es la portada (/), la app vive en /app.
-const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html' };
+const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html', '/terminos': '/terminos.html', '/privacidad': '/privacidad.html' };
 
 async function serveStatic(res, urlPath) {
   const rel = ALIAS[urlPath] || urlPath;
@@ -181,6 +182,7 @@ const server = http.createServer(async (req, res) => {
         lugares: await lugaresRecientes(),
         nVotos: await contarVotos(),
         nLugares: await contarLugares(),
+        analytics: await resumenAnalytics(),
       });
     }
     if (url.pathname === '/api/mod/borrar' && req.method === 'POST') {
@@ -228,6 +230,18 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     }
+    if (url.pathname === '/api/track' && req.method === 'POST') {
+      // Estadística de uso ANÓNIMA (conteo). Sin IP, sin cookies. Responde rápido.
+      let body = '', tooBig = false;
+      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 1000) tooBig = true; });
+      req.on('end', async () => {
+        if (!tooBig) {
+          try { const { tipo, ciudad } = JSON.parse(body || '{}'); await registrarEvento(tipo, ciudad); } catch { /* ignora payloads inválidos */ }
+        }
+        res.writeHead(204); res.end();   // sin contenido: es fire-and-forget
+      });
+      return;
+    }
     if (url.pathname === '/api/config' && req.method === 'GET') {
       // Config pública para el frontend. La API key de MapTiler vive en una
       // variable de entorno (NO en el repo, que es público). Si no está, el
@@ -258,5 +272,6 @@ server.listen(PORT, () => {
   console.log(`   · aportes → ${persist('APORTES_PATH')}`);
   console.log(`   · fotos   → ${persist('FOTOS_DIR')}`);
   console.log(`   · lugares → ${persist('LUGARES_PATH')}`);
+  console.log(`   · stats   → ${persist('ANALYTICS_PATH')}`);
   console.log('');
 });

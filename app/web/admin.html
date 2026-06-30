@@ -38,6 +38,11 @@
   .price-val{font-family:ui-monospace,monospace;font-weight:700}
   .copy{background:transparent;border:1px solid var(--line);color:var(--muted);padding:7px 11px;font-size:12px}
   code{font-family:ui-monospace,monospace;background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:12px}
+  .uso-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:6px 0 18px}
+  .uso-cols h3{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:6px 0 8px}
+  .uso-row{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 2px;font-size:14px}
+  .uso-row b{font-family:ui-monospace,monospace}
+  @media(max-width:560px){.uso-cols{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -54,6 +59,8 @@
 
   <div id="panel">
     <div id="stats" class="stats"></div>
+    <h2>Uso de la app <span class="muted">(anónimo)</span></h2>
+    <div id="uso"></div>
     <div class="row">
       <input id="buscar" type="search" placeholder="Buscar por palabra o por lugar…" autocomplete="off" />
     </div>
@@ -71,7 +78,7 @@
 
 <script>
   let CLAVE = '';
-  let DATOS = { comentarios: [], fotos: [], precios: [], lugares: [], nVotos: 0, nLugares: 0 };   // feed completo cargado (se filtra en vivo)
+  let DATOS = { comentarios: [], fotos: [], precios: [], lugares: [], nVotos: 0, nLugares: 0, analytics: null };   // feed completo cargado (se filtra en vivo)
   const CLP = (n) => '$' + new Intl.NumberFormat('es-CL').format(Math.round(n));
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -107,6 +114,20 @@
       ['Lugares reportados', DATOS.nLugares || (DATOS.lugares || []).length],
       ['Votos', DATOS.nVotos || 0],
     ].map(([lbl, n]) => `<div class="stat"><b>${n}</b><span>${lbl}</span></div>`).join('');
+
+    // Uso de la app (analítica anónima): hoy / 7 días / total + por evento + top ciudades.
+    const a = DATOS.analytics || {};
+    const filas = (obj) => Object.entries(obj || {}).sort((x, y) => y[1] - x[1]).map(([k, n]) => `<div class="uso-row"><span>${esc(k)}</span><b>${n}</b></div>`).join('') || '<div class="vacio">Sin datos aún</div>';
+    $('#uso').innerHTML = `
+      <div class="stats">
+        <div class="stat"><b>${a.hoy ? a.hoy.total : 0}</b><span>Hoy</span></div>
+        <div class="stat"><b>${a.semana || 0}</b><span>Últimos 7 días</span></div>
+        <div class="stat"><b>${a.total || 0}</b><span>Total histórico</span></div>
+      </div>
+      <div class="uso-cols">
+        <div><h3>Por acción</h3>${filas(a.porEvento)}</div>
+        <div><h3>Top ciudades</h3>${(a.topCiudades || []).map(([c, n]) => `<div class="uso-row"><span>${esc(c)}</span><b>${n}</b></div>`).join('') || '<div class="vacio">Sin datos aún</div>'}</div>
+      </div>`;
 
     // Precios reportados por la gente (para cosechar a precios-reales.js).
     $('#cuentaPre').textContent = q ? `(${pres.length} de ${(DATOS.precios || []).length})` : `(${(DATOS.precios || []).length})`;
