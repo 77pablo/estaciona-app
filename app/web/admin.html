@@ -144,8 +144,8 @@
     $('#cuentaDest').textContent = `(${ds.filter((d) => d.activo).length} activos)`;
     $('#destActivos').innerHTML = ds.length ? ds.map((d) => `
       <div class="item">
-        <div><div class="txt">⭐ ${esc(d.etiqueta)} · <span class="price-id">${esc(d.id)}</span> ${d.activo ? '' : '<span style="color:var(--muted)">(vencido)</span>'}</div>
-        <div class="meta">${d.hasta ? 'vence ' + fecha(d.hasta) : 'sin vencimiento'}</div></div>
+        <div><div class="txt">${d.premium ? '👑' : '⭐'} ${esc(d.etiqueta)}${d.premium ? ' <span style="color:#f59e0b;font-weight:700">PREMIUM</span>' : ''} · <span class="price-id">${esc(d.id)}</span> ${d.activo ? '' : '<span style="color:var(--muted)">(vencido)</span>'}</div>
+        <div class="meta">${d.tagline ? esc(d.tagline) + ' · ' : ''}${d.hasta ? 'vence ' + fecha(d.hasta) : 'sin vencimiento'}</div></div>
         <button class="del" onclick="quitarDest('${esc(d.id)}')">Quitar</button>
       </div>`).join('') : '<div class="vacio">Ningún destacado aún.</div>';
 
@@ -235,9 +235,12 @@
     if (etiqueta === null) return;
     const dias = prompt('¿Por cuántos días? (vacío o 0 = sin vencimiento)', '30');
     if (dias === null) return;
+    const premium = confirm('¿Es PREMIUM? (Aceptar = sí: badge dorado + frase. Cancelar = normal)');
+    let tagline = '';
+    if (premium) { tagline = prompt('Frase corta del operador (opcional, ej. "Techado y con cámaras 24/7"):', '') || ''; }
     const r = await fetch('/api/mod/destacado', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-mod-clave': CLAVE },
-      body: JSON.stringify({ accion: 'add', id, etiqueta: etiqueta || 'Destacado', dias: Number(dias) || 0 }),
+      body: JSON.stringify({ accion: 'add', id, etiqueta: etiqueta || 'Destacado', dias: Number(dias) || 0, premium, tagline }),
     });
     const j = await r.json().catch(() => ({}));
     if (j.ok) { alert('✅ Destacado activado.'); recargarFeed(); } else alert('No se pudo activar.');

@@ -46,6 +46,9 @@ const TOMTOM_KEY = leerKey('TOMTOM_KEY', 'tomtom.key');   // tráfico en vivo + 
 const ACCESO_CLAVE = (process.env.ACCESO_CLAVE || '').trim();
 // Clave de MODERACIÓN (solo Abel). Para borrar comentarios/fotos en /admin.
 const ADMIN_CLAVE = leerKey('ADMIN_CLAVE', 'admin.key');
+// Códigos de "Estaciona Pro" (plan premium para conductores). Abel los reparte
+// tras cobrar (sin pasarela). Env PRO_CODES="codigo1,codigo2" o archivo pro-codes.key.
+const PRO_CODES = new Set(leerKey('PRO_CODES', 'pro-codes.key').split(/[,\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean));
 // Clave admin: se prefiere por header (x-mod-clave) para NO dejarla en logs/URL;
 // se acepta ?clave= como respaldo (compatibilidad).
 const esAdmin = (req, url) => !!ADMIN_CLAVE && (((req.headers['x-mod-clave'] || '') === ADMIN_CLAVE) || url.searchParams.get('clave') === ADMIN_CLAVE);
@@ -91,7 +94,7 @@ function rateLimit(req, max, ventanaMs) {
 }
 
 // Rutas "bonitas": la landing es la portada (/), la app vive en /app.
-const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html', '/terminos': '/terminos.html', '/privacidad': '/privacidad.html', '/operadores': '/operadores.html' };
+const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html', '/terminos': '/terminos.html', '/privacidad': '/privacidad.html', '/operadores': '/operadores.html', '/pro': '/pro.html' };
 
 async function serveStatic(res, urlPath) {
   const rel = ALIAS[urlPath] || urlPath;
@@ -140,7 +143,7 @@ const server = http.createServer(async (req, res) => {
       for (const e of lista) {
         if (tally[e.id]) e.votos = tally[e.id];
         if (com[e.id]) e.comunidad = com[e.id];
-        if (dest[e.id]) { e.destacado = true; e.destacadoEtiqueta = dest[e.id]; }
+        if (dest[e.id]) { e.destacado = true; e.destacadoEtiqueta = dest[e.id].etiqueta; e.destacadoPremium = dest[e.id].premium; e.destacadoTagline = dest[e.id].tagline; }
       }
       return sendJSON(res, 200, { centro: CENTRO, zonas: ZONAS, regiones: REGIONES, estacionamientos: lista });
     }
@@ -219,10 +222,10 @@ const server = http.createServer(async (req, res) => {
       req.on('end', async () => {
         if (tooBig) return sendJSON(res, 413, { ok: false });
         try {
-          const { accion, id, etiqueta, dias } = JSON.parse(body || '{}');
+          const { accion, id, etiqueta, dias, premium, tagline } = JSON.parse(body || '{}');
           let r;
           if (accion === 'remove') r = { ok: await quitarDestacado(id) };
-          else r = await agregarDestacado(id, etiqueta, dias);
+          else r = await agregarDestacado(id, etiqueta, dias, premium, tagline);
           sendJSON(res, r.ok ? 200 : 400, r);
         } catch { sendJSON(res, 400, { ok: false }); }
       });
@@ -265,6 +268,22 @@ const server = http.createServer(async (req, res) => {
           try { const { tipo, ciudad } = JSON.parse(body || '{}'); await registrarEvento(tipo, ciudad); } catch { /* ignora payloads inválidos */ }
         }
         res.writeHead(204); res.end();   // sin contenido: es fire-and-forget
+      });
+      return;
+    }
+    if (url.pathname === '/api/pro/activar' && req.method === 'POST') {
+      // Activar Estaciona Pro con un código (lo entrega Abel tras cobrar). Sin pasarela.
+      const okRate = rateLimit(req, 20, 600000);   // freno anti fuerza-bruta de códigos
+      let body = '', tooBig = false;
+      req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 500) tooBig = true; });
+      req.on('end', () => {
+        if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+        if (tooBig) return sendJSON(res, 413, { ok: false });
+        try {
+          const { codigo } = JSON.parse(body || '{}');
+          const ok = PRO_CODES.size > 0 && PRO_CODES.has(String(codigo || '').trim().toLowerCase());
+          sendJSON(res, ok ? 200 : 400, { ok });
+        } catch { sendJSON(res, 400, { ok: false }); }
       });
       return;
     }

@@ -27,3 +27,5 @@ desktop.ini
 admin.key
 # Credenciales de Sightengine para correr en local (en Railway: SIGHTENGINE_USER/SECRET)
 sightengine.key
+# Códigos de Estaciona Pro para correr en local (en Railway: PRO_CODES)
+pro-codes.key

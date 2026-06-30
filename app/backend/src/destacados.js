@@ -41,15 +41,18 @@ async function escribir() {
 const activo = (d) => !d.hasta || d.hasta > Date.now();
 
 // Agrega o actualiza un destacado. dias>0 => vence en N días; si no, sin vencimiento.
-export async function agregarDestacado(id, etiqueta, dias) {
+// premium=true => nivel Premium (operador) con `tagline` (frase corta) opcional.
+export async function agregarDestacado(id, etiqueta, dias, premium, tagline) {
   await cargar();
-  if (!id || typeof id !== 'string') return { ok: false, error: 'id' };
+  if (!id || typeof id !== 'string' || !/^[a-z0-9-]{1,64}$/.test(id)) return { ok: false, error: 'id' };
   const et = String(etiqueta || 'Destacado').trim().slice(0, 40) || 'Destacado';
   const n = Number(dias);
   const hasta = Number.isFinite(n) && n > 0 ? Date.now() + n * 86400000 : null;
+  const pre = !!premium;
+  const tag = String(tagline || '').trim().slice(0, 80) || null;
   const ex = destacados.find((d) => d.id === id);
-  if (ex) { ex.etiqueta = et; ex.hasta = hasta; ex.ts = Date.now(); }
-  else destacados.push({ id, etiqueta: et, hasta, ts: Date.now() });
+  if (ex) { ex.etiqueta = et; ex.hasta = hasta; ex.premium = pre; ex.tagline = tag; ex.ts = Date.now(); }
+  else destacados.push({ id, etiqueta: et, hasta, premium: pre, tagline: tag, ts: Date.now() });
   await guardar();
   return { ok: true };
 }
@@ -61,17 +64,17 @@ export async function quitarDestacado(id) {
   await guardar();
   return true;
 }
-// Mapa id -> etiqueta de los destacados ACTIVOS (para marcar el snapshot).
+// Mapa id -> {etiqueta, premium, tagline} de los destacados ACTIVOS (para el snapshot).
 export async function mapaDestacados() {
   await cargar();
   const m = {};
-  for (const d of destacados) if (activo(d)) m[d.id] = d.etiqueta || 'Destacado';
+  for (const d of destacados) if (activo(d)) m[d.id] = { etiqueta: d.etiqueta || 'Destacado', premium: !!d.premium, tagline: d.tagline || null };
   return m;
 }
 // Lista para el panel admin (con estado activo/vencido y fecha).
 export async function listarDestacados() {
   await cargar();
   return destacados.slice().sort((a, b) => b.ts - a.ts).map((d) => ({
-    id: d.id, etiqueta: d.etiqueta || 'Destacado', hasta: d.hasta || null, activo: activo(d),
+    id: d.id, etiqueta: d.etiqueta || 'Destacado', premium: !!d.premium, tagline: d.tagline || null, hasta: d.hasta || null, activo: activo(d),
   }));
 }

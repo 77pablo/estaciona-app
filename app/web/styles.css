@@ -969,6 +969,18 @@ main, .view { flex: 1; min-height: 0; }
   border-radius: var(--r); padding: 11px 14px; margin: 12px 0; font-size: 13px; font-weight: 600;
 }
 .aviso-dest b { color: var(--accent); }
+/* Destacado Premium (operador): badge dorado + tagline. */
+.dest-tag.premium { background: linear-gradient(90deg,#f5c542,#f59e0b); color:#3a2a00; }
+.dest-tag.premium .ic-svg { color:#3a2a00; }
+.dest-tagline { font-size: 11.5px; color: var(--amber); margin: 2px 0 4px; font-weight: 600; }
+.card.dest-premium { border-color: rgba(245,158,11,.55); box-shadow: 0 0 0 1px rgba(245,158,11,.3), var(--shadow-soft); }
+
+/* ── Estaciona Pro (tarjeta en Favoritos) ─────────────────────────────────── */
+.pro-card { margin-top: 20px; background: var(--surface-2); border: 1px solid rgba(45,212,191,.4); border-radius: var(--r-lg); padding: 16px; }
+.pro-card.on { border-color: rgba(45,212,191,.6); background: var(--green-bg); }
+.pro-tit { font-weight: 800; font-size: 15px; display: flex; align-items: center; gap: 7px; }
+.pro-card .pro-tit .ic-svg { color: var(--accent); }
+.pro-card p { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
 
 /* ── Historial de estacionamientos (vista Mi auto) ────────────────────────── */
 .hist-sec { margin-top: 22px; }

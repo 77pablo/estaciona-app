@@ -32,6 +32,12 @@ function debounce(fn, ms) {
   };
 }
 
+// Estaciona Pro (plan premium del conductor). El flag se guarda en el teléfono
+// (lo escribe la página /pro al activar un código). esPro = ¿tiene Pro activo?
+function esPro() { try { return !!localStorage.getItem('estaciona_pro'); } catch { return false; } }
+// ¿Mostrar este lugar como publicidad (destacado)? No, si el usuario es Pro (sin avisos).
+function adDe(p) { return !!p.destacado && !esPro(); }
+
 // Estado en memoria.
 let DATA = [];
 let CENTRO = { lat: -38.7359, lng: -72.5905, nombre: 'Temuco' };
@@ -617,11 +623,11 @@ function clusterIcon(cluster) {
 function iconHtml(p) {
   const nivel = p.disponibilidad.nivel;
   const esSel = p.id === selectedId;
-  const dest = p.destacado ? ' dest' : '';
+  const dest = adDe(p) ? ' dest' : '';
   // Mapa alejado (zoom < 15): simplifica a un punto para no saturar de precios.
-  // El pin seleccionado y los DESTACADOS siempre conservan el pin "P".
+  // El pin seleccionado y los DESTACADOS (publicidad) conservan el pin "P".
   const zoom = map ? map.getZoom() : 16;
-  if (zoom < 15 && !esSel && !p.destacado) return `<div class="pin-dot ${nivel}"></div>`;
+  if (zoom < 15 && !esSel && !adDe(p)) return `<div class="pin-dot ${nivel}"></div>`;
   // Pin "P" circular (estilo parkspot); el seleccionado muestra el precio arriba.
   const precio = esSel ? `<span class="pin-precio">${precioCorto(p)}</span>` : '';
   return `<div class="pin-p ${nivel}${esSel ? ' sel' : ''}${dest}">${precio}P</div>`;
@@ -659,7 +665,7 @@ function zOffset(p) {
     : p.precioHora == null
       ? 0                                              // pago sin dato: no lo priorizamos como si fuera barato
       : Math.max(0, 1200 - Math.min(p.precioHora, 1200));
-  if (p.destacado) z += 3000;            // patrocinados por encima de los normales
+  if (adDe(p)) z += 3000;                // patrocinados por encima de los normales (no si es Pro)
   if (p.id === selectedId) z += 5000;
   return Math.round(z);
 }
@@ -673,7 +679,7 @@ function updateMarkers(lista) {
     const nivel = p.disponibilidad.nivel, sel = p.id === selectedId;
     // Firma de lo que afecta el aspecto del pin: si no cambió, no re-seteamos el
     // icono (cada setIcon fuerza refresco del clúster → caro cada 6 s).
-    const sig = `${nivel}|${sel ? 's' : ''}|${simpl && !sel && !p.destacado ? 'd' : 'p'}|${p.destacado ? 'D' : ''}`;
+    const sig = `${nivel}|${sel ? 's' : ''}|${simpl && !sel && !adDe(p) ? 'd' : 'p'}|${adDe(p) ? 'D' : ''}`;
     let mk = markers[p.id];
     if (mk) {
       if (mk._sig !== sig) { mk.setIcon(L.divIcon({ className: '', html: iconHtml(p), iconSize: [0, 0] })); mk._sig = sig; }
@@ -717,8 +723,8 @@ function listaFiltrada() {
       return true;
     })
     .sort((a, b) => {
-      // Destacados (patrocinados) primero, sin importar el orden elegido.
-      if (!!a.destacado !== !!b.destacado) return a.destacado ? -1 : 1;
+      // Destacados (patrocinados) primero, sin importar el orden elegido (salvo Pro: sin avisos).
+      if (adDe(a) !== adDe(b)) return adDe(a) ? -1 : 1;
       if (orden === 'precio') {
         // Precio efectivo: gratis (o gratis ahora) cuenta como 0. Empate → cercanía.
         const pa = (a.gratisAhora || a.precioHora === 0) ? 0 : (a.precioHora == null ? Infinity : a.precioHora);
@@ -804,8 +810,8 @@ function renderLista() {
     // Check verde — NO una estrella dorada (eso parecería un rating inventado).
     const votos = p.votos ? `<span class="card-rate" title="${p.votos.up} confirmaron cupo (últimas 3 h)">${ic('check', 12)} ${p.votos.up}</span>` : '';
     return `
-      <div class="card ${nivel}${p.id === selectedId ? ' sel' : ''}${p.destacado ? ' dest' : ''}" data-id="${esc(p.id)}" role="button" tabindex="0" aria-label="${esc(p.nombre)}, ver detalle">
-        ${p.destacado ? `<div class="dest-tag">${ic('starFull', 11)} ${esc(p.destacadoEtiqueta || 'Destacado')}</div>` : ''}
+      <div class="card ${nivel}${p.id === selectedId ? ' sel' : ''}${adDe(p) ? ' dest' : ''}${adDe(p) && p.destacadoPremium ? ' dest-premium' : ''}" data-id="${esc(p.id)}" role="button" tabindex="0" aria-label="${esc(p.nombre)}, ver detalle">
+        ${adDe(p) ? `<div class="dest-tag${p.destacadoPremium ? ' premium' : ''}">${ic('starFull', 11)} ${esc(p.destacadoEtiqueta || 'Destacado')}</div>${p.destacadoPremium && p.destacadoTagline ? `<div class="dest-tagline">${esc(p.destacadoTagline)}</div>` : ''}` : ''}
         <div class="card-main">
           <div class="card-info">
             <div class="nm"><span class="estado-dot ${nivel}" aria-hidden="true"></span><span class="nm-txt">${esc(p.nombre)}</span>${LS.isFav(p.id) ? ic('starFull', 12) : ''}${catBadge(p)}</div>
@@ -895,7 +901,7 @@ function abrirMapCard(id) {
   const el = $('#mapcard');
   el.innerHTML = `
     <button class="mapcard-x" onclick="cerrarMapCard()" aria-label="Cerrar">${ic('x', 16)}</button>
-    ${p.destacado ? `<div class="dest-tag">${ic('starFull', 11)} ${esc(p.destacadoEtiqueta || 'Destacado')}</div>` : ''}
+    ${adDe(p) ? `<div class="dest-tag${p.destacadoPremium ? ' premium' : ''}">${ic('starFull', 11)} ${esc(p.destacadoEtiqueta || 'Destacado')}</div>` : ''}
     <div class="mapcard-nm"><span class="estado-dot ${nivel}" aria-hidden="true"></span><span class="nm-txt">${esc(p.nombre)}</span></div>
     <div class="mapcard-addr">${esc(p.direccion || p.ciudad || '')}</div>
     <div class="mapcard-body">
@@ -921,8 +927,9 @@ window.cerrarMapCard = function () {
 // --- Comparar 2-3 estacionamientos lado a lado ------------------------------
 window.toggleComparar = (id) => {
   const i = comparar.indexOf(id);
+  const tope = esPro() ? 5 : 3;
   if (i >= 0) comparar.splice(i, 1);
-  else { if (comparar.length >= 3) { toast('Puedes comparar hasta 3 a la vez'); return; } comparar.push(id); }
+  else { if (comparar.length >= tope) { toast(esPro() ? 'Puedes comparar hasta 5' : 'Comparas hasta 3 (con Pro, 5)'); return; } comparar.push(id); }
   renderLista();                 // refresca el estado "on" de los toggles
   actualizarBarraComparar();
 };
@@ -1031,7 +1038,7 @@ function openDetalle(id) {
     <div class="det-body">
       <div class="det-hero"><span class="hero-ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 30)}</span><span class="hero-nm">${esc(p.nombre)}</span></div>
       <div class="det-status" id="det-status-line">${lineaDisponibilidad(p)}</div>
-      ${p.destacado ? `<div class="aviso-dest">${ic('starFull', 15)} <b>${esc(p.destacadoEtiqueta || 'Destacado')}</b> · espacio destacado (publicidad)</div>` : ''}
+      ${adDe(p) ? `<div class="aviso-dest">${ic('starFull', 15)} <b>${esc(p.destacadoEtiqueta || 'Destacado')}</b>${p.destacadoTagline ? ' · ' + esc(p.destacadoTagline) : ''} · espacio destacado (publicidad)</div>` : ''}
       ${p.reportado ? `<div class="aviso-com">${ic('users', 16)} Estacionamiento <b>aportado por la comunidad</b> — gracias por sumar. Si algo está mal, coméntalo abajo.</div>` : ''}
       ${p.categoria ? `<div class="aviso-cli">${catBadge(p)} Es un estacionamiento de <b>${esc(p.categoria.toLowerCase())}</b> — puede ser de uso restringido, no público general.</div>` : ''}
       <div class="det-row precio-row"><span class="k">${ic('wallet')}</span><span class="precio-val">${precioLinea}</span></div>
@@ -1538,7 +1545,10 @@ function historialHTML() {
   return `<div class="hist-sec">
     <div class="hist-head">
       <h2 style="font-size:15px;margin:0">${ic('clock', 18)} Historial</h2>
-      <button class="hist-clear" onclick="limpiarHistorial()">${ic('x', 13)} Borrar</button>
+      <div style="display:flex;gap:8px">
+        ${esPro() ? `<button class="hist-clear" onclick="exportarHistorial()">${ic('share', 13)} Exportar</button>` : ''}
+        <button class="hist-clear" onclick="limpiarHistorial()">${ic('x', 13)} Borrar</button>
+      </div>
     </div>
     ${h.map((e, i) => `
       <div class="hist-item">
@@ -1557,6 +1567,21 @@ function historialHTML() {
 window.limpiarHistorial = () => {
   if (!confirm('¿Borrar todo el historial de estacionamientos?')) return;
   lsRemove('estaciona_historial'); renderMiAuto(); toast('Historial borrado');
+};
+// Exportar historial a CSV (beneficio Pro). Descarga un archivo en el teléfono/PC.
+window.exportarHistorial = () => {
+  if (!esPro()) { window.location.href = '/pro'; return; }
+  const h = LS.getHist();
+  if (!h.length) { toast('No hay historial para exportar'); return; }
+  const esc2 = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const filas = [['nombre', 'ciudad', 'direccion', 'inicio', 'fin', 'minutos', 'costo']];
+  for (const e of h) filas.push([e.nombre, e.ciudad || '', e.direccion || '', new Date(e.inicio).toLocaleString('es-CL'), new Date(e.fin).toLocaleString('es-CL'), Math.round((e.dur || 0) / 60000), e.precioHora == null ? '' : e.costo]);
+  const csv = '﻿' + filas.map((f) => f.map(esc2).join(',')).join('\n');   // BOM para que Excel respete acentos
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'estaciona-historial.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('Historial exportado ✓');
 };
 
 // Estructura de la vista (se construye al entrar o al cambiar el auto guardado).
@@ -1646,7 +1671,7 @@ window.terminarAuto = () => {
       lat: a.lat, lng: a.lng, precioHora: a.precioHora, gratisInfo: a.gratisInfo, horario: a.horario,
       inicio: a.inicio, fin: Date.now(), costo: costoTranscurrido(a), dur: Date.now() - a.inicio,
     });
-    LS.setHist(h.slice(0, 30));   // tope 30 episodios
+    LS.setHist(h.slice(0, esPro() ? 500 : 30));   // tope 30 (Pro: 500)
   }
   LS.clearAuto(); renderMiAuto(); toast('¡Listo, buen viaje! 🚗');
 };
@@ -1670,12 +1695,27 @@ function renderFavoritos() {
       <div class="empty-tit">Aún no guardas lugares</div>
       <p>Toca la ${ic('starOutline', 14)} de un estacionamiento para guardarlo aquí y volver rápido.</p>
     </div>`}
+    ${proCardHTML()}
     <div class="app-legal">
       <a href="/terminos" target="_blank" rel="noopener">Términos</a> · <a href="/privacidad" target="_blank" rel="noopener">Privacidad</a>
     </div>
   </div>`;
   $('#view-favoritos').querySelectorAll('.fav-item[data-id]').forEach((el) =>
     el.addEventListener('click', () => irAFav(el.dataset.id)));
+}
+// Tarjeta "Estaciona Pro" en Favoritos: invita a Pro (o confirma que ya lo tiene).
+function proCardHTML() {
+  if (esPro()) {
+    return `<div class="pro-card on">
+      <div class="pro-tit">${ic('starFull', 16)} Eres Pro ✨</div>
+      <p>Sin publicidad · historial ampliado + exportar · comparar hasta 5. ¡Gracias por apoyar Estaciona!</p>
+    </div>`;
+  }
+  return `<div class="pro-card">
+    <div class="pro-tit">${ic('starOutline', 16)} Estaciona Pro</div>
+    <p>Sin avisos, historial ilimitado + exportar y comparar hasta 5 lugares.</p>
+    <a class="btn btn-primary" href="/pro" style="margin-top:8px;display:inline-flex">${ic('starFull', 15)} Conocer Pro</a>
+  </div>`;
 }
 // Tocar un favorito: si es de otra ciudad, cambia a esa ciudad; si es de la
 // actual, abre su detalle directamente.

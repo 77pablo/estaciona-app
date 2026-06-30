@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="description" content="Estaciona Pro: sin avisos, historial ilimitado y más." />
+<title>Estaciona Pro</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🅿️</text></svg>" />
+<meta name="theme-color" content="#0d0f14" />
+<style>
+  :root{ --bg:#0d0f14; --surface:#161922; --surface2:#1d2230; --text:#f3f5f7; --muted:#8a909c; --line:rgba(255,255,255,.12); --accent:#2dd4bf; --on-accent:#062925; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:"Urbanist",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;padding:30px 20px;max-width:680px;margin:0 auto;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  .top{display:flex;align-items:center;gap:10px}
+  h1{font-size:30px;font-weight:900;letter-spacing:-.02em}
+  .badge{background:var(--accent);color:var(--on-accent);font-weight:900;font-size:12px;padding:3px 10px;border-radius:999px}
+  .lead{color:#d7dade;font-size:16px;margin:12px 0 22px}
+  .benef{display:grid;gap:10px;margin:8px 0 22px}
+  .b{display:flex;gap:12px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .b .em{font-size:20px;line-height:1}
+  .b b{display:block;margin-bottom:2px}
+  .b span{font-size:13.5px;color:var(--muted)}
+  .card{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:10px}
+  .card h2{font-size:17px;margin-bottom:6px}
+  .card p{font-size:13.5px;color:var(--muted);margin-bottom:12px}
+  .row{display:flex;gap:8px}
+  input{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:13px;color:var(--text);font-size:16px;outline:none}
+  input:focus{border-color:var(--accent)}
+  button{border:none;border-radius:8px;padding:13px 18px;font-weight:800;cursor:pointer;font-size:15px;background:var(--accent);color:var(--on-accent);font-family:inherit}
+  .msg{margin-top:10px;font-size:14px;font-weight:700}
+  .msg.ok{color:var(--accent)} .msg.err{color:#f4565b}
+  .cta{display:inline-flex;align-items:center;gap:8px;background:transparent;border:1px solid var(--line);color:var(--text);padding:12px 18px;border-radius:8px;font-weight:700;margin-top:8px}
+  .back{display:inline-block;margin-top:24px;color:var(--muted)}
+  footer{margin-top:28px;border-top:1px solid var(--line);padding-top:14px;font-size:12.5px;color:var(--muted)}
+  .nota{font-size:12.5px;color:var(--muted);margin-top:10px}
+</style>
+</head>
+<body>
+  <div class="top"><span style="font-size:28px">🅿️</span><h1>Estaciona <span class="badge">PRO</span></h1></div>
+  <p class="lead">La misma app honesta de siempre, con extras para quienes la usan a diario. <b>Lo básico (dónde hay, cuánto cuesta) seguirá siendo gratis para todos.</b></p>
+
+  <div class="benef">
+    <div class="b"><span class="em">🚫</span><div><b>Sin avisos</b><span>Navega sin estacionamientos destacados (publicidad).</span></div></div>
+    <div class="b"><span class="em">🕑</span><div><b>Historial ilimitado + exportar</b><span>Guarda todos tus estacionamientos y descárgalos en Excel/CSV.</span></div></div>
+    <div class="b"><span class="em">⚖️</span><div><b>Comparar hasta 5</b><span>Pon 5 estacionamientos lado a lado (en vez de 3).</span></div></div>
+    <div class="b"><span class="em">💚</span><div><b>Apoyas el proyecto</b><span>Ayudas a mantener Estaciona y a sumar más ciudades.</span></div></div>
+  </div>
+
+  <div class="card">
+    <h2>Activar con código</h2>
+    <p>¿Ya tienes un código Pro? Ingrésalo aquí y se activa en este teléfono.</p>
+    <div class="row">
+      <input id="codigo" type="text" placeholder="Tu código Pro" autocomplete="off" />
+      <button onclick="activar()">Activar</button>
+    </div>
+    <div id="msg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Quiero Pro</h2>
+    <p>Escríbenos y te enviamos tu código.</p>
+    <a class="cta" href="mailto:pdanielespinozavega@gmail.com?subject=Quiero%20Estaciona%20Pro">✉️ Pedir mi código</a>
+    <p class="nota">¿Tienes un estacionamiento? Mira el plan para <a href="/operadores">operadores</a>.</p>
+  </div>
+
+  <a class="back" href="/app">← Volver a la app</a>
+  <footer>Estaciona · <a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  // Si ya es Pro, avisarlo.
+  try { if (localStorage.getItem('estaciona_pro')) { $('#msg').textContent = 'Ya tienes Pro activo en este teléfono ✨'; $('#msg').className = 'msg ok'; } } catch (e) {}
+  async function activar() {
+    const codigo = $('#codigo').value.trim();
+    if (!codigo) return;
+    $('#msg').textContent = 'Verificando…'; $('#msg').className = 'msg';
+    try {
+      const r = await fetch('/api/pro/activar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo }) });
+      const j = await r.json().catch(() => ({}));
+      if (j.ok) {
+        try { localStorage.setItem('estaciona_pro', codigo); } catch (e) {}
+        $('#msg').innerHTML = '¡Listo! Pro activado ✨ <a href="/app">Abrir la app</a>';
+        $('#msg').className = 'msg ok';
+      } else if (r.status === 429) {
+        $('#msg').textContent = 'Demasiados intentos, espera un momento.'; $('#msg').className = 'msg err';
+      } else {
+        $('#msg').textContent = 'Código no válido.'; $('#msg').className = 'msg err';
+      }
+    } catch (e) { $('#msg').textContent = 'Sin conexión, intenta de nuevo.'; $('#msg').className = 'msg err'; }
+  }
+  $('#codigo').addEventListener('keydown', (e) => { if (e.key === 'Enter') activar(); });
+</script>
+</body>
+</html>
