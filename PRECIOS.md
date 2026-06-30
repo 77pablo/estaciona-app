@@ -47,6 +47,18 @@ precio real, **para siempre** (no se borra al regenerar los datos).
 
 ---
 
+## Forma 3 — Agregar un lugar que NO está en el mapa
+
+Si un estacionamiento real (con precio) no existe en el dataset, agrégalo en
+`app/backend/src/fichas-extra.js` (un objeto por lugar): id único con prefijo
+`x-`, `ciudad` EXACTA como en el selector, `region`, coords (`lat`/`lng` —
+geocodifica el lugar), precio (`precioMin` + `precioHora`), `horario`, `gratis`,
+`fuente`, y `verificado: true`. El engine lo concatena al dataset y sobrevive a
+la regeneración de `data.js`. Útil para malls regionales y parquímetros que OSM
+no tiene.
+
+---
+
 ## Estado actual (jun-2026)
 
 Verificados con fuente oficial:
