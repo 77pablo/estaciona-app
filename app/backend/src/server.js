@@ -210,5 +210,12 @@ server.listen(PORT, () => {
   console.log('  🅿️  Estaciona  🅿️');
   console.log(`  Abre la app en:  http://localhost:${PORT}`);
   console.log('  Ctrl+C para detener.');
+  // Dónde persiste cada cosa: si la env var del volumen NO está, se usa el disco
+  // efímero del contenedor y se borra en cada redeploy (útil para verlo en Railway).
+  const persist = (env) => process.env[env] ? `${process.env[env]}  (persiste)` : `local efímero — SE BORRA en redeploy (define ${env})`;
+  console.log('  Persistencia:');
+  console.log(`   · votos   → ${persist('VOTOS_PATH')}`);
+  console.log(`   · aportes → ${persist('APORTES_PATH')}`);
+  console.log(`   · fotos   → ${persist('FOTOS_DIR')}`);
   console.log('');
 });

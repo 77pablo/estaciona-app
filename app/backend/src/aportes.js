@@ -6,12 +6,13 @@
 // Railway hay que montar un volumen y apuntar APORTES_PATH ahí (ej. /data/aportes.json).
 // ============================================================================
 
-import { readFile, writeFile, rename } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FILE = process.env.APORTES_PATH || join(__dirname, '..', 'aportes.json');
+let _dirOk = false, _avisoFallo = false;
 
 let aportes = [];
 let cargaPromise = null;
@@ -22,8 +23,12 @@ function cargar() {
 }
 async function guardar() {
   const tmp = FILE + '.tmp';
-  try { await writeFile(tmp, JSON.stringify(aportes)); await rename(tmp, FILE); }
-  catch { /* disco no escribible: seguimos en memoria */ }
+  try {
+    if (!_dirOk) { await mkdir(dirname(FILE), { recursive: true }); _dirOk = true; }   // crea el dir del volumen si falta
+    await writeFile(tmp, JSON.stringify(aportes)); await rename(tmp, FILE);
+  } catch (e) {
+    if (!_avisoFallo) { _avisoFallo = true; console.warn(`[aportes] no pude escribir en ${FILE}: ${e.message} — los aportes NO persisten`); }
+  }
 }
 
 // Registra un aporte. precio (número CLP/hora) y/o texto (comentario). Devuelve ok.

@@ -9,12 +9,13 @@
 // la app de la iglesia con DB_PATH).
 // ============================================================================
 
-import { readFile, writeFile, rename } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FILE = process.env.VOTOS_PATH || join(__dirname, '..', 'votos.json');
+let _dirOk = false, _avisoFallo = false;
 
 let votos = [];
 let cargaPromise = null;
@@ -31,8 +32,14 @@ async function guardar() {
   // mismo disco). Evita que un corte a mitad de escritura deje el JSON corrupto
   // y borre todos los votos.
   const tmp = FILE + '.tmp';
-  try { await writeFile(tmp, JSON.stringify(votos)); await rename(tmp, FILE); }
-  catch { /* disco no escribible: seguimos en memoria */ }
+  try {
+    if (!_dirOk) { await mkdir(dirname(FILE), { recursive: true }); _dirOk = true; }   // crea el dir del volumen si falta
+    await writeFile(tmp, JSON.stringify(votos)); await rename(tmp, FILE);
+  } catch (e) {
+    // Disco no escribible: seguimos en memoria, pero avisamos UNA vez para que se
+    // note en los logs de Railway si el volumen quedó mal montado (no persiste).
+    if (!_avisoFallo) { _avisoFallo = true; console.warn(`[votos] no pude escribir en ${FILE}: ${e.message} — los votos NO persisten`); }
+  }
 }
 
 // Registra un voto (ok = true → "había cupo"; false → "no había").
