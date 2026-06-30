@@ -40,6 +40,16 @@ export const PRECIOS_REALES = [
   { id: 'temuco-calle-2', precioMin: 30, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30 y domingos', fuente: 'parksur.cl (app vía pública Temuco)' }, // Claro Solar
   { id: 'temuco-calle-3', precioMin: 30, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30 y domingos', fuente: 'parksur.cl (app vía pública Temuco)' }, // Vicuña Mackenna
   { id: 'temuco-calle-4', precioMin: 30, horario: 'Parquímetro 08:30–20:00', gratis: '20:00–08:30 y domingos', fuente: 'parksur.cl (app vía pública Temuco)' }, // Antonio Varas
+
+  // ── Santiago / Las Condes — malls grandes (fuente oficial del operador) ──
+  // Parque Arauco Kennedy (Las Condes): $25/min general, cobro 07:00–00:00. Fuente parquearauco.cl.
+  // (3 fichas OSM del mismo mall: accesos/polígonos distintos.) Express $39/min NO se modela.
+  { id: 'las-condes-2',  precioMin: 25, horario: '07:00–00:00', fuente: 'parquearauco.cl (Parque Arauco Kennedy)' }, // Estacionamientos Parque Arauco
+  { id: 'las-condes-22', precioMin: 25, horario: '07:00–00:00', fuente: 'parquearauco.cl (Parque Arauco Kennedy)' }, // Mall Parque Arauco
+  { id: 'las-condes-35', precioMin: 25, horario: '07:00–00:00', fuente: 'parquearauco.cl (Parque Arauco Kennedy)' }, // Parque Arauco Oriente
+  // Alto Las Condes (Cenco Malls): $19/min, cobro 07:00–21:00. Fuente cencomalls.cl.
+  { id: 'las-condes-16', precioMin: 19, horario: '07:00–21:00', fuente: 'cencomalls.cl (Alto Las Condes)' }, // Alto Las Condes
+  { id: 'vitacura-4',    precioMin: 19, horario: '07:00–21:00', fuente: 'cencomalls.cl (Alto Las Condes)' }, // Alto Las Condes (acceso lado Vitacura)
 ];
 
 // Devuelve un mapa id -> override, con precioHora derivado de precioMin si falta.
