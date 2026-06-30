@@ -149,4 +149,28 @@ export const FICHAS_EXTRA = [
     verificado: true, fuente: 'municipalidadpucon.cl (zona amarilla visitante; varía por zona y residencia)',
     atributos: { techado: false, ev: false, accesible: false, camaras: false },
   },
+
+  // ── Otros lugares con tarifa verificada (2ª tanda) ──
+  {
+    id: 'x-puntaarenas-aeropuerto', tipo: 'privado', ciudad: 'Punta Arenas', region: 'Magallanes',
+    categoria: 'Terminal', nombre: 'Aeropuerto Carlos Ibáñez (estacionamiento)', direccion: 'Aeropuerto Pdte. Carlos Ibáñez del Campo',
+    lat: -53.003809, lng: -70.846482, precioMin: 54, precioHora: 3240, fraccion: null,
+    gratis: null, horario: '24h', verificado: true, fuente: 'aeropuertosaustrales.cl (24h = $19.440)',
+    atributos: { techado: false, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-concepcion-mirador', tipo: 'privado', ciudad: 'Concepción', region: 'Biobío',
+    categoria: null, nombre: 'Mallplaza Mirador Biobío', direccion: 'Av. 21 de Mayo, Concepción',
+    lat: -36.829681, lng: -73.063334, precioMin: 16, precioHora: 960, fraccion: null,
+    gratis: null, horario: '10:00–21:00', verificado: true, fuente: 'biobiochile.cl (nov-2023; cobro por minuto)',
+    atributos: { techado: true, ev: false, accesible: true, camaras: true },
+  },
+  {
+    id: 'x-santiago-calle', tipo: 'calle', ciudad: 'Santiago', region: 'Metropolitana',
+    categoria: null, nombre: 'Parquímetros centro (E Santiago)', direccion: 'Centro de Santiago',
+    lat: -33.437415, lng: -70.651278, precioHora: 1260, fraccion: null,
+    gratis: '20:00–08:30 y domingos', horario: 'Parquímetro 08:30–20:00', demandaBase: 0.82,
+    verificado: true, fuente: 'encancha.cl (E Santiago, $420 por cada 20 min, mar-2024)',
+    atributos: { techado: false, ev: false, accesible: false, camaras: false },
+  },
 ];
