@@ -9,11 +9,16 @@
 
 import { ESTACIONAMIENTOS } from './data.js';
 import { mapaPreciosReales } from './precios-reales.js';
+import { FICHAS_EXTRA } from './fichas-extra.js';
+
+// Dataset completo = OSM (data.js) + fichas hechas a mano (fichas-extra.js, que
+// sobreviven a la regeneración de data.js).
+const FICHAS = ESTACIONAMIENTOS.concat(FICHAS_EXTRA);
 
 // Aplica los precios REALES (verificados a mano) encima de los datos base.
 // Esa ficha pasa a verificado:true con su precio/horario/fuente confirmados.
 const OVERRIDES = mapaPreciosReales();
-for (const e of ESTACIONAMIENTOS) {
+for (const e of FICHAS) {
   const o = OVERRIDES[e.id];
   if (o) { Object.assign(e, o); e.verificado = true; }
 }
@@ -40,7 +45,7 @@ function categoriaPorNombre(nombre) {
   for (const [cat, re] of REGLAS_CATEGORIA) if (re.test(n)) return cat;
   return null;
 }
-for (const e of ESTACIONAMIENTOS) {
+for (const e of FICHAS) {
   if (e.categoria == null) {
     const c = categoriaPorNombre(e.nombre);
     if (c) e.categoria = c;
@@ -115,7 +120,7 @@ function nowChile() {
 export function getEstacionamientos() {
   const { hora, dia } = nowChile();
 
-  return ESTACIONAMIENTOS.map((e) => {
+  return FICHAS.map((e) => {
     const abierto = abiertoAhora(e, hora);
     const gratis = gratisAhora(e, hora, dia);
     const base = {
