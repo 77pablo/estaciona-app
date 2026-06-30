@@ -50,6 +50,16 @@ export const PRECIOS_REALES = [
   // Alto Las Condes (Cenco Malls): $19/min, cobro 07:00–21:00. Fuente cencomalls.cl.
   { id: 'las-condes-16', precioMin: 19, horario: '07:00–21:00', fuente: 'cencomalls.cl (Alto Las Condes)' }, // Alto Las Condes
   { id: 'vitacura-4',    precioMin: 19, horario: '07:00–21:00', fuente: 'cencomalls.cl (Alto Las Condes)' }, // Alto Las Condes (acceso lado Vitacura)
+
+  // ── Regiones (barrido región por región, fuente oficial del operador) ──
+  // Mall Marina Arauco (Viña del Mar): $36/min efectivo. Fuente mallmarina.cl / saba-chile.cl.
+  { id: 'vina-del-mar-4', precioMin: 36, horario: '07:00–22:15', fuente: 'mallmarina.cl (Marina Arauco)' }, // Mall Marina Arauco
+  // Mall Florida Center (Cenco Malls, La Florida): $15/min, cobro 07:00–21:00, 15 min gracia. Fuente cencomalls.cl.
+  { id: 'la-florida-1', precioMin: 15, horario: '07:00–21:00', fuente: 'cencomalls.cl (Florida Center)' }, // Mall Florida Center
+  { id: 'la-florida-2', precioMin: 15, horario: '07:00–21:00', fuente: 'cencomalls.cl (Florida Center)' }, // Mall Florida Center (2)
+  { id: 'la-florida-3', precioMin: 15, horario: '07:00–21:00', fuente: 'cencomalls.cl (Florida Center)' }, // Mall Florida Center (3)
+  // Mall Arauco Maipú: estacionamiento GRATIS (autos/motos/bicis). Fuente araucomaipu.cl.
+  { id: 'maipu-2', precioHora: 0, gratis: 'Estacionamiento gratis', horario: '09:30–20:30', fuente: 'araucomaipu.cl' }, // Mall Arauco Maipu
 ];
 
 // Devuelve un mapa id -> override, con precioHora derivado de precioMin si falta.
