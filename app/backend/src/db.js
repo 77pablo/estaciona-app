@@ -42,6 +42,12 @@ const DATABASE_URL = process.env.DATABASE_URL;
 const PK = { destacados: ['id'], an_evento: ['tipo'], an_dia: ['dia', 'tipo'], an_ciudad: ['ciudad'] };
 
 export function toPg(sql) {
+  const mTable = sql.match(/^INSERT(?: OR \w+)? INTO (\w+)/i);
+  const table = mTable ? mTable[1] : '';
+  // En Postgres, `DO UPDATE SET n = n + 1` es ambiguo (¿columna de la tabla o de
+  // EXCLUDED?). Hay que calificar la derecha con el nombre de la tabla. SQLite lo
+  // acepta sin calificar; aquí lo calificamos solo para PG.
+  if (table) sql = sql.replace(/DO UPDATE SET (\w+) = \1 \+ 1/gi, `DO UPDATE SET $1 = ${table}.$1 + 1`);
   // INSERT OR REPLACE INTO t(cols) VALUES(...)  →  INSERT ... ON CONFLICT (pk) DO UPDATE SET nonpk=EXCLUDED.nonpk
   const mRep = sql.match(/^INSERT OR REPLACE INTO (\w+)\s*\(([^)]+)\)/i);
   if (mRep) {
