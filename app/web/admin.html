@@ -139,15 +139,28 @@
         <div><h3>Top ciudades</h3>${(a.topCiudades || []).map(([c, n]) => `<div class="uso-row"><span>${esc(c)}</span><b>${n}</b></div>`).join('') || '<div class="vacio">Sin datos aún</div>'}</div>
       </div>`;
 
-    // Destacados activos (publicidad). Lista con opción de quitar.
+    // Destacados activos (publicidad). Lista con opción de quitar + métricas reales
+    // (vistas al detalle / clics "cómo llegar") y aviso de vencimiento próximo.
     const ds = DATOS.destacados || [];
+    const vl = DATOS.vistasLugar || {};
+    const diasRestantes = (hasta) => Math.ceil((hasta - Date.now()) / 86400000);
     $('#cuentaDest').textContent = `(${ds.filter((d) => d.activo).length} activos)`;
-    $('#destActivos').innerHTML = ds.length ? ds.map((d) => `
+    $('#destActivos').innerHTML = ds.length ? ds.map((d) => {
+      const v = vl[d.id] || { detalle: 0, comollegar: 0 };
+      const dr = d.hasta ? diasRestantes(d.hasta) : null;
+      const venc = d.hasta
+        ? (d.activo
+            ? `vence ${fecha(d.hasta)} · <b style="color:${dr <= 3 ? 'var(--red)' : 'var(--muted)'}">${dr} día${dr === 1 ? '' : 's'}${dr <= 3 ? ' ⚠️ renovar' : ''}</b>`
+            : '<span style="color:var(--muted)">(vencido)</span>')
+        : 'sin vencimiento';
+      return `
       <div class="item">
         <div><div class="txt">${d.premium ? '👑' : '⭐'} ${esc(d.etiqueta)}${d.premium ? ' <span style="color:#f59e0b;font-weight:700">PREMIUM</span>' : ''} · <span class="price-id">${esc(d.id)}</span> ${d.activo ? '' : '<span style="color:var(--muted)">(vencido)</span>'}</div>
-        <div class="meta">${d.tagline ? esc(d.tagline) + ' · ' : ''}${d.hasta ? 'vence ' + fecha(d.hasta) : 'sin vencimiento'}</div></div>
+        <div class="meta">${d.tagline ? esc(d.tagline) + ' · ' : ''}${venc}</div>
+        <div class="meta">👁️ ${v.detalle} ${v.detalle === 1 ? 'vista' : 'vistas'} · 🧭 ${v.comollegar} cómo llegar</div></div>
         <button class="del" onclick="quitarDest('${esc(d.id)}')">Quitar</button>
-      </div>`).join('') : '<div class="vacio">Ningún destacado aún.</div>';
+      </div>`;
+    }).join('') : '<div class="vacio">Ningún destacado aún.</div>';
 
     // Precios reportados por la gente (para cosechar a precios-reales.js).
     $('#cuentaPre').textContent = q ? `(${pres.length} de ${(DATOS.precios || []).length})` : `(${(DATOS.precios || []).length})`;

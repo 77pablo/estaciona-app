@@ -13,9 +13,9 @@ const API = '/api/estacionamientos';
 
 // Estadística de uso ANÓNIMA (fire-and-forget). Solo manda el tipo de evento y la
 // ciudad mirada; NO datos personales. Nunca debe romper la app (todo en try/catch).
-function track(tipo, ciudad) {
+function track(tipo, ciudad, id) {
   try {
-    const body = JSON.stringify({ tipo, ciudad });
+    const body = JSON.stringify({ tipo, ciudad, id });
     if (navigator.sendBeacon) { navigator.sendBeacon('/api/track', new Blob([body], { type: 'application/json' })); return; }
     fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
   } catch { /* la analítica jamás interrumpe el uso */ }
@@ -58,6 +58,7 @@ let watchId = null;                 // seguimiento de ubicación (watchPosition)
 let query = '';
 let orden = 'cercania';            // orden de la lista: 'cercania' | 'precio'
 let comparar = [];                 // ids seleccionados para comparar lado a lado (máx 3)
+let _ciudadCargada = null;         // última ciudad realmente cargada (para vaciar la comparación al cambiar)
 let cargado = false;
 let cargaSeq = 0;                  // contador de cargas: descarta respuestas viejas (carrera)
 let sinConexionAvisado = false;    // evita spamear el toast "Sin conexión" cada 6s
@@ -1005,7 +1006,7 @@ function openDetalle(id) {
   const p = DATA.find((x) => x.id === id);
   if (!p) { toast('Este lugar ya no está disponible'); return; }
   detalleAbiertoId = id;
-  track('detalle', p.ciudad);
+  track('detalle', p.ciudad, p.id);
   panselect(p);                 // centrar mapa + resaltar el pin del lugar
 
   const attrs = [];
@@ -1045,7 +1046,7 @@ function openDetalle(id) {
       ${esGratisClientes(p)
         ? `<div class="aviso-cli">${ic('cart', 16)} <b>Gratis solo para clientes</b> — válido con compra en el local, no es estacionamiento público.</div>`
         : p.gratisInfo ? `<div class="det-row"><span class="k">${ic('tag')}</span><span>${esc(p.gratisInfo)}</span></div>` : ''}
-      <div class="det-row"><span class="k">${ic('clock')}</span><span>${esc(p.horario)} · ${p.abierto ? '<b style="color:var(--green)">Abierto ahora</b>' : '<b style="color:var(--red)">Cerrado</b>'}</span></div>
+      <div class="det-row"><span class="k">${ic('clock')}</span><span>${p.horario ? esc(p.horario) + ' · ' : ''}${p.abierto ? '<b style="color:var(--green)">Abierto ahora</b>' : '<b style="color:var(--red)">Cerrado</b>'}</span></div>
       <div class="det-row"><span class="k">${ic('pin')}</span><span>${esc(p.direccion)} · ${Math.round(haversine(USER, p))} m · ${ic('walk', 13)} ${walkMin(haversine(USER, p))} min caminando</span></div>
       <div class="det-row"><span class="k">${ic('car')}</span><span id="det-eta">${carMin(haversine(USER, p))} min en auto · ${trafHTML()}</span></div>
       <div class="attrs">${attrs.map((a) => `<span class="attr">${a}</span>`).join('')}</div>
@@ -1383,7 +1384,7 @@ let _rutaDest = null;
 function abrirRuta(p) {
   if (!p) return;
   _rutaDest = p;
-  track('comollegar', p.ciudad || ciudadActual);
+  track('comollegar', p.ciudad || ciudadActual, p.id);
   $('#modal').innerHTML = `
     <h3>${ic('compass', 18)} ¿Con qué app te llevo?</h3>
     <p>${esc(p.nombre || 'Tu auto')}${p.direccion ? ' · ' + esc(p.direccion) : ''}</p>
@@ -1920,6 +1921,7 @@ function salirModoReporte() {
   _reportando = false;
   $('#crosshair')?.setAttribute('hidden', '');
   $('#reportar-bar')?.classList.remove('show');
+  onMapMove();   // recalcula "Buscar cerca de aquí" (#btn-zona), que se ocultó al entrar a reportar
 }
 window.cancelarReporte = () => salirModoReporte();
 window.confirmarUbicacionReporte = () => {
@@ -2354,6 +2356,10 @@ async function cargar() {
     const j = await r.json();
     if (seq !== cargaSeq) return;     // llegó una carga más reciente: ignora esta respuesta vieja
     DATA = Array.isArray(j.estacionamientos) ? j.estacionamientos : [];   // respuesta rara → lista vacía, no romper
+    if (_ciudadCargada !== null && _ciudadCargada !== ciudadActual && comparar.length) {
+      comparar = []; actualizarBarraComparar();   // la comparación es por ciudad; al cambiar (buscar/ubicación/favorito) se vacía
+    }
+    _ciudadCargada = ciudadActual;
     if (j.centro) CENTRO = j.centro;
     if (j.regiones && j.regiones.length) REGIONES = j.regiones;
     if (j.zonas && j.zonas.length && !ZONAS.length) { ZONAS = j.zonas; poblarSelectorCiudades(); }

@@ -13,17 +13,20 @@ import { ready, run, all, get } from './db.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ID_OK = (id) => typeof id === 'string' && /^[a-z0-9-]{1,64}$/.test(id);
 
-// Importa una sola vez el JSON antiguo si la tabla está vacía.
-let _migrado = false;
-async function migrar() {
-  if (_migrado || !ready) return; _migrado = true;
-  const row = await get('SELECT COUNT(*) AS c FROM votos');
-  if (row && row.c > 0) return;
-  try {
-    const arr = JSON.parse(await readFile(process.env.VOTOS_PATH || join(__dirname, '..', 'votos.json'), 'utf8'));
-    for (const v of arr) if (v && ID_OK(v.id)) await run('INSERT INTO votos(id, ok, ts) VALUES(?, ?, ?)', [v.id, v.ok ? 1 : 0, v.ts || Date.now()]);
-    console.log(`[votos] migrados ${arr.length} desde JSON a SQLite`);
-  } catch { /* no había JSON: nada que migrar */ }
+// Importa una sola vez el JSON antiguo si la tabla está vacía. Migración cacheada
+// en una promesa para que corra UNA sola vez aunque lleguen requests concurrentes.
+let _migP = null;
+function migrar() {
+  return _migP || (_migP = (async () => {
+    if (!ready) return;
+    const row = await get('SELECT COUNT(*) AS c FROM votos');
+    if (row && row.c > 0) return;
+    try {
+      const arr = JSON.parse(await readFile(process.env.VOTOS_PATH || join(__dirname, '..', 'votos.json'), 'utf8'));
+      for (const v of arr) if (v && ID_OK(v.id)) await run('INSERT INTO votos(id, ok, ts) VALUES(?, ?, ?)', [v.id, v.ok ? 1 : 0, v.ts || Date.now()]);
+      console.log(`[votos] migrados ${arr.length} desde JSON a SQLite`);
+    } catch { /* no había JSON: nada que migrar */ }
+  })());
 }
 
 // Registra un voto (ok = true → "había cupo"; false → "no había").

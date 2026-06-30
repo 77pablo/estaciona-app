@@ -19,16 +19,19 @@ const mediana = (xs) => {
   return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
 };
 
-let _migrado = false;
-async function migrar() {
-  if (_migrado || !ready) return; _migrado = true;
-  const row = await get('SELECT COUNT(*) AS c FROM aportes');
-  if (row && row.c > 0) return;
-  try {
-    const arr = JSON.parse(await readFile(process.env.APORTES_PATH || join(__dirname, '..', 'aportes.json'), 'utf8'));
-    for (const a of arr) if (a && ID_OK(a.id)) await run('INSERT INTO aportes(id, precio, texto, ts) VALUES(?, ?, ?, ?)', [a.id, a.precio ?? null, a.texto ?? null, a.ts || Date.now()]);
-    console.log(`[aportes] migrados ${arr.length} desde JSON a SQLite`);
-  } catch { /* sin JSON: nada que migrar */ }
+// Migración cacheada en una promesa (corre UNA vez aunque haya requests concurrentes).
+let _migP = null;
+function migrar() {
+  return _migP || (_migP = (async () => {
+    if (!ready) return;
+    const row = await get('SELECT COUNT(*) AS c FROM aportes');
+    if (row && row.c > 0) return;
+    try {
+      const arr = JSON.parse(await readFile(process.env.APORTES_PATH || join(__dirname, '..', 'aportes.json'), 'utf8'));
+      for (const a of arr) if (a && ID_OK(a.id)) await run('INSERT INTO aportes(id, precio, texto, ts) VALUES(?, ?, ?, ?)', [a.id, a.precio ?? null, a.texto ?? null, a.ts || Date.now()]);
+      console.log(`[aportes] migrados ${arr.length} desde JSON a SQLite`);
+    } catch { /* sin JSON: nada que migrar */ }
+  })());
 }
 
 // Registra un aporte. precio (CLP/hora) y/o texto (comentario). Devuelve ok.
@@ -75,9 +78,8 @@ export async function comentariosRecientes(n = 80) {
 // Elimina comentarios/aportes de un id en un ts exacto (moderación). Devuelve cuántos borró.
 export async function eliminarAporte(id, ts) {
   await migrar();
-  await run('DELETE FROM aportes WHERE id = ? AND ts = ?', [id, ts]);
-  const r = await get('SELECT changes() AS c');
-  return r ? r.c : 0;
+  const r = await run('DELETE FROM aportes WHERE id = ? AND ts = ?', [id, ts]);
+  return r.changes;
 }
 
 // Aportes de un lugar (detalle): comentarios + precio reportado.

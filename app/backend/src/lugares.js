@@ -24,16 +24,19 @@ function distM(aLat, aLng, bLat, bLng) {
   return Math.hypot(dLat, dLng);
 }
 
-let _migrado = false;
-async function migrar() {
-  if (_migrado || !ready) return; _migrado = true;
-  const row = await get('SELECT COUNT(*) AS c FROM lugares');
-  if (row && row.c > 0) return;
-  try {
-    const arr = JSON.parse(await readFile(process.env.LUGARES_PATH || join(__dirname, '..', 'lugares.json'), 'utf8'));
-    for (const l of arr) if (l && l.id) await run('INSERT OR IGNORE INTO lugares(id, ciudad, nombre, lat, lng, json, ts) VALUES(?, ?, ?, ?, ?, ?, ?)', [l.id, l.ciudad, l.nombre, l.lat, l.lng, JSON.stringify(l), l.ts || Date.now()]);
-    console.log(`[lugares] migrados ${arr.length} desde JSON a SQLite`);
-  } catch { /* sin JSON: nada que migrar */ }
+// Migración cacheada en una promesa (corre UNA vez aunque haya requests concurrentes).
+let _migP = null;
+function migrar() {
+  return _migP || (_migP = (async () => {
+    if (!ready) return;
+    const row = await get('SELECT COUNT(*) AS c FROM lugares');
+    if (row && row.c > 0) return;
+    try {
+      const arr = JSON.parse(await readFile(process.env.LUGARES_PATH || join(__dirname, '..', 'lugares.json'), 'utf8'));
+      for (const l of arr) if (l && l.id) await run('INSERT OR IGNORE INTO lugares(id, ciudad, nombre, lat, lng, json, ts) VALUES(?, ?, ?, ?, ?, ?, ?)', [l.id, l.ciudad, l.nombre, l.lat, l.lng, JSON.stringify(l), l.ts || Date.now()]);
+      console.log(`[lugares] migrados ${arr.length} desde JSON a SQLite`);
+    } catch { /* sin JSON: nada que migrar */ }
+  })());
 }
 
 // Registra un lugar reportado. Devuelve { ok, id } o { ok:false, error }.
@@ -95,7 +98,6 @@ export async function contarLugares() {
 // Elimina un lugar reportado por id (moderación). Devuelve true si borró algo.
 export async function eliminarLugar(id) {
   await migrar();
-  await run('DELETE FROM lugares WHERE id = ?', [id]);
-  const r = await get('SELECT changes() AS c');
-  return !!(r && r.c > 0);
+  const r = await run('DELETE FROM lugares WHERE id = ?', [id]);
+  return r.changes > 0;
 }

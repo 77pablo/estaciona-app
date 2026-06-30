@@ -11,16 +11,20 @@ import { ready, run, all, get } from './db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-let _migrado = false;
-async function migrar() {
-  if (_migrado || !ready) return; _migrado = true;
-  const row = await get('SELECT COUNT(*) AS c FROM destacados');
-  if (row && row.c > 0) return;
-  try {
-    const arr = JSON.parse(await readFile(process.env.DESTACADOS_PATH || join(__dirname, '..', 'destacados.json'), 'utf8'));
-    for (const d of arr) if (d && typeof d.id === 'string') await run('INSERT OR REPLACE INTO destacados(id, etiqueta, premium, tagline, hasta, ts) VALUES(?, ?, ?, ?, ?, ?)', [d.id, d.etiqueta || 'Destacado', d.premium ? 1 : 0, d.tagline || null, d.hasta || null, d.ts || Date.now()]);
-    console.log(`[destacados] migrados ${arr.length} desde JSON a SQLite`);
-  } catch { /* sin JSON: nada que migrar */ }
+// Migración cacheada en una promesa: todas las operaciones la esperan, pero el
+// readFile + INSERTs corren UNA sola vez (sin carrera entre requests concurrentes).
+let _migP = null;
+function migrar() {
+  return _migP || (_migP = (async () => {
+    if (!ready) return;
+    const row = await get('SELECT COUNT(*) AS c FROM destacados');
+    if (row && row.c > 0) return;
+    try {
+      const arr = JSON.parse(await readFile(process.env.DESTACADOS_PATH || join(__dirname, '..', 'destacados.json'), 'utf8'));
+      for (const d of arr) if (d && typeof d.id === 'string') await run('INSERT OR REPLACE INTO destacados(id, etiqueta, premium, tagline, hasta, ts) VALUES(?, ?, ?, ?, ?, ?)', [d.id, d.etiqueta || 'Destacado', d.premium ? 1 : 0, d.tagline || null, d.hasta || null, d.ts || Date.now()]);
+      console.log(`[destacados] migrados ${arr.length} desde JSON a SQLite`);
+    } catch { /* sin JSON: nada que migrar */ }
+  })());
 }
 
 // Agrega o actualiza un destacado. dias>0 => vence en N días; premium + tagline opcional.
@@ -36,9 +40,8 @@ export async function agregarDestacado(id, etiqueta, dias, premium, tagline) {
 }
 export async function quitarDestacado(id) {
   await migrar();
-  await run('DELETE FROM destacados WHERE id = ?', [id]);
-  const r = await get('SELECT changes() AS c');
-  return !!(r && r.c > 0);
+  const r = await run('DELETE FROM destacados WHERE id = ?', [id]);
+  return r.changes > 0;
 }
 // Mapa id -> {etiqueta, premium, tagline} de los ACTIVOS (para el snapshot).
 export async function mapaDestacados() {

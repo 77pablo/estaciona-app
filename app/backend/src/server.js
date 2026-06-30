@@ -19,9 +19,10 @@ import { registrarVoto, tallyReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
 import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto } from './fotos.js';
 import { registrarLugar, lugaresDe, lugaresRecientes, eliminarLugar, contarLugares } from './lugares.js';
-import { registrarEvento, resumenAnalytics } from './analytics.js';
+import { registrarEvento, resumenAnalytics, vistasLugar } from './analytics.js';
 import { agregarDestacado, quitarDestacado, mapaDestacados, listarDestacados } from './destacados.js';
 import { revisarFoto } from './modera-foto.js';
+import { ready as dbReady } from './db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = join(__dirname, '..', '..', 'web');
@@ -93,6 +94,27 @@ function rateLimit(req, max, ventanaMs) {
   return arr.length <= max;
 }
 
+// Anti fuerza-bruta de la clave admin: cuenta intentos FALLIDOS por IP y bloquea
+// si hay demasiados en la ventana (la clave admin es la única defensa de /admin).
+const _adminFails = new Map();
+function ipDe(req) {
+  const xff = (req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return xff.length ? xff[xff.length - 1] : (req.socket.remoteAddress || 'x');   // el ÚLTIMO XFF lo pone el proxy (no falsificable)
+}
+function adminBloqueado(req) {
+  const ip = ipDe(req), ahora = Date.now();
+  const arr = (_adminFails.get(ip) || []).filter((t) => ahora - t < 300000);   // ventana 5 min
+  _adminFails.set(ip, arr);
+  return arr.length >= 15;     // ≥15 fallos en 5 min ⇒ bloqueado un rato
+}
+function adminFallo(req) {
+  const ip = ipDe(req);
+  const arr = _adminFails.get(ip) || [];
+  arr.push(Date.now());
+  _adminFails.set(ip, arr);
+  if (_adminFails.size > 5000) for (const [k, v] of _adminFails) if (!v.length) _adminFails.delete(k);
+}
+
 // Rutas "bonitas": la landing es la portada (/), la app vive en /app.
 const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html', '/terminos': '/terminos.html', '/privacidad': '/privacidad.html', '/operadores': '/operadores.html', '/pro': '/pro.html' };
 
@@ -148,9 +170,11 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, { centro: CENTRO, zonas: ZONAS, regiones: REGIONES, estacionamientos: lista });
     }
     if (url.pathname === '/api/aporte' && req.method === 'POST') {
+      const okRate = rateLimit(req, 20, 600000);   // máx 20 aportes / 10 min por IP (anti-spam)
       let body = '', tooBig = false;
       req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 20000) tooBig = true; });   // marca y drena; responde en 'end'
       req.on('end', async () => {
+        if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
         if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
         try {
           const { id, precio, texto } = JSON.parse(body || '{}');
@@ -165,9 +189,11 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, await aportesDe(id));
     }
     if (url.pathname === '/api/foto' && req.method === 'POST') {
+      const okRate = rateLimit(req, 15, 600000);   // máx 15 fotos / 10 min por IP (anti-spam; suben pesadas)
       let body = '', tooBig = false;
       req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 3_000_000) tooBig = true; });   // tope ~3MB; responde en 'end' (el cliente muestra "muy pesada")
       req.on('end', async () => {
+        if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
         if (tooBig) return sendJSON(res, 413, { ok: false });
         try {
           const { id, dataUrl } = JSON.parse(body || '{}');
@@ -186,7 +212,8 @@ const server = http.createServer(async (req, res) => {
       return await servirFoto(res, url.pathname);
     }
     if (url.pathname === '/api/mod/feed' && req.method === 'GET') {
-      if (!esAdmin(req, url)) return sendJSON(res, 403, { error: 'no autorizado' });
+      if (adminBloqueado(req)) return sendJSON(res, 429, { error: 'demasiados intentos, espera unos minutos' });
+      if (!esAdmin(req, url)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
       return sendJSON(res, 200, {
         comentarios: await comentariosRecientes(),
         fotos: await fotosRecientes(),
@@ -196,10 +223,12 @@ const server = http.createServer(async (req, res) => {
         nLugares: await contarLugares(),
         analytics: await resumenAnalytics(),
         destacados: await listarDestacados(),
+        vistasLugar: await vistasLugar(),
       });
     }
     if (url.pathname === '/api/mod/borrar' && req.method === 'POST') {
-      if (!esAdmin(req, url)) return sendJSON(res, 403, { error: 'no autorizado' });
+      if (adminBloqueado(req)) return sendJSON(res, 429, { error: 'demasiados intentos' });
+      if (!esAdmin(req, url)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
       let body = '', tooBig = false;
       req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 10000) tooBig = true; });
       req.on('end', async () => {
@@ -216,7 +245,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (url.pathname === '/api/mod/destacado' && req.method === 'POST') {
-      if (!esAdmin(req, url)) return sendJSON(res, 403, { error: 'no autorizado' });
+      if (adminBloqueado(req)) return sendJSON(res, 429, { error: 'demasiados intentos' });
+      if (!esAdmin(req, url)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
       let body = '', tooBig = false;
       req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 4000) tooBig = true; });
       req.on('end', async () => {
@@ -232,9 +262,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (url.pathname === '/api/voto' && req.method === 'POST') {
+      const okRate = rateLimit(req, 40, 600000);   // máx 40 votos / 10 min por IP (anti-spam)
       let body = '', tooBig = false;
       req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 10000) tooBig = true; });
       req.on('end', async () => {
+        if (!okRate) return sendJSON(res, 429, { error: 'rate' });
         if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
         try {
           const { id, ok } = JSON.parse(body || '{}');
@@ -261,11 +293,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/track' && req.method === 'POST') {
       // Estadística de uso ANÓNIMA (conteo). Sin IP, sin cookies. Responde rápido.
+      // Rate-limit por IP para que los números NO se puedan inflar (defienden la
+      // analítica que se le muestra a un operador). Al exceder, se descarta en silencio.
+      const okRate = rateLimit(req, 120, 60000);   // máx 120 eventos / min por IP
       let body = '', tooBig = false;
       req.on('data', (c) => { if (tooBig) return; body += c; if (body.length > 1000) tooBig = true; });
       req.on('end', async () => {
-        if (!tooBig) {
-          try { const { tipo, ciudad } = JSON.parse(body || '{}'); await registrarEvento(tipo, ciudad); } catch { /* ignora payloads inválidos */ }
+        if (okRate && !tooBig) {
+          try { const { tipo, ciudad, id } = JSON.parse(body || '{}'); await registrarEvento(tipo, ciudad, id); } catch { /* ignora payloads inválidos */ }
         }
         res.writeHead(204); res.end();   // sin contenido: es fire-and-forget
       });
@@ -294,7 +329,9 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, { maptilerKey: MAPTILER_KEY, tomtomKey: TOMTOM_KEY });
     }
     if (url.pathname === '/api/health' && req.method === 'GET') {
-      return sendJSON(res, 200, { ok: true });
+      // `db:false` => SQLite no cargó: la app responde pero NADA persiste (las
+      // escrituras se descartan). Sirve para monitorear que la persistencia esté viva.
+      return sendJSON(res, 200, { ok: true, db: dbReady });
     }
     if (req.method === 'GET') return await serveStatic(res, url.pathname);
     res.writeHead(405); res.end('Método no permitido');
@@ -314,7 +351,9 @@ server.listen(PORT, () => {
   // como archivos (define FOTOS_DIR al volumen).
   const persist = (env) => process.env[env] ? `${process.env[env]}  (persiste)` : `local efímero — SE BORRA en redeploy (define ${env})`;
   console.log('  Persistencia:');
-  console.log(`   · base de datos → ${persist('SQLITE_PATH')}`);
+  // Refleja el estado REAL de SQLite: si no cargó, NADA se guarda aunque SQLITE_PATH esté definido.
+  if (dbReady) console.log(`   · base de datos → ${persist('SQLITE_PATH')}`);
+  else console.log('   · base de datos → ⚠️  SQLite NO cargó: votos/aportes/lugares/analítica NO se guardan (revisa SQLITE_PATH / versión de Node ≥22.5)');
   console.log(`   · fotos         → ${persist('FOTOS_DIR')}`);
   console.log('');
 });

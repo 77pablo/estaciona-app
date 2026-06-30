@@ -45,6 +45,7 @@ try {
     CREATE TABLE IF NOT EXISTS an_evento (tipo TEXT PRIMARY KEY, n INTEGER);
     CREATE TABLE IF NOT EXISTS an_dia (dia TEXT, tipo TEXT, n INTEGER, PRIMARY KEY (dia, tipo));
     CREATE TABLE IF NOT EXISTS an_ciudad (ciudad TEXT PRIMARY KEY, n INTEGER);
+    CREATE TABLE IF NOT EXISTS an_lugar (id TEXT, tipo TEXT, n INTEGER, PRIMARY KEY (id, tipo));
   `);
   ready = true;
   console.log(`  Base de datos: SQLite → ${FILE}`);
@@ -54,6 +55,9 @@ try {
 
 // Helpers async (envuelven node:sqlite, que es síncrono). Mañana, para Postgres,
 // solo cambian estas 3 funciones por la versión con `pg` (mismo contrato).
-export async function run(sql, params = []) { if (!ready) return; sdb.prepare(sql).run(...params); }
+// `run` devuelve el resultado nativo { changes, lastInsertRowid } para que el
+// llamador sepa cuántas filas tocó SIN un segundo query (que tendría una carrera
+// entre requests concurrentes sobre la misma conexión).
+export async function run(sql, params = []) { if (!ready) return { changes: 0, lastInsertRowid: 0 }; return sdb.prepare(sql).run(...params); }
 export async function all(sql, params = []) { if (!ready) return []; return sdb.prepare(sql).all(...params); }
 export async function get(sql, params = []) { if (!ready) return null; return sdb.prepare(sql).get(...params) ?? null; }
