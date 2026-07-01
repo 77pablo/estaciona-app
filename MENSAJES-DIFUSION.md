@@ -19,13 +19,15 @@ resto del país es estimación. La honestidad es tu diferencia — no la pierdas
 > me decí honestamente si te sirvió o si te "mintió"? Me ayudai caleta con eso 🙏
 >
 > 👉 https://estaciona-app-production.up.railway.app
+>
+> — Pablo
 
 ---
 
 ## 2) Para grupos locales de Temuco (Facebook / WhatsApp de barrio o trabajo)
 
-> Hola 👋 Soy de Temuco y armé una app **gratis** para encontrar estacionamiento en el
-> centro sin dar tantas vueltas: **Estaciona**.
+> Hola 👋 Soy **Pablo**, de Temuco, y armé una app **gratis** para encontrar
+> estacionamiento en el centro sin dar tantas vueltas: **Estaciona**.
 >
 > Te muestra en el mapa los estacionamientos, el precio por minuto/hora, el horario y
 > cuáles son gratis. Los precios del **centro de Temuco los verifiqué en terreno**
@@ -36,11 +38,13 @@ resto del país es estimación. La honestidad es tu diferencia — no la pierdas
 > y lo estoy probando acá en Temuco antes que en otras partes.
 >
 > Si la ocupan, me sirve un montón el feedback honesto: ¿les sirvió? ¿algún precio está
-> mal? (adentro de la app se puede reportar). 
+> mal? (adentro de la app se puede reportar, o me escriben directo). 
 >
 > 👉 https://estaciona-app-production.up.railway.app
 >
-> ¡Gracias! 🙌
+> Cualquier cosa me escriben 🙌
+> 📱 WhatsApp: +56 9 5998 7786 · ✉️ pablodaniel28200728@gmail.com
+> — Pablo Espinoza
 
 ---
 
@@ -49,6 +53,7 @@ resto del país es estimación. La honestidad es tu diferencia — no la pierdas
 > **Estaciona** — dónde estacionar en el centro de Temuco, con precios reales y gratis.
 > Sin cuenta, sin publicidad. Pruébala y dime si te sirve 👉
 > https://estaciona-app-production.up.railway.app
+> (feedback a Pablo: WhatsApp +56 9 5998 7786)
 
 ---
 
