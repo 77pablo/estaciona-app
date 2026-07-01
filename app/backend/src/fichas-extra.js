@@ -175,6 +175,31 @@ export const FICHAS_EXTRA = [
     atributos: { techado: true, ev: false, accesible: true, camaras: true },
   },
   {
+    // Estacionamiento subterráneo Plaza Manuel Recabarren (centro-sur de Temuco),
+    // operado por Estacionamientos Araucanía. Horario L-V 07:30–22:00 / Sáb 09:00–14:30
+    // / Dom cerrado (confirmado, incl. web oficial). El PRECIO (~$1.500/hr, tope
+    // $8.000/24h) proviene de terceros (Tripadvisor/chilopina), NO de fuente oficial
+    // (su web solo publica "pagas 7h por 24h") → verificado:false, se muestra "~est.".
+    // Coords referenciales (Plaza Recabarren: Prat/San Martín).
+    id: 'x-temuco-recabarren', tipo: 'privado', ciudad: 'Temuco', region: 'La Araucanía',
+    categoria: null, nombre: 'Subterráneo Plaza Manuel Recabarren', direccion: 'Av. San Martín 751, Temuco',
+    lat: -38.73985, lng: -72.58935, precioHora: 1500, fraccion: null,
+    gratis: null, horario: '07:30–22:00', verificado: false,
+    fuente: 'horario oficial estacionamientosaraucania.cl; precio ref. Tripadvisor/chilopina (~$1.500/hr, no oficial)',
+    atributos: { techado: true, ev: false, accesible: true, camaras: true },
+  },
+  {
+    // EC Parking en Falabella Temuco (Vicuña Mackenna 590). Estacionamiento techado
+    // integrado; GRATIS proporcional a la compra en la tienda (solo clientes).
+    // L-D 08:30–21:00. Verificado jul-2026 (ecparking.cl/sucursales-temuco).
+    id: 'x-temuco-ecparking-falabella', tipo: 'privado', ciudad: 'Temuco', region: 'La Araucanía',
+    categoria: null, nombre: 'EC Parking — Falabella', direccion: 'Vicuña Mackenna 590, Temuco',
+    lat: -38.73690, lng: -72.58955, precioHora: 0, fraccion: null,
+    gratis: 'Gratis con compra (clientes)', horario: '08:30–21:00', verificado: true,
+    fuente: 'ecparking.cl (sucursal Falabella Temuco)',
+    atributos: { techado: true, ev: false, accesible: true, camaras: true },
+  },
+  {
     id: 'x-puntaarenas-aeropuerto', tipo: 'privado', ciudad: 'Punta Arenas', region: 'Magallanes',
     categoria: 'Terminal', nombre: 'Aeropuerto Carlos Ibáñez (estacionamiento)', direccion: 'Aeropuerto Pdte. Carlos Ibáñez del Campo',
     lat: -53.003809, lng: -70.846482, precioMin: 54, precioHora: 3240, fraccion: null,

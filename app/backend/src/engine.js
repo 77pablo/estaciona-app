@@ -9,6 +9,7 @@
 
 import { ESTACIONAMIENTOS } from './data.js';
 import { mapaPreciosReales } from './precios-reales.js';
+import { mapaCorrecciones } from './correcciones.js';
 import { FICHAS_EXTRA } from './fichas-extra.js';
 import { ESTIMACIONES_COMUNA } from './estimaciones-comuna.js';
 
@@ -22,6 +23,14 @@ const OVERRIDES = mapaPreciosReales();
 for (const e of FICHAS) {
   const o = OVERRIDES[e.id];
   if (o) { Object.assign(e, o); e.verificado = true; }
+}
+
+// Correcciones de campos (dirección/nombre/coords) SIN marcar verificado: arreglan
+// un dato erróneo de OSM cuando no tenemos su precio confirmado.
+const CORR = mapaCorrecciones();
+for (const e of FICHAS) {
+  const c = CORR[e.id];
+  if (c) { const { id, ...campos } = c; Object.assign(e, campos); }
 }
 
 // Estimación por comuna: para fichas SIN precio real (verificado:false) y PAGADAS
