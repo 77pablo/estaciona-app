@@ -185,14 +185,15 @@
         <button class="del" onclick="borrar(this,'lugar','${esc(l.id)}',0)">Eliminar</button>
       </div>`).join('') : `<div class="vacio">${q ? 'Ningún lugar coincide.' : 'Aún nadie agrega lugares.'}</div>`;
 
-    // Reportes de problemas (crowdsource de corrección).
+    // Reportes de problemas (crowdsource de corrección). Vienen AGRUPADOS por ficha.
     const MOTIVO = { cerrado: 'Cerrado permanentemente', 'no-existe': 'No existe / no es estacionamiento', precio: 'Precio equivocado', datos: 'Datos incorrectos', otro: 'Otro problema' };
+    const motivosTxt = (m) => Object.entries(m || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${MOTIVO[k] || k}${v > 1 ? ` ×${v}` : ''}`).join(' · ');
     $('#cuentaRep').textContent = q ? `(${reps.length} de ${(DATOS.reportes || []).length})` : `(${(DATOS.reportes || []).length})`;
     $('#reportes').innerHTML = reps.length ? reps.map((r) => `
       <div class="item">
-        <div><div class="txt">${esc(MOTIVO[r.motivo] || r.motivo)} · <span class="price-id">${esc(r.id)}</span></div>
-        <div class="meta">${fecha(r.ts)}</div></div>
-        <button class="del" onclick="borrar(this,'reporte','${esc(r.id)}',${r.ts})">Eliminar</button>
+        <div><div class="txt">${esc(motivosTxt(r.motivos))} · <span class="price-id">${esc(r.id)}</span></div>
+        <div class="meta">${r.n} aviso${r.n === 1 ? '' : 's'} · último ${fecha(r.ts)}</div></div>
+        <button class="del" onclick="borrar(this,'reporte','${esc(r.id)}',0)">Eliminar todos</button>
       </div>`).join('') : `<div class="vacio">${q ? 'Ningún reporte coincide.' : 'Sin reportes de problemas.'}</div>`;
 
     $('#cuentaCom').textContent = q ? `(${coms.length} de ${DATOS.comentarios.length})` : `(${DATOS.comentarios.length})`;
@@ -224,6 +225,7 @@
     if (j.ok) {
       if (tipo === 'comentario') DATOS.comentarios = DATOS.comentarios.filter((c) => !(c.id === id && c.ts === ts));
       else if (tipo === 'lugar') { DATOS.lugares = (DATOS.lugares || []).filter((l) => l.id !== id); DATOS.nLugares = Math.max(0, (DATOS.nLugares || 1) - 1); }
+      else if (tipo === 'reporte') DATOS.reportes = (DATOS.reportes || []).filter((rp) => rp.id !== id);
       else DATOS.fotos = DATOS.fotos.filter((f) => !(f.id === id && f.file === file));
       render();
     } else alert('No se pudo eliminar.');

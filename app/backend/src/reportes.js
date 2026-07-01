@@ -28,13 +28,29 @@ export async function contarReportes() {
   return r ? r.c : 0;
 }
 
-// Reportes recientes de todo el país (para el panel admin). Máx n.
+// Reportes AGRUPADOS por ficha (para el panel admin): 1 fila por lugar con el
+// desglose de motivos y el total, ordenados por el aviso más reciente. Así 40
+// avisos de la misma ficha no inundan el feed. Devuelve máx n lugares.
 export async function reportesRecientes(n = 80) {
-  return await all('SELECT id, motivo, ts FROM reportes ORDER BY ts DESC LIMIT ?', [n]);
+  // GROUP BY id, motivo → contamos por motivo; luego re-agrupamos por lugar en JS.
+  // Ventana n*5 (máx 5 motivos por ficha) garantiza n lugares completos.
+  const filas = await all(
+    'SELECT id, motivo, COUNT(*) AS n, MAX(ts) AS ts FROM reportes GROUP BY id, motivo ORDER BY MAX(ts) DESC LIMIT ?',
+    [n * 5],
+  );
+  const porId = new Map();
+  for (const f of filas) {
+    let g = porId.get(f.id);
+    if (!g) { g = { id: f.id, ts: f.ts, n: 0, motivos: {} }; porId.set(f.id, g); }
+    g.n += f.n;
+    g.motivos[f.motivo] = (g.motivos[f.motivo] || 0) + f.n;
+    if (f.ts > g.ts) g.ts = f.ts;
+  }
+  return [...porId.values()].sort((a, b) => b.ts - a.ts).slice(0, n);
 }
 
-// Borra un reporte puntual (por id + ts).
-export async function eliminarReporte(id, ts) {
-  const r = await run('DELETE FROM reportes WHERE id = ? AND ts = ?', [id, ts]);
+// Borra TODOS los reportes de una ficha (el moderador la resolvió de raíz).
+export async function eliminarReporte(id) {
+  const r = await run('DELETE FROM reportes WHERE id = ?', [id]);
   return r.changes;
 }
