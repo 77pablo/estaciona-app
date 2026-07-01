@@ -162,6 +162,19 @@ export const FICHAS_EXTRA = [
     atributos: { techado: true, ev: false, accesible: true, camaras: false },
   },
   {
+    // Casino Dreams (operador Republic Parking), Av. Alemania 0945. OJO: precio
+    // NO verificado (verificado:false) → se muestra como estimación "~$X est.".
+    // El operador NO publica tarifa oficial legible; las cifras ($25/min = $1.500/hr,
+    // tope $6.000/día, finde $3.000 con validación) vienen de ParkMe (agregador
+    // tercero), NO de fuente oficial. Además es GRATIS para clientes del casino con
+    // validación de consumo. No subir a verificado:true sin confirmar en terreno/operador.
+    id: 'x-temuco-casino-dreams', tipo: 'privado', ciudad: 'Temuco', region: 'La Araucanía',
+    categoria: null, nombre: 'Casino Dreams (estacionamiento)', direccion: 'Av. Alemania 0945, Temuco',
+    lat: -38.732634, lng: -72.615646, precioMin: 25, precioHora: 1500, fraccion: null,
+    gratis: null, horario: '24h', verificado: false, fuente: 'ParkMe (no oficial); gratis clientes casino c/validación',
+    atributos: { techado: true, ev: false, accesible: true, camaras: true },
+  },
+  {
     id: 'x-puntaarenas-aeropuerto', tipo: 'privado', ciudad: 'Punta Arenas', region: 'Magallanes',
     categoria: 'Terminal', nombre: 'Aeropuerto Carlos Ibáñez (estacionamiento)', direccion: 'Aeropuerto Pdte. Carlos Ibáñez del Campo',
     lat: -53.003809, lng: -70.846482, precioMin: 54, precioHora: 3240, fraccion: null,
