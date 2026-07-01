@@ -13,7 +13,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
-import { snapshotCiudad, shapeFichas } from './engine.js';
+import { snapshotCiudad, shapeFichas, curvaDisponibilidad } from './engine.js';
+import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } from './reportes.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
@@ -200,6 +201,26 @@ const server = http.createServer(async (req, res) => {
       const id = url.searchParams.get('id') || '';
       return sendJSON(res, 200, await aportesDe(id));
     }
+    if (url.pathname === '/api/curva' && req.method === 'GET') {
+      // Curva de disponibilidad estimada por hora (beneficio Pro "mejor hora para ir").
+      // Mismo modelo que el semáforo; null si el id no está en el dataset.
+      const c = curvaDisponibilidad(url.searchParams.get('id') || '');
+      return sendJSON(res, c ? 200 : 404, c || { error: 'sin curva' });
+    }
+    if (url.pathname === '/api/reporte' && req.method === 'POST') {
+      // Reportar que una ficha está mal (cerrada/no existe/precio/datos). Crowdsource
+      // de corrección: se revisa en /admin. Rate-limit anti-spam por IP.
+      const okRate = rateLimit(req, 20, 600000);   // máx 20 reportes / 10 min por IP
+      const { tooBig, body } = await readBody(req, 2000);
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { id, motivo } = JSON.parse(body || '{}');
+        const ok = await registrarReporte(id, motivo);
+        sendJSON(res, ok ? 200 : 400, { ok });
+      } catch { sendJSON(res, 400, { ok: false }); }
+      return;
+    }
     if (url.pathname === '/api/foto' && req.method === 'POST') {
       const okRate = rateLimit(req, 15, 600000);   // máx 15 fotos / 10 min por IP (anti-spam; suben pesadas)
       const { tooBig, body } = await readBody(req, 3_000_000);   // tope ~3MB (el cliente muestra "muy pesada")
@@ -231,8 +252,10 @@ const server = http.createServer(async (req, res) => {
         fotos: await fotosRecientes(),
         precios: await preciosReportados(),
         lugares: await lugaresRecientes(),
+        reportes: await reportesRecientes(),
         nVotos: await contarVotos(),
         nLugares: await contarLugares(),
+        nReportes: await contarReportes(),
         analytics: await resumenAnalytics(),
         destacados: await listarDestacados(),
         vistasLugar: await vistasLugar(),
@@ -249,6 +272,7 @@ const server = http.createServer(async (req, res) => {
         if (tipo === 'comentario') ok = (await eliminarAporte(id, ts)) > 0;
         else if (tipo === 'foto') ok = await eliminarFoto(id, file);
         else if (tipo === 'lugar') ok = await eliminarLugar(id);
+        else if (tipo === 'reporte') ok = (await eliminarReporte(id, ts)) > 0;
         sendJSON(res, ok ? 200 : 400, { ok });
       } catch { sendJSON(res, 400, { ok: false }); }
       return;

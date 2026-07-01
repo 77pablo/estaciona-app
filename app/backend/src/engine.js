@@ -157,6 +157,24 @@ export function shapeFichas(fichas) {
   });
 }
 
+// Curva de disponibilidad estimada por hora (beneficio Pro: "mejor hora para ir").
+// Usa EXACTAMENTE el mismo modelo que el semáforo (nada nuevo/inventado), solo que
+// recorriendo las 24 horas del día indicado. Devuelve null si el id no está en el
+// dataset (ej. un lugar aportado por la comunidad, que no tiene curva confiable).
+export function curvaDisponibilidad(id, diaOverride) {
+  const e = FICHAS.find((f) => f.id === id);
+  if (!e) return null;
+  const dia = Number.isInteger(diaOverride) && diaOverride >= 0 && diaOverride <= 6 ? diaOverride : nowChile().dia;
+  const horas = [];
+  for (let h = 0; h < 24; h++) {
+    const abierto = abiertoAhora(e, h);
+    const demanda = clamp((e.demandaBase ?? 0.55) * factorHora(h, dia), 0, 1);
+    const nivel = !abierto ? 'cerrado' : nivelPorRatio(1 - demanda);
+    horas.push({ h, nivel, gratis: gratisAhora(e, h, dia), abierto });
+  }
+  return { dia, horaActual: nowChile().hora, horas };
+}
+
 // Snapshot del dataset completo (compat; el servidor usa snapshotCiudad).
 export function getEstacionamientos() {
   return shapeFichas(FICHAS);

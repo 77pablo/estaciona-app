@@ -80,6 +80,9 @@
     <h2>Lugares reportados por la gente <span id="cuentaLug" class="muted"></span></h2>
     <p class="sub" style="margin:-4px 0 10px">Estacionamientos que la gente agregó al mapa. Revisa que sean reales; elimina los falsos o spam.</p>
     <div id="lugares"></div>
+    <h2>Reportes de problemas <span id="cuentaRep" class="muted"></span></h2>
+    <p class="sub" style="margin:-4px 0 10px">La gente avisó que estas fichas están mal (cerrada, no existe, precio/datos). Revisa y corrige o borra la ficha; luego elimina el reporte.</p>
+    <div id="reportes"></div>
     <h2>Comentarios <span id="cuentaCom" class="muted"></span></h2>
     <div id="comentarios"></div>
     <h2>Fotos <span id="cuentaFot" class="muted"></span></h2>
@@ -115,6 +118,7 @@
     const fots = q ? DATOS.fotos.filter((f) => norm(f.id).includes(q)) : DATOS.fotos;
     const pres = q ? (DATOS.precios || []).filter((p) => norm(p.id).includes(q)) : (DATOS.precios || []);
     const lugs = q ? (DATOS.lugares || []).filter((l) => norm(l.nombre).includes(q) || norm(l.ciudad).includes(q) || norm(l.direccion).includes(q)) : (DATOS.lugares || []);
+    const reps = q ? (DATOS.reportes || []).filter((r) => norm(r.id).includes(q)) : (DATOS.reportes || []);
 
     // Contadores (totales sin filtrar): sirven para monitorear que la gente aporta y que PERSISTE.
     $('#stats').innerHTML = [
@@ -122,6 +126,7 @@
       ['Fotos', DATOS.fotos.length],
       ['Precios reportados', (DATOS.precios || []).length],
       ['Lugares reportados', DATOS.nLugares || (DATOS.lugares || []).length],
+      ['Reportes de problemas', DATOS.nReportes || (DATOS.reportes || []).length],
       ['Votos', DATOS.nVotos || 0],
     ].map(([lbl, n]) => `<div class="stat"><b>${n}</b><span>${lbl}</span></div>`).join('');
 
@@ -179,6 +184,16 @@
         <div class="meta">${esc(l.ciudad)}${l.direccion ? ' · ' + esc(l.direccion) : ''} · ${fecha(l.ts)} · <a href="https://www.google.com/maps?q=${l.lat},${l.lng}" target="_blank" rel="noopener">ver en mapa</a></div></div>
         <button class="del" onclick="borrar(this,'lugar','${esc(l.id)}',0)">Eliminar</button>
       </div>`).join('') : `<div class="vacio">${q ? 'Ningún lugar coincide.' : 'Aún nadie agrega lugares.'}</div>`;
+
+    // Reportes de problemas (crowdsource de corrección).
+    const MOTIVO = { cerrado: 'Cerrado permanentemente', 'no-existe': 'No existe / no es estacionamiento', precio: 'Precio equivocado', datos: 'Datos incorrectos', otro: 'Otro problema' };
+    $('#cuentaRep').textContent = q ? `(${reps.length} de ${(DATOS.reportes || []).length})` : `(${(DATOS.reportes || []).length})`;
+    $('#reportes').innerHTML = reps.length ? reps.map((r) => `
+      <div class="item">
+        <div><div class="txt">${esc(MOTIVO[r.motivo] || r.motivo)} · <span class="price-id">${esc(r.id)}</span></div>
+        <div class="meta">${fecha(r.ts)}</div></div>
+        <button class="del" onclick="borrar(this,'reporte','${esc(r.id)}',${r.ts})">Eliminar</button>
+      </div>`).join('') : `<div class="vacio">${q ? 'Ningún reporte coincide.' : 'Sin reportes de problemas.'}</div>`;
 
     $('#cuentaCom').textContent = q ? `(${coms.length} de ${DATOS.comentarios.length})` : `(${DATOS.comentarios.length})`;
     $('#cuentaFot').textContent = q ? `(${fots.length} de ${DATOS.fotos.length})` : `(${DATOS.fotos.length})`;

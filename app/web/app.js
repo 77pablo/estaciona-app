@@ -144,6 +144,7 @@ const ICONS = {
   plus:'<path d="M12 5v14M5 12h14"/>',
   pinPlus:'<path d="M19 11c0 4.5-7 10-7 10s-7-5.5-7-10a7 7 0 0 1 13.2-3.2"/><path d="M16 4.5h5M18.5 2v5"/>',
   compare:'<path d="M3 8h14l-3.5-3.5M21 16H7l3.5 3.5"/>',
+  flag:'<path d="M5 21V4M5 4.5h11l-2 3 2 3H5"/>',
 };
 // Devuelve un <svg> inline del ícono pedido (hereda color y se alinea al texto).
 function ic(name, size = 18) {
@@ -1071,6 +1072,7 @@ function openDetalle(id) {
         <div class="total" id="calc-total">${p.verificado ? '' : '~'}${CLP(p.precioHora)}</div>
         <div class="calc-nota" id="calc-nota"></div>
       </div>` : ''}
+      <div id="curva-sec" class="curva-sec"></div>
       <div class="det-row"><span class="k">${ic('users')}</span>
         <span>¿Encontraste cupo aquí?</span>
         <span class="thumbs" style="margin-left:auto;display:flex;gap:6px">
@@ -1079,6 +1081,7 @@ function openDetalle(id) {
         </span></div>
       ${p.votos ? `<div class="votos-info">${ic('users', 14)} Últimas 3 h: <b>${p.votos.up}</b> dijeron que había cupo · <b>${p.votos.down}</b> que no</div>` : ''}
       <p class="disclaimer">${ic('bulb', 15)} ${p.verificado ? 'Precio confirmado.' : p.reportado ? '<b>Lugar aportado por la comunidad, sin verificar.</b> Confirma la tarifa y los datos en el lugar.' : '<b>Precio estimado, sin verificar.</b> Es una referencia generada automáticamente — confirma la tarifa real en el lugar.'}</p>
+      <button class="reporte-link" onclick="reportarProblema('${p.id}')">${ic('flag', 13)} ¿Algo está mal? Reportar</button>
 
       <div class="fotos-sec">
         <h4>${ic('camera', 15)} Fotos de la gente</h4>
@@ -1124,6 +1127,7 @@ function openDetalle(id) {
 
   cargarComentarios(p.id);                    // trae los comentarios de la gente
   cargarFotos(p.id);                          // trae las fotos de la gente
+  renderCurva(p);                             // "mejor hora para venir" (Pro) o teaser
 
   cerrarMapCard();                            // la card flotante del pin no debe quedar sobre el detalle
   const det = $('#detalle');
@@ -1231,6 +1235,68 @@ window.enviarComentario = (id) => {
   if (!t) { toast('Escribe algo'); return; }
   enviarAporte(id, { texto: t });
 };
+
+// --- Reportar un problema de la ficha (crowdsource de corrección) ------------
+window.reportarProblema = (id) => {
+  const opts = [
+    ['cerrado', 'Cerrado permanentemente'],
+    ['no-existe', 'No existe / no es estacionamiento'],
+    ['precio', 'El precio está mal'],
+    ['datos', 'Horario u otros datos incorrectos'],
+    ['otro', 'Otro problema'],
+  ];
+  $('#modal').innerHTML = `
+    <h3>${ic('flag', 18)} Reportar un problema</h3>
+    <p>¿Qué está mal con este lugar? Nos ayuda a mantener los datos al día.</p>
+    <div class="reporte-opts">
+      ${opts.map(([m, t]) => `<button class="btn btn-second reporte-opt" onclick="enviarReporte('${id}','${m}')">${t}</button>`).join('')}
+    </div>
+    <button class="btn btn-ghost" style="margin-top:10px;width:100%" onclick="cerrarModal()">Cancelar</button>`;
+  abrirModal();
+};
+window.enviarReporte = async (id, motivo) => {
+  cerrarModal();
+  try {
+    const r = await fetch('/api/reporte', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, motivo }) });
+    const j = await r.json();
+    toast(j.ok ? '¡Gracias! Lo vamos a revisar 🙌' : 'No se pudo enviar el reporte');
+  } catch { toast('Sin conexión'); }
+};
+
+// --- "Mejor hora para venir" (beneficio Pro) --------------------------------
+// Curva de disponibilidad estimada por hora (mismo modelo que el semáforo).
+async function renderCurva(p) {
+  const el = $('#curva-sec');
+  if (!el) return;
+  if (!esPro()) {
+    el.innerHTML = `<div class="curva-teaser" onclick="location.href='/pro'" role="button" tabindex="0">
+      <div class="curva-teaser-t">${ic('clock', 15)} <b>Mejor hora para venir</b> <span class="pro-tag">PRO</span></div>
+      <div class="curva-teaser-s">Mira a qué horas suele haber cupo aquí. Se desbloquea con Estaciona Pro.</div></div>`;
+    return;
+  }
+  try {
+    const r = await fetch(`/api/curva?id=${encodeURIComponent(p.id)}`);
+    if (!r.ok) { el.innerHTML = ''; return; }
+    const c = await r.json();
+    if (detalleAbiertoId !== p.id) return;   // el usuario ya cambió de ficha
+    const col = { verde: 'var(--green)', amarillo: 'var(--amber)', rojo: 'var(--red)', cerrado: 'var(--line)' };
+    const alt = { verde: 100, amarillo: 60, rojo: 28, cerrado: 10 };
+    const nom = { verde: 'suele haber', amarillo: 'puede costar', rojo: 'difícil', cerrado: 'cerrado' };
+    const barras = c.horas.map((h) => {
+      const ttl = `${String(h.h).padStart(2, '0')}:00 · ${nom[h.nivel]}${h.gratis ? ' · gratis' : ''}`;
+      return `<div class="curva-bar${h.h === c.horaActual ? ' ahora' : ''}${h.gratis ? ' free' : ''}" title="${ttl}"><i style="height:${alt[h.nivel]}%;background:${col[h.nivel]}"></i></div>`;
+    }).join('');
+    const verdes = c.horas.filter((h) => h.nivel === 'verde').map((h) => h.h);
+    const sug = verdes.length
+      ? `Suele haber cupo alrededor de las ${verdes.slice(0, 6).map((h) => h + ' h').join(', ')}${verdes.length > 6 ? '…' : ''}.`
+      : 'Hoy la disponibilidad se ve ajustada casi todo el día.';
+    el.innerHTML = `
+      <div class="curva-head">${ic('clock', 15)} <b>Mejor hora para venir</b> <small>· estimación de hoy</small></div>
+      <div class="curva-bars">${barras}</div>
+      <div class="curva-axis"><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span></div>
+      <div class="curva-sug">${sug}</div>`;
+  } catch { el.innerHTML = ''; }
+}
 async function enviarAporte(id, body) {
   // Bloquea los botones del modal mientras envía (evita doble envío en redes lentas).
   const btns = [...($('#modal')?.querySelectorAll('button') || [])];
@@ -1564,6 +1630,40 @@ function fmtDur(ms) {
   const h = Math.floor(m / 60), mm = m % 60;
   return mm ? `${h}h ${mm}min` : `${h}h`;
 }
+// Resumen de gasto mensual (beneficio Pro). Usa el historial local (localStorage);
+// los costos son ESTIMADOS (según el precio de cada lugar), no cobros reales.
+function gastoHTML() {
+  const h = LS.getHist();
+  if (!h.length) return '';
+  if (!esPro()) {
+    return `<div class="gasto-teaser" onclick="location.href='/pro'" role="button" tabindex="0">
+      <div class="gasto-teaser-t">${ic('wallet', 15)} <b>Tu gasto en estacionamiento</b> <span class="pro-tag">PRO</span></div>
+      <div class="gasto-teaser-s">Cuánto llevas gastado este mes y tu promedio. Se desbloquea con Estaciona Pro.</div></div>`;
+  }
+  const conCosto = h.filter((e) => e.precioHora != null && typeof e.costo === 'number');
+  if (!conCosto.length) return '';
+  const mesDe = (ts) => { const d = new Date(ts); return d.getFullYear() * 12 + d.getMonth(); };
+  const ahora = new Date();
+  const mesAct = ahora.getFullYear() * 12 + ahora.getMonth();
+  const suma = (arr) => arr.reduce((s, e) => s + (e.costo || 0), 0);
+  const esteMes = conCosto.filter((e) => mesDe(e.fin) === mesAct);
+  const mesPrev = conCosto.filter((e) => mesDe(e.fin) === mesAct - 1);
+  const totalMes = suma(esteMes), totalPrev = suma(mesPrev);
+  const prom = Math.round(suma(conCosto) / conCosto.length);
+  const tend = totalPrev > 0 ? Math.round((totalMes - totalPrev) / totalPrev * 100) : null;
+  const tendTxt = tend == null ? 'Estimado según el precio de cada lugar.'
+    : tend === 0 ? 'Igual que el mes pasado · estimado.'
+    : tend > 0 ? `${tend}% más que el mes pasado · estimado.`
+    : `${Math.abs(tend)}% menos que el mes pasado · estimado.`;
+  return `<div class="gasto-sec">
+    <div class="gasto-head">${ic('wallet', 18)} <b>Tu gasto este mes</b> <span class="pro-tag">PRO</span></div>
+    <div class="gasto-grid">
+      <div class="gasto-card"><div class="g-num">${CLP(totalMes)}</div><div class="g-lbl">este mes · ${esteMes.length} ${esteMes.length === 1 ? 'vez' : 'veces'}</div></div>
+      <div class="gasto-card"><div class="g-num">${CLP(prom)}</div><div class="g-lbl">promedio por vez</div></div>
+    </div>
+    <div class="gasto-nota">${ic('bulb', 12)} ${tendTxt}</div>
+  </div>`;
+}
 function historialHTML() {
   const h = LS.getHist();
   if (!h.length) return '';
@@ -1619,7 +1719,7 @@ function renderMiAuto() {
       <div class="empty-tit">Aún no estás estacionado</div>
       <p>Cuando dejes el auto, abre un lugar y toca <b>"Estacioné aquí"</b>. Te guardo dónde quedó, con cronómetro y costo estimado.</p>
       <button class="btn btn-primary" style="margin-top:18px" onclick="irA('buscar')">${ic('search', 16)} Buscar dónde estacionar</button>
-    </div>${historialHTML()}</div>`;
+    </div>${gastoHTML()}${historialHTML()}</div>`;
     return;
   }
   v.innerHTML = `<div class="simple">
@@ -1654,7 +1754,7 @@ function renderMiAuto() {
       <button class="btn btn-primary" onclick="llevame('${a.id}')">${ic('compass', 17)} Volver a mi auto</button>
       <button class="btn btn-second" onclick="compartir('${a.id}')">${ic('share', 16)} Compartir ubicación</button>
       <button class="btn btn-ghost" onclick="terminarAuto()">${ic('check', 16)} Terminar</button>
-    </div>${historialHTML()}</div>`;
+    </div>${gastoHTML()}${historialHTML()}</div>`;
   crearMiniMapa(a);
   actualizarMiAutoVivo();             // rellena tiempo/costo/alarma/ETA
 }

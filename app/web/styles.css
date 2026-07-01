@@ -1046,3 +1046,40 @@ main, .view { flex: 1; min-height: 0; }
 .cmp-cell .free { color: var(--accent); }
 .cmp-cell small { color: var(--muted); font-size: 10px; margin-left: 3px; }
 .cmp-go { width: 100%; padding: 8px; }
+
+/* ===== "Mejor hora para venir" (curva Pro) + teaser ===== */
+.pro-tag{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.06em;
+  background:var(--accent);color:#04201d;border-radius:5px;padding:1px 5px;vertical-align:middle;margin-left:2px}
+.curva-sec{margin:14px 0}
+.curva-head{font-size:13px;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.curva-head small{color:var(--muted);font-weight:400}
+.curva-bars{display:flex;align-items:flex-end;gap:2px;height:56px;padding:4px 0}
+.curva-bar{flex:1;height:100%;display:flex;align-items:flex-end;position:relative;border-radius:3px}
+.curva-bar>i{display:block;width:100%;border-radius:3px 3px 2px 2px;min-height:3px;opacity:.85}
+.curva-bar.ahora{background:rgba(45,212,191,.10);outline:1px solid rgba(45,212,191,.5)}
+.curva-bar.ahora>i{opacity:1}
+.curva-bar.free::after{content:"";position:absolute;top:-5px;left:50%;transform:translateX(-50%);
+  width:4px;height:4px;border-radius:50%;background:var(--green)}
+.curva-axis{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px}
+.curva-sug{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.35}
+.curva-teaser,.gasto-teaser{background:var(--surface-2);border:1px dashed rgba(45,212,191,.4);
+  border-radius:12px;padding:12px 14px;cursor:pointer;transition:border-color .2s}
+.curva-teaser:hover,.gasto-teaser:hover{border-color:var(--accent)}
+.curva-teaser-t,.gasto-teaser-t{font-size:13px;display:flex;align-items:center;gap:6px}
+.curva-teaser-s,.gasto-teaser-s{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.35}
+
+/* ===== Reportar un problema ===== */
+.reporte-link{display:inline-flex;align-items:center;gap:5px;background:none;border:none;
+  color:var(--muted);font-size:12px;cursor:pointer;padding:6px 2px;margin-top:2px}
+.reporte-link:hover{color:var(--text)}
+.reporte-opts{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.reporte-opt{text-align:left;justify-content:flex-start}
+
+/* ===== Gasto mensual (Pro) ===== */
+.gasto-sec{margin:16px 0;padding:14px;background:var(--surface-2);border:1px solid var(--line);border-radius:14px}
+.gasto-head{font-size:14px;display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.gasto-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.gasto-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.gasto-card .g-num{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text)}
+.gasto-card .g-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+.gasto-nota{font-size:11px;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:5px}
