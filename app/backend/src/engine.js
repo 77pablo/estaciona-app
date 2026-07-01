@@ -74,6 +74,23 @@ function nivelPorRatio(ratio) {
   return 'rojo';
 }
 
+// Demanda base del lugar (0 = siempre vacío, 1 = siempre disputado). ES UN PRIOR
+// HONESTO, no un dato real de ocupación: se deriva de lo que SÍ sabemos de la ficha
+// (tipo, categoría, capacidad). La calle con parquímetro es más disputada que un
+// recinto con capacidad; los grandes (malls) tienen más holgura. Antes TODAS las
+// fichas sin dato usaban 0.55 (semáforo casi siempre verde e inútil por uniforme).
+// Sigue siendo estimación y el front lo rotula como tal.
+export function demandaBaseDe(e) {
+  if (typeof e.demandaBase === 'number') return e.demandaBase;   // respeta lo explícito
+  let d = e.tipo === 'calle' ? 0.72 : 0.5;                       // calle = más contestada
+  if (e.categoria === 'Salud') d += 0.12;                        // clínicas/hospitales: alta rotación diurna
+  else if (e.categoria === 'Terminal') d += 0.06;               // aeropuertos/terminales
+  else if (e.categoria === 'Estadio') d += 0.04;
+  if (e.capacidad >= 300) d -= 0.12;                             // mucha capacidad => más holgura
+  else if (e.capacidad >= 100) d -= 0.06;
+  return clamp(d, 0.2, 0.9);
+}
+
 // Factor de demanda de la calle según la hora (0 = vacío, 1 = saturado).
 function factorHora(hora, dia) {
   // Domingo (0) o noche: poca demanda.
@@ -143,8 +160,8 @@ export function shapeFichas(fichas) {
     };
 
     {
-      // Estimación honesta por hora (privados sin demandaBase usan 0.55 por defecto).
-      const demanda = clamp((e.demandaBase ?? 0.55) * factorHora(hora, dia), 0, 1);
+      // Estimación honesta por hora: prior por tipo/categoría/capacidad × factor horario.
+      const demanda = clamp(demandaBaseDe(e) * factorHora(hora, dia), 0, 1);
       const nivel = !abierto ? 'cerrado' : nivelPorRatio(1 - demanda);
       const label = nivel === 'cerrado' ? 'Cerrado ahora'
         : nivel === 'verde' ? 'Suele haber cupo'
@@ -168,7 +185,7 @@ export function curvaDisponibilidad(id, diaOverride) {
   const horas = [];
   for (let h = 0; h < 24; h++) {
     const abierto = abiertoAhora(e, h);
-    const demanda = clamp((e.demandaBase ?? 0.55) * factorHora(h, dia), 0, 1);
+    const demanda = clamp(demandaBaseDe(e) * factorHora(h, dia), 0, 1);
     const nivel = !abierto ? 'cerrado' : nivelPorRatio(1 - demanda);
     horas.push({ h, nivel, gratis: gratisAhora(e, h, dia), abierto });
   }

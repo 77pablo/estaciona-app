@@ -4,7 +4,7 @@
   "description": "Estaciona — app para encontrar estacionamiento (prototipo)",
   "type": "module",
   "engines": { "node": ">=22.5.0" },
-  "scripts": { "start": "node src/server.js" },
+  "scripts": { "start": "node src/server.js", "test": "node --test test/*.test.js" },
   "author": "Abel Espinoza (77pablo)",
   "license": "UNLICENSED",
   "dependencies": {

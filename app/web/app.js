@@ -1082,7 +1082,7 @@ function openDetalle(id) {
           <button class="vote-no" onclick="confirmarCupo('${p.id}',false)" aria-label="No había cupo">${ic('x', 16)} No</button>
         </span></div>
       ${p.votos ? `<div class="votos-info">${ic('users', 14)} Últimas 3 h: <b>${p.votos.up}</b> dijeron que había cupo · <b>${p.votos.down}</b> que no</div>` : ''}
-      <p class="disclaimer">${ic('bulb', 15)} ${p.verificado ? 'Precio confirmado.' : p.reportado ? '<b>Lugar aportado por la comunidad, sin verificar.</b> Confirma la tarifa y los datos en el lugar.' : '<b>Precio estimado, sin verificar.</b> Es una referencia generada automáticamente — confirma la tarifa real en el lugar.'}</p>
+      <p class="disclaimer">${ic('bulb', 15)} ${p.verificado ? 'Precio confirmado con fuente oficial <b>a junio 2026</b>. Las tarifas se reajustan — confírmalo si ha pasado tiempo.' : p.reportado ? '<b>Lugar aportado por la comunidad, sin verificar.</b> Confirma la tarifa y los datos en el lugar.' : '<b>Precio estimado, sin verificar.</b> Es una referencia generada automáticamente — confirma la tarifa real en el lugar.'}</p>
       <button class="reporte-link" onclick="reportarProblema('${p.id}')">${ic('flag', 13)} ¿Algo está mal? Reportar</button>
 
       <div class="fotos-sec">
