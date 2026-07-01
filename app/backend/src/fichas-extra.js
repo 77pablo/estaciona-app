@@ -152,6 +152,16 @@ export const FICHAS_EXTRA = [
 
   // ── Otros lugares con tarifa verificada (2ª tanda) ──
   {
+    // PlusParken – edificio SOFO (centro de Temuco). Tarifa OFICIAL del operador
+    // (jun-2026): $35/min, tope diario $15.000. Coords referenciales sobre Av.
+    // Vicuña Mackenna (Nominatim). OJO: un dump de IA decía $30/min (subvalorado).
+    id: 'x-temuco-plusparken-sofo', tipo: 'privado', ciudad: 'Temuco', region: 'La Araucanía',
+    categoria: null, nombre: 'PlusParken SOFO', direccion: 'Av. Vicuña Mackenna 852, Temuco',
+    lat: -38.735602, lng: -72.591106, precioMin: 35, precioHora: 2100, fraccion: null,
+    gratis: null, horario: '07:00–23:00', verificado: true, fuente: 'plusparken.cl (SOFO, máx $15.000/día)',
+    atributos: { techado: true, ev: false, accesible: true, camaras: false },
+  },
+  {
     id: 'x-puntaarenas-aeropuerto', tipo: 'privado', ciudad: 'Punta Arenas', region: 'Magallanes',
     categoria: 'Terminal', nombre: 'Aeropuerto Carlos Ibáñez (estacionamiento)', direccion: 'Aeropuerto Pdte. Carlos Ibáñez del Campo',
     lat: -53.003809, lng: -70.846482, precioMin: 54, precioHora: 3240, fraccion: null,
