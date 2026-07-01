@@ -1268,8 +1268,11 @@ window.enviarReporte = async (id, motivo) => {
 async function renderCurva(p) {
   const el = $('#curva-sec');
   if (!el) return;
+  // Los lugares aportados por la comunidad no tienen curva (no están en el modelo);
+  // no mostramos ni la curva ni el teaser Pro (sería vender algo que no existe aquí).
+  if (p.reportado) { el.innerHTML = ''; return; }
   if (!esPro()) {
-    el.innerHTML = `<div class="curva-teaser" onclick="location.href='/pro'" role="button" tabindex="0">
+    el.innerHTML = `<div class="curva-teaser" onclick="location.href='/pro'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.href='/pro'}" role="button" tabindex="0">
       <div class="curva-teaser-t">${ic('clock', 15)} <b>Mejor hora para venir</b> <span class="pro-tag">PRO</span></div>
       <div class="curva-teaser-s">Mira a qué horas suele haber cupo aquí. Se desbloquea con Estaciona Pro.</div></div>`;
     return;
@@ -1286,10 +1289,16 @@ async function renderCurva(p) {
       const ttl = `${String(h.h).padStart(2, '0')}:00 · ${nom[h.nivel]}${h.gratis ? ' · gratis' : ''}`;
       return `<div class="curva-bar${h.h === c.horaActual ? ' ahora' : ''}${h.gratis ? ' free' : ''}" title="${ttl}"><i style="height:${alt[h.nivel]}%;background:${col[h.nivel]}"></i></div>`;
     }).join('');
-    const verdes = c.horas.filter((h) => h.nivel === 'verde').map((h) => h.h);
-    const sug = verdes.length
-      ? `Suele haber cupo alrededor de las ${verdes.slice(0, 6).map((h) => h + ' h').join(', ')}${verdes.length > 6 ? '…' : ''}.`
-      : 'Hoy la disponibilidad se ve ajustada casi todo el día.';
+    // Sugerencia útil: solo horas DIURNAS (7–21). Si suele haber cupo casi todo el
+    // día, decirlo (no recomendar "venir a las 3am"); si no, marcar las mejores y
+    // avisar cuáles evitar.
+    const verdesDia = c.horas.filter((h) => h.nivel === 'verde' && h.h >= 7 && h.h <= 21).map((h) => h.h);
+    const ajustadas = c.horas.filter((h) => (h.nivel === 'amarillo' || h.nivel === 'rojo') && h.h >= 7 && h.h <= 21).map((h) => h.h);
+    const sug = verdesDia.length >= 12
+      ? 'Suele haber cupo a cualquier hora del día.'
+      : verdesDia.length
+        ? `Mejor a las ${verdesDia.slice(0, 5).map((h) => h + ' h').join(', ')}${verdesDia.length > 5 ? '…' : ''}.${ajustadas.length ? ` Evita las ${ajustadas.slice(0, 3).map((h) => h + ' h').join(', ')}.` : ''}`
+        : 'Hoy la disponibilidad se ve ajustada casi todo el día.';
     el.innerHTML = `
       <div class="curva-head">${ic('clock', 15)} <b>Mejor hora para venir</b> <small>· estimación de hoy</small></div>
       <div class="curva-bars">${barras}</div>
@@ -1636,7 +1645,7 @@ function gastoHTML() {
   const h = LS.getHist();
   if (!h.length) return '';
   if (!esPro()) {
-    return `<div class="gasto-teaser" onclick="location.href='/pro'" role="button" tabindex="0">
+    return `<div class="gasto-teaser" onclick="location.href='/pro'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.href='/pro'}" role="button" tabindex="0">
       <div class="gasto-teaser-t">${ic('wallet', 15)} <b>Tu gasto en estacionamiento</b> <span class="pro-tag">PRO</span></div>
       <div class="gasto-teaser-s">Cuánto llevas gastado este mes y tu promedio. Se desbloquea con Estaciona Pro.</div></div>`;
   }
@@ -1658,8 +1667,8 @@ function gastoHTML() {
   return `<div class="gasto-sec">
     <div class="gasto-head">${ic('wallet', 18)} <b>Tu gasto este mes</b> <span class="pro-tag">PRO</span></div>
     <div class="gasto-grid">
-      <div class="gasto-card"><div class="g-num">${CLP(totalMes)}</div><div class="g-lbl">este mes · ${esteMes.length} ${esteMes.length === 1 ? 'vez' : 'veces'}</div></div>
-      <div class="gasto-card"><div class="g-num">${CLP(prom)}</div><div class="g-lbl">promedio por vez</div></div>
+      <div class="gasto-card"><div class="g-num">${totalMes ? CLP(totalMes) : '$0'}</div><div class="g-lbl">este mes · ${esteMes.length} ${esteMes.length === 1 ? 'vez' : 'veces'}</div></div>
+      <div class="gasto-card"><div class="g-num">${prom ? CLP(prom) : '$0'}</div><div class="g-lbl">promedio por vez</div></div>
     </div>
     <div class="gasto-nota">${ic('bulb', 12)} ${tendTxt}</div>
   </div>`;
