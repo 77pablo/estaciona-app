@@ -43,7 +43,7 @@ resto del país es estimación. La honestidad es tu diferencia — no la pierdas
 > 👉 https://estaciona-app-production.up.railway.app
 >
 > Cualquier cosa me escriben 🙌
-> 📱 WhatsApp: +56 9 5998 7786 · ✉️ pablodaniel28200728@gmail.com
+> 📱 WhatsApp: +56 9 5998 7786 · ✉️ pdanielespinozavega@gmail.com
 > — Pablo Espinoza
 
 ---
