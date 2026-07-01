@@ -187,6 +187,8 @@ async function etaReal(p) {
     const s = (await r.json())?.routes?.[0]?.summary;
     if (!s) return null;
     const res = { min: Math.max(1, Math.round(s.travelTimeInSeconds / 60)), delayMin: Math.round((s.trafficDelayInSeconds || 0) / 60) };
+    // El origen cambia al moverse → las claves se acumulan; purga si crece mucho.
+    if (Object.keys(_etaCache).length > 200) for (const key of Object.keys(_etaCache)) delete _etaCache[key];
     _etaCache[k] = res;
     return res;
   } catch { return null; }
@@ -896,7 +898,7 @@ function precioGrande(p) {
   if (p.gratisAhora || esGratisReal(p)) return `<b class="free">Gratis</b>`;
   if (esGratisClientes(p)) return `<b class="free-cli">${ic('cart', 13)} Solo clientes</b>`;
   if (p.precioHora == null) return `<b>Pago</b><small>precio sin dato</small>`;
-  return `<b>${p.verificado ? '' : '~'}${CLP(p.precioHora)}</b><small>por hora${p.verificado ? '' : ' · est.'}</small>`;
+  return `<b>${p.verificado ? '' : '~'}${CLP(p.precioHora)}</b><small>/hr${p.verificado ? '' : ' · est.'}</small>`;
 }
 function abrirMapCard(id) {
   const p = DATA.find((x) => x.id === id);
@@ -962,7 +964,7 @@ function precioCmp(p) {
   if (p.precioHora == null) return 'Pago <small>s/dato</small>';
   return `${p.verificado ? '' : '~'}${CLP(p.precioHora)}`;
 }
-const _estadoTxt = (nivel) => nivel === 'cerrado' ? 'Cerrado' : nivel === 'verde' ? 'Disponible' : nivel === 'amarillo' ? 'Casi lleno' : 'Completo';
+const _estadoTxt = (nivel) => nivel === 'cerrado' ? 'Cerrado' : nivel === 'verde' ? 'Suele haber' : nivel === 'amarillo' ? 'Puede costar' : 'Difícil';
 window.abrirComparar = () => {
   if (comparar.length < 2) { toast('Elige al menos 2 lugares para comparar'); return; }
   const items = comparar.map((id) => DATA.find((p) => p.id === id)).filter(Boolean);
@@ -999,7 +1001,7 @@ window.abrirComparar = () => {
   detalleAbiertoId = null;                          // no es un detalle individual
   cerrarMapCard();
   const det = $('#detalle');
-  det.classList.add('open');
+  det.classList.add('open'); det.inert = false;   // vuelve a entrar al árbol de foco/AX
   _focoPrevio = document.activeElement;
   det.setAttribute('tabindex', '-1'); det.focus();
 };
@@ -1036,9 +1038,9 @@ function openDetalle(id) {
       ? 'Pago · precio sin dato — ¿lo sabes? Repórtalo abajo'
       : p.verificado
         ? (p.precioMin
-            ? `${CLP(p.precioMin)} / min · equivale a ≈${CLP(p.precioHora)}/hora${p.fuente ? ` <span class="precio-fuente">fuente: ${esc(p.fuente)}</span>` : ''}`
-            : `${CLP(p.precioHora)} / hora`)
-        : `~${CLP(p.precioHora)} / hora <span class="precio-est">estimado · sin verificar</span>`;
+            ? `${CLP(p.precioMin)} / min · equivale a ~${CLP(p.precioHora)}/hr${p.fuente ? ` <span class="precio-fuente">fuente: ${esc(p.fuente)}</span>` : ''}`
+            : `${CLP(p.precioHora)} / hr`)
+        : `~${CLP(p.precioHora)} / hr <span class="precio-est">estimado · sin verificar</span>`;
   const fav = LS.isFav(p.id);
 
   $('#detalle').innerHTML = `
@@ -1131,7 +1133,7 @@ function openDetalle(id) {
 
   cerrarMapCard();                            // la card flotante del pin no debe quedar sobre el detalle
   const det = $('#detalle');
-  det.classList.add('open');
+  det.classList.add('open'); det.inert = false;   // vuelve a entrar al árbol de foco/AX
   _focoPrevio = document.activeElement;       // recuerda dónde estaba el foco
   det.setAttribute('tabindex', '-1'); det.focus();   // mueve el foco al diálogo (lector de pantalla)
 }
@@ -1440,7 +1442,7 @@ window.cerrarDetalle = () => {
       markers[prev].setZIndexOffset(zOffset(pp));
     }
   }
-  $('#detalle').classList.remove('open');
+  const det = $('#detalle'); det.classList.remove('open'); det.inert = true;   // fuera del foco/AX al cerrar (permite la animación de salida)
   if (_focoPrevio?.focus) _focoPrevio.focus();    // devuelve el foco a donde estaba
 };
 window.toggleFavDetalle = (id) => {
@@ -1627,7 +1629,7 @@ function crearMiniMapa(a) {
     .setView([a.lat, a.lng], 16);
   addBaseLayer(miniMap);
   L.marker([a.lat, a.lng], {
-    icon: L.divIcon({ className: '', html: `<div class="pin verde">${ic('car', 13)}</div>`, iconSize: [0, 0] }),
+    icon: L.divIcon({ className: '', html: `<div class="pin-p verde">${ic('car', 13)}</div>`, iconSize: [0, 0] }),
   }).addTo(miniMap);
   setTimeout(() => miniMap && miniMap.invalidateSize(), 60);
 }
@@ -1820,7 +1822,7 @@ function renderFavoritos() {
     ${filaLugar('trabajo', ic('work', 20))}
     <h2 style="font-size:14px;color:var(--muted);margin:16px 0 8px">Lugares guardados</h2>
     ${favs.length ? favs.map((p) => `
-      <div class="fav-item" data-id="${p.id}"><span class="ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 21)}</span>
+      <div class="fav-item" data-id="${p.id}" role="button" tabindex="0" aria-label="${esc(p.nombre)}, ver detalle"><span class="ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 21)}</span>
         <div style="flex:1;min-width:0"><div class="nm">${esc(p.nombre)}</div>
         <div class="sub">${precioHTML(p)}${p.ciudad ? ' · ' + esc(p.ciudad) : ''} · ${esc(p.direccion)}</div></div>
         <span class="fav-go" aria-hidden="true">${ic('arrowRight', 16)}</span></div>
@@ -1834,8 +1836,11 @@ function renderFavoritos() {
       <a href="/terminos" target="_blank" rel="noopener">Términos</a> · <a href="/privacidad" target="_blank" rel="noopener">Privacidad</a>
     </div>
   </div>`;
-  $('#view-favoritos').querySelectorAll('.fav-item[data-id]').forEach((el) =>
-    el.addEventListener('click', () => irAFav(el.dataset.id)));
+  $('#view-favoritos').querySelectorAll('.fav-item[data-id]').forEach((el) => {
+    const go = () => irAFav(el.dataset.id);
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
 }
 // Tarjeta "Estaciona Pro" en Favoritos: invita a Pro (o confirma que ya lo tiene).
 function proCardHTML() {
@@ -1881,7 +1886,7 @@ function filaLugar(k, iconHtml) {
     ? `${esc(l.etiqueta || 'Ubicación fijada')} · ver cerca`
     : 'Sin fijar · usa el lápiz para poner tu dirección';
   return `<div class="fav-item lugar${fijada ? ' fijada' : ''}">
-    <div class="lugar-main" onclick="irLugar('${k}')"><span class="ic">${iconHtml}</span>
+    <div class="lugar-main" role="button" tabindex="0" onclick="irLugar('${k}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();irLugar('${k}')}" aria-label="${nom}, ver cerca"><span class="ic">${iconHtml}</span>
       <div style="min-width:0"><div class="nm">${nom}${fijada ? '' : ' <span class="lugar-tag">Sin fijar</span>'}</div><div class="sub">${sub}</div></div></div>
     <button class="lugar-edit" onclick="editarLugar('${k}')" aria-label="${fijada ? 'Editar' : 'Fijar'} ${nom}" title="${fijada ? 'Editar' : 'Fijar'} ${nom}">${ic('edit', 16)}</button>
   </div>`;
@@ -1906,11 +1911,14 @@ window.editarLugar = (k) => {
 };
 window.fijarLugarAqui = () => {
   const usar = (lat, lng) => { guardarLugar(_lugarEdit, lat, lng, 'Mi ubicación'); finLugar(); };
-  if (!navigator.geolocation) { usar(USER.lat, USER.lng); return; }
+  // Si NO hay una ubicación real (permiso denegado/sin GPS), NO guardamos el centro
+  // de la ciudad como "Mi ubicación" en silencio: avisamos y ofrecemos la dirección.
+  const fallar = () => toast('No pude obtener tu ubicación. Prueba fijándola por dirección.');
+  if (!navigator.geolocation) { userReal ? usar(USER.lat, USER.lng) : fallar(); return; }
   toast('Buscando tu ubicación…');
   navigator.geolocation.getCurrentPosition(
     (pos) => usar(pos.coords.latitude, pos.coords.longitude),
-    () => usar(USER.lat, USER.lng),
+    () => (userReal ? usar(USER.lat, USER.lng) : fallar()),
     { enableHighAccuracy: true, timeout: 8000 });
 };
 window.fijarLugarDireccion = async () => {
@@ -2213,7 +2221,7 @@ function abrirFiltros() {
       <div class="opts" id="f-otros" role="group" aria-labelledby="f-otros-lbl">
         <button type="button" data-k="abierto" class="${chip(f.abierto)}" aria-pressed="${press(f.abierto)}">${ic('clock', 14)} Abierto ahora</button>
         <button type="button" data-k="soloPublicos" class="${chip(f.soloPublicos)}" aria-pressed="${press(f.soloPublicos)}">${ic('check', 14)} Solo públicos</button>
-        <button type="button" data-k="verificado" class="${chip(f.verificado)}" aria-pressed="${press(f.verificado)}">${ic('bulb', 14)} Precio confirmado</button>
+        <button type="button" data-k="verificado" class="${chip(f.verificado)}" aria-pressed="${press(f.verificado)}">${ic('check', 14)} Precio confirmado</button>
       </div>
       <p class="f-hint">"Solo públicos" oculta hospitales, colegios y otros de uso restringido. "Precio confirmado" muestra solo tarifas verificadas.</p>
     </div>
@@ -2525,7 +2533,7 @@ function mostrarBienvenida() {
   if (!o) return;
   o.innerHTML = `<div class="onboard-card" role="dialog" aria-modal="true" aria-labelledby="onboard-tit">
     <div class="onboard-ic" aria-hidden="true">${ic('parking', 44)}</div>
-    <h3 id="onboard-tit">¡Bienvenido a Estaciona!</h3>
+    <h3 id="onboard-tit">¡Te damos la bienvenida a Estaciona!</h3>
     <p>Versión <b>piloto</b> para <b>todo Chile</b>. Te mostramos dónde estacionar, cuánto cobran y si es gratis. Elige tu ciudad arriba o usa tu ubicación.</p>
     <ul class="onboard-list">
       <li>${ic('locate', 16)} <span>Toca el botón de ubicación para ver lo más cercano a ti.</span></li>
@@ -2641,10 +2649,22 @@ async function init() {
   // Refresco periódico SOLO si vale la pena: pestaña visible y vista del mapa activa.
   // (No reconstruir #lista en segundo plano ni mientras estás en "Mi auto"/"Favoritos".)
   setInterval(() => {
-    if (document.visibilityState === 'visible' && $('#view-buscar').classList.contains('active')) cargar();
+    if (document.visibilityState !== 'visible' || !$('#view-buscar').classList.contains('active')) return;
+    // No reconstruir la lista si el usuario está interactuando con ella (foco dentro):
+    // evita colapsar una tarjeta expandida y perderle el foco del teclado cada 6 s.
+    const lista = $('#lista');
+    if (lista && lista.contains(document.activeElement) && document.activeElement !== document.body) return;
+    cargar();
   }, 6000);
   setInterval(() => { if ($('#view-miauto').classList.contains('active')) actualizarMiAutoVivo(); }, 1000);
   setInterval(chequearAlarma, 1000);
   setInterval(chequearRecordatorios, 1000);   // avisos "Avísame"
+  setInterval(chequearRecordatorioAuto, 60000);   // recordatorio del auto al día siguiente (se auto-protege con a.recordado)
+  // Batería: soltar el GPS (watchPosition) cuando la app queda en segundo plano,
+  // y reanudarlo al volver si estás en el mapa con ubicación real.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') { detenerSeguimiento(); return; }
+    if (userReal && $('#view-buscar').classList.contains('active')) iniciarSeguimiento();
+  });
 }
 init();
