@@ -10,16 +10,17 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
+import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
-import { snapshotCiudad, shapeFichas, curvaDisponibilidad } from './engine.js';
+import { snapshotCiudad, shapeFichas, curvaDisponibilidad, idExiste } from './engine.js';
 import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } from './reportes.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
 import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto, validarFoto } from './fotos.js';
-import { registrarLugar, lugaresDe, lugaresRecientes, eliminarLugar, contarLugares } from './lugares.js';
+import { registrarLugar, lugaresDe, lugaresRecientes, eliminarLugar, contarLugares, lugarExiste } from './lugares.js';
 import { registrarEvento, resumenAnalytics, vistasLugar } from './analytics.js';
 import { agregarDestacado, quitarDestacado, mapaDestacados, listarDestacados } from './destacados.js';
 import { revisarFoto } from './modera-foto.js';
@@ -51,16 +52,25 @@ const ADMIN_CLAVE = leerKey('ADMIN_CLAVE', 'admin.key');
 // Códigos de "Estaciona Pro" (plan premium para conductores). Abel los reparte
 // tras cobrar (sin pasarela). Env PRO_CODES="codigo1,codigo2" o archivo pro-codes.key.
 const PRO_CODES = new Set(leerKey('PRO_CODES', 'pro-codes.key').split(/[,\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean));
-// Clave admin: se prefiere por header (x-mod-clave) para NO dejarla en logs/URL;
-// se acepta ?clave= como respaldo (compatibilidad).
-const esAdmin = (req, url) => !!ADMIN_CLAVE && (((req.headers['x-mod-clave'] || '') === ADMIN_CLAVE) || url.searchParams.get('clave') === ADMIN_CLAVE);
+// Comparación de claves en tiempo CONSTANTE (no filtra la longitud/contenido por
+// timing). Longitudes distintas => false sin comparar byte a byte.
+function claveIgual(a, b) {
+  const ba = Buffer.from(String(a || ''), 'utf8');
+  const bb = Buffer.from(String(b || ''), 'utf8');
+  if (ba.length === 0 || ba.length !== bb.length) return false;
+  return timingSafeEqual(ba, bb);
+}
+// Clave admin: SOLO por header (x-mod-clave). Ya NO se acepta ?clave= en la URL,
+// que la filtraba a logs de acceso, historial del navegador y el header Referer
+// hacia las CDNs de mapas/moderación. El panel /admin ya manda el header.
+const esAdmin = (req) => !!ADMIN_CLAVE && claveIgual(req.headers['x-mod-clave'] || '', ADMIN_CLAVE);
 function autorizado(req) {
   if (!ACCESO_CLAVE) return true;                 // sin clave configurada => app pública
   const m = (req.headers.authorization || '').match(/^Basic\s+(.+)$/i);
   if (!m) return false;
   const dec = Buffer.from(m[1], 'base64').toString('utf8');   // "usuario:clave"
   const clave = dec.slice(dec.indexOf(':') + 1);              // ignora el usuario, compara la clave
-  return clave === ACCESO_CLAVE;
+  return claveIgual(clave, ACCESO_CLAVE);
 }
 
 const MIME = {
@@ -131,6 +141,18 @@ function adminFallo(req) {
   if (_adminFails.size > 5000) for (const [k, v] of _adminFails) if (!v.length) _adminFails.delete(k);
 }
 
+// Agregados de TODO el país (votos recientes, precios/comentarios, destacados).
+// Son iguales para todas las ciudades y requests, y su cálculo recorre tablas
+// completas → se cachean unos segundos para que un flood de requests al home NO
+// dispare un escaneo por cada uno (amplificación de DoS). Se refresca al vencer.
+let _agg = { t: 0, tally: null, com: null, dest: null };
+async function agregados() {
+  const ahora = Date.now();
+  if (_agg.com && ahora - _agg.t < 15000) return _agg;   // válido 15 s
+  _agg = { t: ahora, tally: await tallyReciente(3), com: await resumenAportes(), dest: await mapaDestacados() };
+  return _agg;
+}
+
 // Rutas "bonitas": la landing es la portada (/), la app vive en /app.
 const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html', '/terminos': '/terminos.html', '/privacidad': '/privacidad.html', '/operadores': '/operadores.html', '/pro': '/pro.html' };
 
@@ -157,6 +179,13 @@ async function serveStatic(res, urlPath) {
 
 const server = http.createServer(async (req, res) => {
   req.on('error', () => {});   // aborto/corte del cliente a mitad de subida: no tumbar el server
+  // Cabeceras de seguridad en TODAS las respuestas:
+  //  · nosniff        → el navegador no adivina el tipo de contenido (anti-XSS)
+  //  · no-referrer    → no se filtra la URL (ni ?clave= ni las keys de mapas) a terceros
+  //  · DENY framing   → anti clickjacking
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Frame-Options', 'DENY');
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     // Modo privado: si hay clave configurada, exige autenticación antes de TODO.
@@ -175,9 +204,7 @@ const server = http.createServer(async (req, res) => {
       const base = snapshotCiudad(ciudad);                       // solo esa ciudad (filtra antes de dar forma)
       const reportados = shapeFichas(await lugaresDe(ciudad));   // lugares aportados por la gente
       const lista = [...base, ...reportados];
-      const tally = await tallyReciente(3);            // votos de las últimas 3 h
-      const com = await resumenAportes();              // precios/comentarios de la gente
-      const dest = await mapaDestacados();             // patrocinados activos (publicidad)
+      const { tally, com, dest } = await agregados();  // votos + precios/comentarios + destacados (cacheados)
       for (const e of lista) {
         if (tally[e.id]) e.votos = tally[e.id];
         if (com[e.id]) e.comunidad = com[e.id];
@@ -228,11 +255,22 @@ const server = http.createServer(async (req, res) => {
       if (tooBig) return sendJSON(res, 413, { ok: false });
       try {
         const { id, dataUrl } = JSON.parse(body || '{}');
+        // El id DEBE ser un estacionamiento real (del dataset) o un lugar reportado
+        // existente. Sin esto, alguien podía subir fotos a millones de ids inventados
+        // y llenar el disco (cada id crea su carpeta). Se valida antes de nada.
+        if (!idExiste(id) && !(await lugarExiste(id))) { sendJSON(res, 400, { ok: false, error: 'lugar' }); return; }
         // Validar formato + tamaño ANTES de moderar: así una imagen inválida o
         // >700KB no gasta una llamada de Sightengine (cuota gratis ~2.000/mes).
         if (!validarFoto(dataUrl)) { sendJSON(res, 400, { ok: false }); return; }
-        const rev = await revisarFoto(dataUrl);     // moderación automática (Sightengine)
-        if (!rev.ok) { sendJSON(res, 422, { ok: false, motivo: rev.motivo }); return; }
+        const rev = await revisarFoto(dataUrl);     // moderación automática (Sightengine, fail-closed)
+        if (!rev.ok) {
+          // 'bloqueada' = la IA la rechazó (contenido no permitido) → 422.
+          // 'no-disponible'/'no-config' = no se pudo verificar → 503 (reintentable),
+          // NO se guarda (fail-closed): nunca servimos una foto sin revisar.
+          const st = rev.code === 'bloqueada' ? 422 : rev.code === 'formato' ? 400 : 503;
+          sendJSON(res, st, { ok: false, motivo: rev.motivo });
+          return;
+        }
         const foto = await guardarFoto(id, dataUrl);
         sendJSON(res, foto ? 200 : 400, { ok: !!foto, url: foto });
       } catch { sendJSON(res, 400, { ok: false }); }
@@ -246,7 +284,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/mod/feed' && req.method === 'GET') {
       if (adminBloqueado(req)) return sendJSON(res, 429, { error: 'demasiados intentos, espera unos minutos' });
-      if (!esAdmin(req, url)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
+      if (!esAdmin(req)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
       return sendJSON(res, 200, {
         comentarios: await comentariosRecientes(),
         fotos: await fotosRecientes(),
@@ -263,7 +301,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/mod/borrar' && req.method === 'POST') {
       if (adminBloqueado(req)) return sendJSON(res, 429, { error: 'demasiados intentos' });
-      if (!esAdmin(req, url)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
+      if (!esAdmin(req)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
       const { tooBig, body } = await readBody(req, 10000);
       if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
       try {
@@ -279,7 +317,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/mod/destacado' && req.method === 'POST') {
       if (adminBloqueado(req)) return sendJSON(res, 429, { error: 'demasiados intentos' });
-      if (!esAdmin(req, url)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
+      if (!esAdmin(req)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
       const { tooBig, body } = await readBody(req, 4000);
       if (tooBig) return sendJSON(res, 413, { ok: false });
       try {
@@ -298,8 +336,8 @@ const server = http.createServer(async (req, res) => {
       if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
       try {
         const { id, ok } = JSON.parse(body || '{}');
-        await registrarVoto(id, ok);
-        sendJSON(res, 200, { ok: true });
+        const guardado = await registrarVoto(id, ok);
+        sendJSON(res, guardado ? 200 : 400, { ok: guardado });
       } catch { sendJSON(res, 400, { error: 'json inválido' }); }
       return;
     }

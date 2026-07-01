@@ -32,10 +32,12 @@ function migrar() {
 // Registra un voto (ok = true → "había cupo"; false → "no había").
 export async function registrarVoto(id, ok) {
   await migrar();
-  if (!ID_OK(id)) return;
+  if (!ready) return false;             // DB no cargó: no fingir que se guardó
+  if (!ID_OK(id)) return false;
   await run('INSERT INTO votos(id, ok, ts) VALUES(?, ?, ?)', [id, ok ? 1 : 0, Date.now()]);
   // Poda: conserva los 5000 más recientes.
   await run('DELETE FROM votos WHERE rowid NOT IN (SELECT rowid FROM votos ORDER BY ts DESC LIMIT 5000)');
+  return true;
 }
 
 // Total de votos acumulados (contador del panel admin).

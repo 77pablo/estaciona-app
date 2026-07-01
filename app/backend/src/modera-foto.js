@@ -66,32 +66,42 @@ function consultar(buf, ext, cred) {
   });
 }
 
-// Revisa un dataUrl de imagen. Devuelve { ok:true } o { ok:false, motivo }.
-// FAIL-OPEN: si no hay credenciales o la API falla/tarda, devuelve ok:true para
-// no bloquear a todos por una caída del servicio (la IA del navegador ya filtró
-// desnudos). Logguea el motivo para poder diagnosticar.
+// ¿Se permite guardar fotos SIN moderación de servidor? Por defecto NO (fail-closed):
+// aceptar fotos sin revisar deja un hueco por el que alguien puede subir contenido
+// ilegal por POST directo (saltándose la IA del navegador) y quedaría servido público.
+// Poner FOTOS_SIN_MODERAR=1 solo si se asume ese riesgo a conciencia.
+const PERMITIR_SIN_MODERAR = /^(1|true|si|s[ií]|yes)$/i.test(process.env.FOTOS_SIN_MODERAR || '');
+
+// Revisa un dataUrl de imagen. Devuelve { ok:true } o { ok:false, motivo, code }.
+// FAIL-CLOSED: si la moderación no está configurada o la API falla/tarda, se
+// RECHAZA la foto (code:'no-disponible') en vez de dejarla pasar. Así ningún
+// contenido queda almacenado y servido sin haber sido revisado. El usuario ve
+// "no pudimos verificar la foto, intenta más tarde".
 export async function revisarFoto(dataUrl) {
   const cred = credenciales();
-  if (!cred) return { ok: true };                     // sin llave => no se revisa
+  if (!cred) {
+    if (PERMITIR_SIN_MODERAR) return { ok: true };     // opt-in explícito y a riesgo del operador
+    return { ok: false, code: 'no-config', motivo: 'la subida de fotos no está disponible por ahora' };
+  }
   const m = String(dataUrl || '').match(/^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
-  if (!m) return { ok: true };                         // guardarFoto validará el formato igual
+  if (!m) return { ok: false, code: 'formato', motivo: 'formato de imagen no válido' };
   const ext = m[1] === 'jpeg' ? 'jpg' : m[1];
   const buf = Buffer.from(m[2], 'base64');
   try {
     const r = await consultar(buf, ext, cred);
-    if (r.status !== 'success') { console.error('Sightengine:', r.error || r); return { ok: true }; }
+    if (r.status !== 'success') { console.error('Sightengine:', r.error || r); return { ok: false, code: 'no-disponible', motivo: 'no pudimos verificar la foto, intenta más tarde' }; }
     const n = r.nudity || {};
     const adulto = Math.max(n.sexual_activity || 0, n.sexual_display || 0, n.erotica || 0);
     const arma = Math.max(r.weapon?.classes?.firearm || 0, r.weapon?.classes?.knife || 0);
     const droga = r.recreational_drug?.prob || 0;
     const gore = r.gore?.prob || 0;
-    if (adulto > 0.5) return { ok: false, motivo: 'contenido para adultos' };
-    if (droga > 0.5)  return { ok: false, motivo: 'drogas' };
-    if (arma > 0.5)   return { ok: false, motivo: 'armas' };
-    if (gore > 0.5)   return { ok: false, motivo: 'violencia explícita' };
+    if (adulto > 0.5) return { ok: false, code: 'bloqueada', motivo: 'contenido para adultos' };
+    if (droga > 0.5)  return { ok: false, code: 'bloqueada', motivo: 'drogas' };
+    if (arma > 0.5)   return { ok: false, code: 'bloqueada', motivo: 'armas' };
+    if (gore > 0.5)   return { ok: false, code: 'bloqueada', motivo: 'violencia explícita' };
     return { ok: true };
   } catch (e) {
     console.error('Sightengine error:', e.message);
-    return { ok: true };                               // fail-open
+    return { ok: false, code: 'no-disponible', motivo: 'no pudimos verificar la foto, intenta más tarde' };  // fail-CLOSED
   }
 }

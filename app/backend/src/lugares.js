@@ -18,6 +18,9 @@ const ZONA_POR_NOMBRE = {};
 for (const z of ZONAS) ZONA_POR_NOMBRE[z.nombre] = z;
 
 const normNombre = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+// Quita '<' '>' y caracteres de control de lo que sube la gente (nombre/dirección):
+// texto plano seguro de mostrar en la app y en /admin, aunque el frontend escape.
+const limpiarTexto = (s) => String(s == null ? '' : s).replace(/[<>]/g, '').replace(/[\x00-\x1f\x7f]/g, ' ');
 function distM(aLat, aLng, bLat, bLng) {
   const dLat = (aLat - bLat) * 111000;
   const dLng = (aLng - bLng) * 111000 * Math.cos(aLat * Math.PI / 180);
@@ -39,11 +42,23 @@ function migrar() {
   })());
 }
 
+// Cola en memoria: SERIALIZA los registros para que el "chequear duplicado →
+// insertar" no tenga carrera entre dos POST concurrentes (que insertarían el mismo
+// lugar dos veces). En una sola instancia cierra la ventana por completo.
+let _cola = Promise.resolve();
+
 // Registra un lugar reportado. Devuelve { ok, id } o { ok:false, error }.
-export async function registrarLugar(d) {
+export function registrarLugar(d) {
+  const p = _cola.then(() => _registrarLugar(d));
+  _cola = p.catch(() => {});   // la cola sigue viva aunque uno falle
+  return p;
+}
+
+async function _registrarLugar(d) {
   await migrar();
+  if (!ready) return { ok: false, error: 'db' };       // DB no cargó: no fingir que se guardó
   d = d || {};
-  const nombre = String(d.nombre ?? '').trim().replace(/\s+/g, ' ').slice(0, 80);
+  const nombre = limpiarTexto(d.nombre).trim().replace(/\s+/g, ' ').slice(0, 80);
   if (nombre.length < 2) return { ok: false, error: 'nombre' };
   const lat = Number(d.lat), lng = Number(d.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
@@ -58,7 +73,7 @@ export async function registrarLugar(d) {
     const ph = Number(d.precioHora);
     if (Number.isFinite(ph) && ph > 0 && ph <= 20000) precioHora = Math.round(ph);
   }
-  const direccion = String(d.direccion ?? '').trim().slice(0, 120) || `${ciudad} (reportado)`;
+  const direccion = limpiarTexto(d.direccion).trim().slice(0, 120) || `${ciudad} (reportado)`;
   // Dedupe: mismo nombre normalizado a <60 m en esa ciudad.
   const nn = normNombre(nombre);
   const candidatos = await all('SELECT nombre, lat, lng FROM lugares WHERE ciudad = ?', [ciudad]);
@@ -75,6 +90,15 @@ export async function registrarLugar(d) {
   };
   await run('INSERT INTO lugares(id, ciudad, nombre, lat, lng, json, ts) VALUES(?, ?, ?, ?, ?, ?, ?)', [id, ciudad, nombre, lat, lng, JSON.stringify(ficha), ts]);
   return { ok: true, id };
+}
+
+// ¿Existe un lugar reportado con este id? (para validar fotos dirigidas a él).
+export async function lugarExiste(id) {
+  if (typeof id !== 'string' || !/^x-rep-\d{10,}-[a-z0-9]{3,8}$/.test(id)) return false;
+  await migrar();
+  if (!ready) return false;
+  const r = await get('SELECT 1 AS x FROM lugares WHERE id = ?', [id]);
+  return !!r;
 }
 
 // Fichas reportadas de una ciudad (para fusionarlas con el dataset).

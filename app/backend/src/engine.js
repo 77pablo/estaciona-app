@@ -49,6 +49,11 @@ const REGLAS_CATEGORIA = [
   ['Estadio',   /\b(estadio|gimnasio|polideportivo|complejo deportivo|cancha)\b/i],
   ['Terminal',  /\b(terminal|rodoviario|aeropuerto|estaci[oó]n de (?:buses|trenes|ferrocarril)|estaci[oó]n de buses)\b/i],
   ['Camiones',  /\b(cami[oó]n|camiones|truck)\b/i],
+  // Comercio con estacionamiento SOLO-CLIENTES (no es parking público general):
+  // supermercados, mejoramiento del hogar, bencineras, farmacias, bancos. Antes se
+  // mostraban como si fueran públicos; ahora el filtro "Solo públicos" los oculta y
+  // el detalle avisa "uso restringido". NO incluye malls (sí son parking público pago).
+  ['Comercio',  /\b(unimarc|santa isabel|l[ií]der|jumbo|tottus|acuenta|mayorista\s*10|alvi|ekono|supermercado|sodimac|homecenter|construmart|imperial|copec|shell|petrobras|enex|terpel|aramco|bencinera|estaci[oó]n de servicio|farmacia|cruz verde|salcobrand|scotiabank|santander|\bbci\b|banco estado|banco de chile)\b/i],
 ];
 function categoriaPorNombre(nombre) {
   const n = nombre || '';
@@ -61,6 +66,13 @@ for (const e of FICHAS) {
     if (c) e.categoria = c;
   }
 }
+
+// Conjunto de IDs válidos del dataset (fichas OSM + hechas a mano). Se usa para
+// RECHAZAR fotos/aportes dirigidos a ids inventados (evita que un atacante cree
+// millones de carpetas de fotos con ids basura y llene el disco). Los lugares
+// aportados por la gente (x-rep-…) se validan aparte contra la base.
+const IDS_DATASET = new Set(FICHAS.map((e) => e.id));
+export function idExiste(id) { return IDS_DATASET.has(id); }
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 

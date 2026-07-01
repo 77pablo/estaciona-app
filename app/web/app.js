@@ -199,7 +199,7 @@ async function etaReal(p) {
 // supermercado creyendo que es estacionamiento público gratis.
 // Categorías "no públicas" (hospital, colegio, etc.): ícono + etiqueta para
 // mostrarlas distinto. Devuelve '' si es estacionamiento público normal.
-const CAT_ICON = { Salud: 'access', Colegio: 'home', Estadio: 'starOutline', Municipal: 'home', Camiones: 'truck', Terminal: 'car', Cultura: 'home' };
+const CAT_ICON = { Salud: 'access', Colegio: 'home', Estadio: 'starOutline', Municipal: 'home', Camiones: 'truck', Terminal: 'car', Cultura: 'home', Comercio: 'home' };
 function catBadge(p) {
   if (!p.categoria) return '';
   const name = CAT_ICON[p.categoria] || 'pin';
@@ -207,6 +207,15 @@ function catBadge(p) {
 }
 const esGratisClientes = (p) => p.precioHora === 0 && /cliente/i.test(p.gratisInfo || '');
 const esGratisReal = (p) => p.precioHora === 0 && !esGratisClientes(p);
+// Indicador de disponibilidad = 3 segmentos según el NIVEL del semáforo (verde 3,
+// amarillo 2, rojo 1, cerrado 0). Antes era una barra con ancho 82%/45%/15%, que
+// se leía como "% de cupos libres" — un dato preciso que NO tenemos (la
+// disponibilidad es estimación por hora, no ocupación real). Los segmentos comunican
+// "nivel", no porcentaje: honesto con lo que sabemos.
+function dispSeg(nivel) {
+  const n = nivel === 'verde' ? 3 : nivel === 'amarillo' ? 2 : nivel === 'rojo' ? 1 : 0;
+  return `<div class="disp-seg ${nivel}" aria-hidden="true">${[0, 1, 2].map((i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div>`;
+}
 // Texto corto para el pin del mapa. "~" marca precio estimado (no verificado).
 function precioCorto(p) {
   if (p.gratisAhora || esGratisReal(p)) return 'Gratis';
@@ -809,8 +818,6 @@ function renderLista() {
     const estadoTxt = nivel === 'cerrado' ? 'Cerrado'
       : nivel === 'verde' ? 'Suele haber'
       : nivel === 'amarillo' ? 'Puede costar' : 'Difícil';
-    // La barra es un VISUAL del semáforo (no un conteo inventado de cupos).
-    const barPct = nivel === 'verde' ? 82 : nivel === 'amarillo' ? 45 : nivel === 'rojo' ? 15 : 6;
     // Confirmaciones REALES de la comunidad (cupo confirmado en las últimas 3 h).
     // Check verde — NO una estrella dorada (eso parecería un rating inventado).
     const votos = p.votos ? `<span class="card-rate" title="${p.votos.up} confirmaron cupo (últimas 3 h)">${ic('check', 12)} ${p.votos.up}</span>` : '';
@@ -831,7 +838,7 @@ function renderLista() {
           ${votos}
           <span class="badge-disp ${nivel}">${estadoTxt}</span>
         </div>
-        <div class="disp-bar" aria-hidden="true"><i class="disp-fill ${nivel}" style="width:${barPct}%"></i></div>
+        ${dispSeg(nivel)}
         <div class="card-expand">
           ${featuresHTML(p)}
           <div class="card-actions">
@@ -909,7 +916,6 @@ function abrirMapCard(id) {
   // Estimación semáforo honesta (NO ocupación real en vivo), igual que la lista/detalle.
   const estadoTxt = nivel === 'cerrado' ? 'Cerrado'
     : nivel === 'verde' ? 'Suele haber' : nivel === 'amarillo' ? 'Puede costar' : 'Difícil';
-  const barPct = nivel === 'verde' ? 82 : nivel === 'amarillo' ? 45 : nivel === 'rojo' ? 15 : 6;
   const tipoTxt = p.tipo === 'calle' ? 'En la calle' : (p.atributos?.techado ? 'Techado' : 'Privado');
   const dist = Math.round(haversine(USER, p));   // DATA no trae dist (se calcula en la lista)
   const votos = p.votos ? `${ic('check', 12)} ${p.votos.up} confirman · ` : '';
@@ -923,7 +929,7 @@ function abrirMapCard(id) {
       <div class="mapcard-precio">${precioGrande(p)}</div>
       <div class="mapcard-disp">
         <div class="mapcard-disp-top"><span>Disponibilidad</span><span class="badge-disp ${nivel}">${estadoTxt}</span></div>
-        <div class="disp-bar" aria-hidden="true"><i class="disp-fill ${nivel}" style="width:${barPct}%"></i></div>
+        ${dispSeg(nivel)}
         <div class="mapcard-meta">${votos}${dist} m · ${tipoTxt}</div>
       </div>
     </div>
@@ -2656,9 +2662,13 @@ async function init() {
     if (lista && lista.contains(document.activeElement) && document.activeElement !== document.body) return;
     cargar();
   }, 6000);
-  setInterval(() => { if ($('#view-miauto').classList.contains('active')) actualizarMiAutoVivo(); }, 1000);
-  setInterval(chequearAlarma, 1000);
-  setInterval(chequearRecordatorios, 1000);   // avisos "Avísame"
+  // "Mi auto" en vivo: solo si esa vista está activa Y la pestaña visible (no hay
+  // nada que actualizar en pantalla si no se ve).
+  setInterval(() => { if (!document.hidden && $('#view-miauto').classList.contains('active')) actualizarMiAutoVivo(); }, 1000);
+  // Alarma anti-multa + recordatorios "Avísame": cada 5 s (no cada 1 s). Precisión
+  // de sobra para avisos a nivel de minuto, y 5× menos trabajo. SÍ corren en segundo
+  // plano a propósito (el sentido de la alarma es avisarte cuando no estás mirando).
+  setInterval(() => { chequearAlarma(); chequearRecordatorios(); }, 5000);
   setInterval(chequearRecordatorioAuto, 60000);   // recordatorio del auto al día siguiente (se auto-protege con a.recordado)
   // Batería: soltar el GPS (watchPosition) cuando la app queda en segundo plano,
   // y reanudarlo al volver si estás en el mapa con ubicación real.

@@ -11,6 +11,10 @@ import { ready, run, all, get } from './db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ID_OK = (id) => typeof id === 'string' && /^[a-z0-9-]{1,64}$/.test(id);
+// Quita '<' '>' y caracteres de control del texto que sube la gente. Defensa en
+// profundidad contra HTML/JS inyectado (aunque el frontend también escape): lo
+// que se guarda queda como texto plano seguro de mostrar en la app y en /admin.
+const limpiarTexto = (s) => String(s).replace(/[<>]/g, '').replace(/[\x00-\x1f\x7f]/g, ' ');
 
 const mediana = (xs) => {
   if (!xs.length) return null;
@@ -37,10 +41,11 @@ function migrar() {
 // Registra un aporte. precio (CLP/hora) y/o texto (comentario). Devuelve ok.
 export async function registrarAporte(id, precio, texto) {
   await migrar();
+  if (!ready) return false;                            // DB no cargó: no fingir que se guardó
   if (!ID_OK(id)) return false;
   const p = Number(precio);
   const precioOk = Number.isFinite(p) && p > 0 && p <= 20000 ? Math.round(p) : null;
-  const t = typeof texto === 'string' ? texto.trim().slice(0, 280) : '';
+  const t = typeof texto === 'string' ? limpiarTexto(texto).trim().slice(0, 280) : '';
   if (precioOk == null && !t) return false;            // aporte vacío
   await run('INSERT INTO aportes(id, precio, texto, ts) VALUES(?, ?, ?, ?)', [id, precioOk, t || null, Date.now()]);
   await run('DELETE FROM aportes WHERE rowid NOT IN (SELECT rowid FROM aportes ORDER BY ts DESC LIMIT 20000)');
