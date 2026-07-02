@@ -76,6 +76,51 @@ for (const e of FICHAS) {
   }
 }
 
+// ── Búsqueda nacional por texto (una sola caja para todo Chile) ─────────────
+// Normaliza (minúsculas + sin acentos) para comparar sin importar tildes/mayúsc.
+function norm(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+
+// Índice liviano precalculado UNA vez (nombre/dirección/ciudad normalizados) para
+// no re-normalizar las ~1700 fichas en cada búsqueda.
+const INDICE_BUSQUEDA = FICHAS.map((e) => ({
+  e, nom: norm(e.nombre), dir: norm(e.direccion), ciu: norm(e.ciudad),
+}));
+
+// Busca en TODO el dataset por nombre/dirección/ciudad y devuelve las mejores
+// coincidencias (livianas: solo lo que la sugerencia necesita para mostrarse y
+// saltar a esa ficha). Ranking: nombre-empieza > nombre-contiene > ciudad-empieza
+// > dirección/ciudad-contiene; a igual score, primero los verificados y el nombre
+// más corto (más específico). Solo el catálogo fijo (OSM + fichas-extra); los
+// lugares aportados por la comunidad son por-ciudad y no entran aquí.
+export function buscarFichas(q, limit = 24) {
+  const t = norm(q).trim();
+  if (t.length < 2) return [];
+  const res = [];
+  for (const it of INDICE_BUSQUEDA) {
+    let score;
+    if (it.nom.startsWith(t)) score = 0;
+    else if (it.nom.includes(t)) score = 1;
+    else if (it.ciu.startsWith(t)) score = 2;
+    else if (it.ciu.includes(t) || it.dir.includes(t)) score = 3;
+    else continue;
+    res.push({ it, score });
+  }
+  res.sort((a, b) => {
+    if (a.score !== b.score) return a.score - b.score;
+    if (!!b.it.e.verificado !== !!a.it.e.verificado) return b.it.e.verificado ? 1 : -1;
+    return a.it.nom.length - b.it.nom.length;
+  });
+  return res.slice(0, limit).map(({ it }) => {
+    const e = it.e;
+    return {
+      id: e.id, nombre: e.nombre, ciudad: e.ciudad, region: e.region,
+      direccion: e.direccion, tipo: e.tipo, categoria: e.categoria,
+      precioHora: e.precioHora, precioMin: e.precioMin, gratisInfo: e.gratis,
+      verificado: !!e.verificado, lat: e.lat, lng: e.lng,
+    };
+  });
+}
+
 // Conjunto de IDs válidos del dataset (fichas OSM + hechas a mano). Se usa para
 // RECHAZAR fotos/aportes dirigidos a ids inventados (evita que un atacante cree
 // millones de carpetas de fotos con ids basura y llene el disco). Los lugares

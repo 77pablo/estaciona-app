@@ -14,7 +14,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
-import { snapshotCiudad, shapeFichas, curvaDisponibilidad, idExiste } from './engine.js';
+import { snapshotCiudad, shapeFichas, curvaDisponibilidad, idExiste, buscarFichas } from './engine.js';
 import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } from './reportes.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente, contarVotos } from './votos.js';
@@ -272,6 +272,13 @@ const server = http.createServer(async (req, res) => {
         if (dest[e.id]) { e.destacado = true; e.destacadoEtiqueta = dest[e.id].etiqueta; e.destacadoPremium = dest[e.id].premium; e.destacadoTagline = dest[e.id].tagline; }
       }
       return sendJSON(res, 200, { centro: CENTRO, zonas: ZONAS, regiones: REGIONES, estacionamientos: lista });
+    }
+    if (url.pathname === '/api/buscar' && req.method === 'GET') {
+      // Búsqueda NACIONAL por texto: una sola caja para todo Chile. Devuelve
+      // coincidencias livianas (nombre/ciudad/precio) de cualquier ciudad, para
+      // que el frontend muestre sugerencias y salte directo a esa ficha.
+      const q = url.searchParams.get('q') || '';
+      return sendJSON(res, 200, { resultados: buscarFichas(q, 24) });
     }
     if (url.pathname === '/api/aporte' && req.method === 'POST') {
       const okRate = rateLimit(req, 20, 600000);   // máx 20 aportes / 10 min por IP (anti-spam)

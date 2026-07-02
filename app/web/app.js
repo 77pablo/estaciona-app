@@ -2047,6 +2047,100 @@ async function geocodificar(texto) {
 }
 window.buscarComoDireccion = () => geocodificar($('#search')?.value || query);
 
+// --- Búsqueda NACIONAL: una sola caja para todo Chile -----------------------
+// Mientras escribes, consulta /api/buscar (todo el país) y muestra un desplegable
+// de sugerencias; al elegir una, salta a su ciudad y abre su detalle. Es lo que
+// convierte el buscador de "solo esta ciudad" a "cualquier estacionamiento del país".
+let _sugResultados = [];   // resultados actuales del desplegable
+let _sugSel = -1;          // índice resaltado (teclado); -1 = ninguno
+let _sugSeq = 0;           // descarta respuestas viejas (búsquedas concurrentes)
+
+// Precio corto para una sugerencia (mismo criterio honesto que el resto de la app).
+function precioSug(r) {
+  if (r.gratisInfo && /cliente/i.test(r.gratisInfo)) return '🛒 Solo clientes';
+  if (r.precioHora === 0) return 'Gratis';
+  if (r.precioHora == null) return 'Pago';
+  return (r.verificado ? '' : '~') + CLP(r.precioHora) + '/hr';
+}
+
+async function buscarNacional(texto) {
+  const q = (texto || '').trim();
+  if (q.length < 2) { cerrarSugerencias(); return; }
+  const seq = ++_sugSeq;
+  try {
+    const r = await fetch('/api/buscar?q=' + encodeURIComponent(q));
+    if (!r.ok) throw new Error('http ' + r.status);
+    const j = await r.json();
+    if (seq !== _sugSeq) return;                 // llegó una respuesta más nueva
+    renderSugerencias(j.resultados || []);
+  } catch {
+    if (seq === _sugSeq) cerrarSugerencias();     // sin conexión: queda el filtro de lista local
+  }
+}
+
+function renderSugerencias(resultados) {
+  _sugResultados = resultados;
+  _sugSel = -1;
+  const box = $('#search-suggest');
+  if (!box) return;
+  if (!resultados.length) {
+    box.innerHTML = '<div class="sug-empty">Sin resultados en todo Chile para “' + esc(query) + '”</div>';
+    box.hidden = false;
+    return;
+  }
+  box.innerHTML = resultados.map((r, i) => `
+    <button class="sug-item" role="option" data-i="${i}" onmousedown="event.preventDefault()" onclick="elegirSugerencia(${i})">
+      <span class="sug-ic">${ic(r.tipo === 'calle' ? 'road' : 'parking', 17)}</span>
+      <span class="sug-main">
+        <span class="sug-nom">${esc(r.nombre)}${r.verificado ? ' <span class="sug-ok" title="Precio confirmado">' + ic('check', 12) + '</span>' : ''}</span>
+        <span class="sug-sub">${esc(r.ciudad)}${r.region ? ' · ' + esc(r.region) : ''}</span>
+      </span>
+      <span class="sug-precio">${precioSug(r)}</span>
+    </button>`).join('') +
+    '<div class="sug-foot">' + ic('pin', 12) + ' Resultados de todo Chile</div>';
+  box.hidden = false;
+}
+
+function cerrarSugerencias() {
+  _sugResultados = []; _sugSel = -1;
+  const box = $('#search-suggest');
+  if (box) { box.hidden = true; box.innerHTML = ''; }
+}
+
+// Resalta la opción i (navegación con flechas) y la deja visible.
+function resaltarSugerencia(i) {
+  const box = $('#search-suggest');
+  if (!box) return;
+  const items = box.querySelectorAll('.sug-item');
+  items.forEach((el, k) => el.classList.toggle('on', k === i));
+  _sugSel = i;
+  if (items[i]) items[i].scrollIntoView({ block: 'nearest' });
+}
+
+// Elige una sugerencia: salta a su ciudad (si hace falta) y abre su detalle.
+window.elegirSugerencia = (i) => {
+  const r = _sugResultados[i];
+  if (!r) return;
+  cerrarSugerencias();
+  const inp = $('#search');
+  if (inp) inp.value = '';
+  query = '';
+  actualizarBotonLimpiar();
+  track('search', r.ciudad);
+  // Ya estás en su ciudad y está cargada → abre directo.
+  if (r.ciudad === ciudadActual && DATA.some((p) => p.id === r.id)) { openDetalle(r.id); return; }
+  const z = ZONAS.find((x) => x.nombre === r.ciudad);
+  if (z) {
+    toast('Yendo a ' + r.nombre + '…');
+    cambiarCiudad(r.ciudad, true).then(() => {
+      if (DATA.some((p) => p.id === r.id)) openDetalle(r.id);
+      else if (map && Number.isFinite(r.lat)) map.setView([r.lat, r.lng], 16);   // respaldo: al menos centra el mapa
+    });
+  } else if (map && Number.isFinite(r.lat)) {
+    map.setView([r.lat, r.lng], 16);
+  }
+};
+
 // --- Reportar un lugar nuevo (crowdsource estilo Waze) ----------------------
 // Flujo: 1) el usuario mueve el mapa para apuntar el lugar con un crosshair;
 // 2) confirma la ubicación; 3) llena un formulario corto (nombre, tipo, pago/gratis);
@@ -2610,10 +2704,26 @@ async function init() {
   // re-filtrado de la lista + redibujo de pines se antirrebota ~160 ms para no
   // recalcular en cada pulsación. El filtrado es local, no se nota la latencia.
   const renderListaDeb = debounce(renderLista, 160);
-  $('#search').addEventListener('input', (e) => { query = e.target.value; actualizarBotonLimpiar(); renderListaDeb(); });
-  $('#search').addEventListener('keydown', (e) => { if (e.key === 'Enter') geocodificar(e.target.value); });
+  const buscarNacionalDeb = debounce(buscarNacional, 230);   // sugerencias de todo Chile
+  $('#search').addEventListener('input', (e) => {
+    query = e.target.value; actualizarBotonLimpiar();
+    renderListaDeb();               // filtra también la ciudad cargada (por si el lugar está aquí)
+    buscarNacionalDeb(e.target.value);
+  });
+  $('#search').addEventListener('keydown', (e) => {
+    const abierto = _sugResultados.length > 0 && !$('#search-suggest')?.hidden;
+    if (e.key === 'ArrowDown' && abierto) { e.preventDefault(); resaltarSugerencia((_sugSel + 1) % _sugResultados.length); }
+    else if (e.key === 'ArrowUp' && abierto) { e.preventDefault(); resaltarSugerencia((_sugSel - 1 + _sugResultados.length) % _sugResultados.length); }
+    else if (e.key === 'Escape' && abierto) { e.preventDefault(); cerrarSugerencias(); }
+    else if (e.key === 'Enter') {
+      if (abierto) { e.preventDefault(); elegirSugerencia(_sugSel >= 0 ? _sugSel : 0); }   // elige la resaltada (o la 1ª)
+      else geocodificar(e.target.value);   // sin sugerencias: buscar como dirección en el mapa
+    }
+  });
+  // Cerrar el desplegable al hacer clic fuera del buscador.
+  document.addEventListener('click', (e) => { if (!e.target.closest('.searchbar')) cerrarSugerencias(); });
   // Botón "X": limpia la búsqueda y vuelve a la ciudad actual.
-  $('#search-clear').addEventListener('click', limpiarBusqueda);
+  $('#search-clear').addEventListener('click', () => { cerrarSugerencias(); limpiarBusqueda(); });
   // Botón "Buscar en esta zona": fija el usuario al centro del mapa y recarga.
   $('#btn-zona').addEventListener('click', () => {
     if (!map) return;
