@@ -4,3 +4,7 @@
 **/*.sqlite
 **/*.sqlite-shm
 **/*.sqlite-wal
+**/*.key
+**/.env
+**/.env.*
+**/fotos

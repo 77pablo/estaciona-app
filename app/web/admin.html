@@ -213,7 +213,7 @@
     const ft = $('#fotos');
     ft.innerHTML = fots.length ? fots.map((f) => `
       <div class="foto">
-        <a href="${f.url}" target="_blank" rel="noopener"><img src="${f.url}" loading="lazy" /></a>
+        <a href="${esc(f.url)}" target="_blank" rel="noopener"><img src="${esc(f.url)}" loading="lazy" /></a>
         <div class="bar"><small>${esc(f.id)}</small><button class="del" onclick="borrar(this,'foto','${esc(f.id)}',0,'${esc(f.file)}')">Eliminar</button></div>
       </div>`).join('') : `<div class="vacio">${q ? 'Ninguna foto coincide.' : 'Sin fotos.'}</div>`;
   }

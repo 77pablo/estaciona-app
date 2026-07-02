@@ -98,7 +98,17 @@ function sendJSON(res, status, data) {
 function readBody(req, maxBytes) {
   return new Promise((resolve) => {
     const chunks = []; let size = 0, tooBig = false;
-    req.on('data', (c) => { if (tooBig) return; size += c.length; if (size > maxBytes) { tooBig = true; return; } chunks.push(c); });
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > maxBytes) {
+        tooBig = true;   // deja de bufferear; si es un poco pasado, igual drena y responde 413
+        // pero si el flujo sigue MUY por encima del tope (4×), es un flood: corta el
+        // socket (el cliente pierde el 413, aceptable para un abuso deliberado de banda).
+        if (size > maxBytes * 4) req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
     req.on('end', () => resolve({ tooBig, body: Buffer.concat(chunks).toString('utf8') }));
     req.on('error', () => resolve({ tooBig: false, body: '' }));
   });
@@ -107,12 +117,19 @@ function readBody(req, maxBytes) {
 // Rate-limit simple en memoria por IP (ventana deslizante). Defensa anti-spam del
 // endpoint que escribe al mapa público (reportar lugar). No es a prueba de balas
 // (la moderación en /admin es la última línea), pero frena floods accidentales/básicos.
+// IP del cliente para rate-limit / anti-fuerza-bruta. El cliente puede FALSIFICAR
+// X-Forwarded-For, así que NO tomamos el primero: tomamos el que agrega el proxy de
+// borde (Railway) contando desde el final. TRUST_PROXY_HOPS = cuántos proxies de
+// confianza hay (default 1 = el último, que es el caso de Railway single-replica).
+const HOPS = Math.max(1, parseInt(process.env.TRUST_PROXY_HOPS || '1', 10) || 1);
+function clientIp(req) {
+  const xff = (req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return xff.length ? (xff[xff.length - HOPS] || xff[0]) : (req.socket.remoteAddress || 'x');
+}
+
 const _ipHits = new Map();
 function rateLimit(req, max, ventanaMs) {
-  // El cliente puede falsificar X-Forwarded-For; el valor confiable es el ÚLTIMO
-  // (el que agrega el proxy de Railway), no el primero. Si no hay, la IP del socket.
-  const xff = (req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
-  const ip = xff.length ? xff[xff.length - 1] : (req.socket.remoteAddress || 'x');
+  const ip = clientIp(req);
   const ahora = Date.now();
   const arr = (_ipHits.get(ip) || []).filter((t) => ahora - t < ventanaMs);
   arr.push(ahora);
@@ -124,10 +141,7 @@ function rateLimit(req, max, ventanaMs) {
 // Anti fuerza-bruta de la clave admin: cuenta intentos FALLIDOS por IP y bloquea
 // si hay demasiados en la ventana (la clave admin es la única defensa de /admin).
 const _adminFails = new Map();
-function ipDe(req) {
-  const xff = (req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
-  return xff.length ? xff[xff.length - 1] : (req.socket.remoteAddress || 'x');   // el ÚLTIMO XFF lo pone el proxy (no falsificable)
-}
+const ipDe = clientIp;   // misma IP confiable (último XFF real) para el anti-fuerza-bruta
 function adminBloqueado(req) {
   const ip = ipDe(req), ahora = Date.now();
   const arr = (_adminFails.get(ip) || []).filter((t) => ahora - t < 300000);   // ventana 5 min
@@ -156,6 +170,46 @@ async function agregados() {
 
 // Rutas "bonitas": la landing es la portada (/), la app vive en /app.
 const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html', '/terminos': '/terminos.html', '/privacidad': '/privacidad.html', '/operadores': '/operadores.html', '/pro': '/pro.html' };
+
+// Content-Security-Policy: whitelist de los orígenes que la app REALMENTE usa
+// (mapas MapTiler, tiles OSM, tráfico TomTom, geocoding Nominatim, fuentes Google,
+// Leaflet en unpkg, nsfwjs/tfjs en jsdelivr, Tailwind CDN, y las fotos en R2).
+// Se mantiene 'unsafe-inline' en script/style porque el frontend usa onclick inline
+// + Tailwind CDN (quitarlo exige refactor a addEventListener + compilar Tailwind);
+// aun así bloquea exfiltración a orígenes no listados, framing y secuestro de <base>.
+// Kill-switch: CSP_OFF=1 la desactiva sin tocar código si algo se rompiera.
+const R2_ORIGEN = (() => { try { return new URL(process.env.R2_PUBLIC_URL).origin; } catch { return 'https://*.r2.dev'; } })();
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://cdn.tailwindcss.com",
+  "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com https://cdn.tailwindcss.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  `img-src 'self' data: blob: https://unpkg.com https://api.maptiler.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://api.tomtom.com ${R2_ORIGEN}`,
+  "connect-src 'self' https://api.maptiler.com https://api.tomtom.com https://nominatim.openstreetmap.org https://cdn.jsdelivr.net",
+  "worker-src 'self' blob:",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ');
+
+// Nombres de ciudades válidas (para no dejar inflar/crecer la analítica con ciudades
+// inventadas vía /api/track). ZONAS viene del dataset.
+const ZONA_NOMBRES = new Set((ZONAS || []).map((z) => z && (z.nombre || z.ciudad)).filter(Boolean));
+
+// Cache corto de la lista de fotos por lugar. En modo R2 cada listado es una llamada
+// (facturable) a R2; sin cache un bucle a /api/fotos amplifica costo. Se invalida al
+// subir una foto de ese lugar (así el que sube la ve al instante).
+const _fotoCache = new Map();   // id -> { t, fotos }
+async function fotosDeCacheado(id) {
+  const ahora = Date.now();
+  const c = _fotoCache.get(id);
+  if (c && ahora - c.t < 30000) return c.fotos;
+  const fotos = await fotosDe(id);
+  _fotoCache.set(id, { t: ahora, fotos });
+  if (_fotoCache.size > 2000) for (const [k, v] of _fotoCache) if (ahora - v.t > 30000) _fotoCache.delete(k);
+  return fotos;
+}
 
 async function serveStatic(res, urlPath) {
   const rel = ALIAS[urlPath] || urlPath;
@@ -187,6 +241,12 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Frame-Options', 'DENY');
+  //  · HSTS             → fuerza HTTPS un año (Railway sirve TLS); evita downgrade/MITM
+  //  · Permissions-Policy → solo geolocalización (la app la usa); cámara/mic/pago off
+  //  · CSP              → whitelist de orígenes reales; bloquea exfiltración/framing/base-hijack
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(), microphone=(), payment=(), usb=()');
+  if (process.env.CSP_OFF !== '1') res.setHeader('Content-Security-Policy', CSP);
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     // Modo privado: si hay clave configurada, exige autenticación antes de TODO.
@@ -273,12 +333,14 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         const foto = await guardarFoto(id, dataUrl);
+        if (foto) _fotoCache.delete(id);   // invalida el cache: quien sube ve su foto al instante
         sendJSON(res, foto ? 200 : 400, { ok: !!foto, url: foto });
       } catch { sendJSON(res, 400, { ok: false }); }
       return;
     }
     if (url.pathname === '/api/fotos' && req.method === 'GET') {
-      return sendJSON(res, 200, { fotos: await fotosDe(url.searchParams.get('id') || '') });
+      if (!rateLimit(req, 90, 60000)) return sendJSON(res, 429, { fotos: [] });   // anti-abuso/costo R2
+      return sendJSON(res, 200, { fotos: await fotosDeCacheado(url.searchParams.get('id') || '') });
     }
     if (url.pathname.startsWith('/fotos/') && req.method === 'GET') {
       return await servirFoto(res, url.pathname);
@@ -312,6 +374,7 @@ const server = http.createServer(async (req, res) => {
         else if (tipo === 'foto') ok = await eliminarFoto(id, file);
         else if (tipo === 'lugar') ok = await eliminarLugar(id);
         else if (tipo === 'reporte') ok = (await eliminarReporte(id, ts)) > 0;
+        if (ok && tipo === 'foto') _fotoCache.delete(id);   // refleja el borrado al instante
         sendJSON(res, ok ? 200 : 400, { ok });
       } catch { sendJSON(res, 400, { ok: false }); }
       return;
@@ -361,7 +424,18 @@ const server = http.createServer(async (req, res) => {
       const okRate = rateLimit(req, 120, 60000);   // máx 120 eventos / min por IP
       const { tooBig, body } = await readBody(req, 1000);
       if (okRate && !tooBig) {
-        try { const { tipo, ciudad, id } = JSON.parse(body || '{}'); await registrarEvento(tipo, ciudad, id); } catch { /* ignora payloads inválidos */ }
+        try {
+          const { tipo, ciudad, id } = JSON.parse(body || '{}');
+          // Anti-inflación/relleno: solo se cuenta la ciudad si es una REAL del dataset,
+          // y el id por-lugar solo si la ficha existe (evita crear filas infinitas en
+          // an_ciudad/an_lugar y ensuciar/inflar las métricas de un operador).
+          const ciudadOk = typeof ciudad === 'string' && ZONA_NOMBRES.has(ciudad) ? ciudad : null;
+          let idOk = null;
+          if ((tipo === 'detalle' || tipo === 'comollegar') && typeof id === 'string') {
+            idOk = (idExiste(id) || await lugarExiste(id)) ? id : null;
+          }
+          await registrarEvento(tipo, ciudadOk, idOk);
+        } catch { /* ignora payloads inválidos */ }
       }
       res.writeHead(204); res.end();   // sin contenido: es fire-and-forget
       return;

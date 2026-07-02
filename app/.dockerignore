@@ -1,3 +1,10 @@
 **/node_modules
 **/.git
 **/*.log
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
+**/*.key
+**/.env
+**/.env.*
+**/fotos

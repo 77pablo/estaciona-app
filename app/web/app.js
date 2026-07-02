@@ -1514,7 +1514,7 @@ window.irRuta = (app) => {
   const url = app === 'waze'
     ? `https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`
     : `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`;
-  window.open(url, '_blank');
+  window.open(url, '_blank', 'noopener');
   cerrarModal();
 };
 // Copia texto al portapapeles con fallback para contextos sin Clipboard API.

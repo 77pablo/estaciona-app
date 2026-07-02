@@ -78,8 +78,13 @@ if (DATABASE_URL) {
     // BIGINT / COUNT / SUM (OID 20 = int8) vuelven como string por defecto en pg;
     // los convertimos a number para que `row.c > 0`, up/down, ts, etc. sigan siendo números.
     pg.types.setTypeParser(20, (v) => parseInt(v, 10));
-    // Neon/Supabase exigen SSL; en un Postgres local (localhost) va sin SSL.
-    const ssl = /localhost|127\.0\.0\.1|::1/.test(DATABASE_URL) ? false : { rejectUnauthorized: false };
+    // Neon/Supabase exigen SSL; en un Postgres local (localhost) va sin SSL. Se VERIFICA
+    // el certificado del servidor (anti-MITM: sin esto un atacante en la ruta puede
+    // presentar su cert, descifrar el tráfico y robar la contraseña de DATABASE_URL).
+    // Neon/Supabase usan CAs públicas → validan con el bundle de Node. Si algún proveedor
+    // usara un cert que no valide, DB_SSL_NO_VERIFY=1 lo desactiva (menos seguro, documentado).
+    const noVerify = process.env.DB_SSL_NO_VERIFY === '1';
+    const ssl = /localhost|127\.0\.0\.1|::1/.test(DATABASE_URL) ? false : { rejectUnauthorized: !noVerify };
     const pool = new pg.Pool({ connectionString: DATABASE_URL, ssl, max: 10 });
     await pool.query(`
       CREATE TABLE IF NOT EXISTS votos (seq BIGSERIAL, id TEXT, ok INTEGER, ts BIGINT);
