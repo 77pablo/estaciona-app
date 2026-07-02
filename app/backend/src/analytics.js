@@ -14,7 +14,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const EVENTOS = new Set([
   'pageview', 'search', 'ciudad', 'detalle', 'comollegar',
-  'reporte_lugar', 'reporte_precio', 'comentario', 'foto', 'voto',
+  'reporte_lugar', 'reporte_precio', 'comentario', 'foto', 'voto', 'resena',
 ]);
 
 function hoyChile() {

@@ -461,6 +461,31 @@ main, .view { flex: 1; min-height: 0; }
 .contacto-links a { color: var(--accent); text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
 .contacto-links a:hover { text-decoration: underline; }
 .contacto-links .sep { color: var(--muted); }
+
+/* Reseñas con estrellas (opiniones propias de la comunidad). */
+.stars { display: inline-flex; align-items: center; gap: 1px; }
+.stars .ic-svg { color: #f5b301; }
+.resenas-cab { margin: 4px 0 12px; }
+.resena-avg { display: flex; align-items: center; gap: 10px; }
+.resena-avg .ra-num { font-family: var(--font-mono); font-size: 26px; font-weight: 700; line-height: 1; }
+.resena-avg .ra-n { font-size: 13px; color: var(--muted); }
+.resena-vacia { font-size: 13.5px; color: var(--muted); }
+.btn-resena { width: 100%; }
+.resenas-lista { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.resena-item { padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
+.resena-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.resena-texto { margin-top: 6px; font-size: 14px; color: var(--text); line-height: 1.4; }
+.com-sep { height: 1px; background: var(--line); margin: 16px 0; }
+/* Selector de estrellas del modal (tocar para calificar). */
+.star-picker { display: flex; justify-content: center; gap: 6px; margin: 8px 0 4px; }
+.star-btn { background: none; border: none; cursor: pointer; padding: 4px; line-height: 0; color: #6b7180; transition: transform .1s; }
+.star-btn .ic-svg { color: inherit; }
+.star-btn.on { color: #f5b301; }
+.star-btn:hover { transform: scale(1.12); }
+.star-btn:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
+/* Estrella promedio en la tarjeta de la lista. */
+.card-star { display: inline-flex; align-items: center; gap: 3px; color: #f5b301; font-weight: 700; }
+.card-star .ic-svg { color: #f5b301; }
 .attrs { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
 .attr { background: transparent; border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 11px; font-size: 12px; }
 .calc { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px; margin: 16px 0; box-shadow: var(--shadow-soft); }

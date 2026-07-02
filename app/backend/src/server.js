@@ -19,6 +19,7 @@ import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } 
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
+import { registrarResena, resumenResenas, resenasDe, resenasRecientes, eliminarResena } from './resenas.js';
 import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto, validarFoto } from './fotos.js';
 import { r2Enabled } from './r2.js';
 import { registrarLugar, lugaresDe, lugaresRecientes, eliminarLugar, contarLugares, lugarExiste } from './lugares.js';
@@ -160,11 +161,11 @@ function adminFallo(req) {
 // Son iguales para todas las ciudades y requests, y su cálculo recorre tablas
 // completas → se cachean unos segundos para que un flood de requests al home NO
 // dispare un escaneo por cada uno (amplificación de DoS). Se refresca al vencer.
-let _agg = { t: 0, tally: null, com: null, dest: null };
+let _agg = { t: 0, tally: null, com: null, dest: null, res: null };
 async function agregados() {
   const ahora = Date.now();
   if (_agg.com && ahora - _agg.t < 15000) return _agg;   // válido 15 s
-  _agg = { t: ahora, tally: await tallyReciente(3), com: await resumenAportes(), dest: await mapaDestacados() };
+  _agg = { t: ahora, tally: await tallyReciente(3), com: await resumenAportes(), dest: await mapaDestacados(), res: await resumenResenas() };
   return _agg;
 }
 
@@ -265,10 +266,11 @@ const server = http.createServer(async (req, res) => {
       const base = snapshotCiudad(ciudad);                       // solo esa ciudad (filtra antes de dar forma)
       const reportados = shapeFichas(await lugaresDe(ciudad));   // lugares aportados por la gente
       const lista = [...base, ...reportados];
-      const { tally, com, dest } = await agregados();  // votos + precios/comentarios + destacados (cacheados)
+      const { tally, com, dest, res: resenasAgg } = await agregados();  // votos + precios/comentarios + destacados + reseñas (cacheados)
       for (const e of lista) {
         if (tally[e.id]) e.votos = tally[e.id];
         if (com[e.id]) e.comunidad = com[e.id];
+        if (resenasAgg[e.id]) e.resena = resenasAgg[e.id];   // { promedio, n } de reseñas con estrellas
         if (dest[e.id]) { e.destacado = true; e.destacadoEtiqueta = dest[e.id].etiqueta; e.destacadoPremium = dest[e.id].premium; e.destacadoTagline = dest[e.id].tagline; }
       }
       return sendJSON(res, 200, { centro: CENTRO, zonas: ZONAS, regiones: REGIONES, estacionamientos: lista });
@@ -295,6 +297,23 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/aportes' && req.method === 'GET') {
       const id = url.searchParams.get('id') || '';
       return sendJSON(res, 200, await aportesDe(id));
+    }
+    if (url.pathname === '/api/resena' && req.method === 'POST') {
+      // Reseña de la gente: estrellas (1-5) + comentario opcional. Anti-spam por IP.
+      const okRate = rateLimit(req, 20, 600000);   // máx 20 reseñas / 10 min por IP
+      const { tooBig, body } = await readBody(req, 20000);
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { error: 'cuerpo demasiado grande' });
+      try {
+        const { id, estrellas, texto } = JSON.parse(body || '{}');
+        const ok = await registrarResena(id, estrellas, texto);
+        sendJSON(res, ok ? 200 : 400, { ok });
+      } catch { sendJSON(res, 400, { error: 'json inválido' }); }
+      return;
+    }
+    if (url.pathname === '/api/resenas' && req.method === 'GET') {
+      const id = url.searchParams.get('id') || '';
+      return sendJSON(res, 200, await resenasDe(id));
     }
     if (url.pathname === '/api/curva' && req.method === 'GET') {
       // Curva de disponibilidad estimada por hora (beneficio Pro "mejor hora para ir").
@@ -361,6 +380,7 @@ const server = http.createServer(async (req, res) => {
         precios: await preciosReportados(),
         lugares: await lugaresRecientes(),
         reportes: await reportesRecientes(),
+        resenas: await resenasRecientes(),
         nVotos: await contarVotos(),
         nLugares: await contarLugares(),
         nReportes: await contarReportes(),
@@ -381,6 +401,7 @@ const server = http.createServer(async (req, res) => {
         else if (tipo === 'foto') ok = await eliminarFoto(id, file);
         else if (tipo === 'lugar') ok = await eliminarLugar(id);
         else if (tipo === 'reporte') ok = (await eliminarReporte(id, ts)) > 0;
+        else if (tipo === 'resena') ok = (await eliminarResena(id, ts)) > 0;
         if (ok && tipo === 'foto') _fotoCache.delete(id);   // refleja el borrado al instante
         sendJSON(res, ok ? 200 : 400, { ok });
       } catch { sendJSON(res, 400, { ok: false }); }

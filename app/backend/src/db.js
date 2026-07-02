@@ -97,6 +97,9 @@ if (DATABASE_URL) {
       CREATE TABLE IF NOT EXISTS reportes (seq BIGSERIAL, id TEXT, motivo TEXT, ts BIGINT);
       CREATE INDEX IF NOT EXISTS ix_reportes_id ON reportes(id);
 
+      CREATE TABLE IF NOT EXISTS resenas (seq BIGSERIAL, id TEXT, estrellas INTEGER, texto TEXT, ts BIGINT);
+      CREATE INDEX IF NOT EXISTS ix_resenas_id ON resenas(id);
+
       CREATE TABLE IF NOT EXISTS lugares (id TEXT PRIMARY KEY, ciudad TEXT, nombre TEXT, lat DOUBLE PRECISION, lng DOUBLE PRECISION, json TEXT, ts BIGINT);
       CREATE INDEX IF NOT EXISTS ix_lugares_ciudad ON lugares(ciudad);
 
@@ -139,6 +142,9 @@ if (!ready) {
 
       CREATE TABLE IF NOT EXISTS reportes (id TEXT, motivo TEXT, ts INTEGER);
       CREATE INDEX IF NOT EXISTS ix_reportes_id ON reportes(id);
+
+      CREATE TABLE IF NOT EXISTS resenas (id TEXT, estrellas INTEGER, texto TEXT, ts INTEGER);
+      CREATE INDEX IF NOT EXISTS ix_resenas_id ON resenas(id);
 
       CREATE TABLE IF NOT EXISTS lugares (id TEXT PRIMARY KEY, ciudad TEXT, nombre TEXT, lat REAL, lng REAL, json TEXT, ts INTEGER);
       CREATE INDEX IF NOT EXISTS ix_lugares_ciudad ON lugares(ciudad);

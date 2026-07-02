@@ -840,6 +840,8 @@ function renderLista() {
     // Confirmaciones REALES de la comunidad (cupo confirmado en las últimas 3 h).
     // Check verde — NO una estrella dorada (eso parecería un rating inventado).
     const votos = p.votos ? `<span class="card-rate" title="${p.votos.up} confirmaron cupo (últimas 3 h)">${ic('check', 12)} ${p.votos.up}</span>` : '';
+    // Promedio de reseñas de la comunidad (estrella dorada). Solo si hay reseñas REALES.
+    const rating = (p.resena && p.resena.n > 0) ? `<span class="card-star" title="${p.resena.n} reseña${p.resena.n > 1 ? 's' : ''} de la comunidad">${ic('starFull', 12)} ${p.resena.promedio.toFixed(1)}</span>` : '';
     return `
       <div class="card ${nivel}${p.id === selectedId ? ' sel' : ''}${adDe(p) ? ' dest' : ''}${adDe(p) && p.destacadoPremium ? ' dest-premium' : ''}" data-id="${esc(p.id)}" role="button" tabindex="0" aria-label="${esc(p.nombre)}, ver detalle">
         ${adDe(p) ? `<div class="dest-tag${p.destacadoPremium ? ' premium' : ''}">${ic('starFull', 11)} ${esc(p.destacadoEtiqueta || 'Destacado')}</div>${p.destacadoPremium && p.destacadoTagline ? `<div class="dest-tagline">${esc(p.destacadoTagline)}</div>` : ''}` : ''}
@@ -854,6 +856,7 @@ function renderLista() {
           <span>${ic('walk', 12)} ${walkMin(p.dist)} min</span>
           <span class="car-eta" style="color:${trafColor}" title="En auto · tráfico est. ${traf.nivel}">${ic('car', 12)} ${carMin(p.dist)} min</span>
           <span>${Math.round(p.dist)} m</span>
+          ${rating}
           ${votos}
           <span class="badge-disp ${nivel}">${estadoTxt}</span>
         </div>
@@ -1118,7 +1121,11 @@ function openDetalle(id) {
       </div>
 
       <div class="comunidad">
-        <h4>${ic('users', 15)} La comunidad</h4>
+        <h4>${ic('starFull', 15)} Reseñas de la comunidad</h4>
+        <div class="resenas-cab" id="resenas-cab">${resenasCabHTML(p)}</div>
+        <button class="btn btn-primary btn-resena" onclick="dejarResena('${p.id}')">${ic('starOutline', 16)} Dejar mi reseña</button>
+        <div id="resenas-lista" class="resenas-lista"></div>
+        <div class="com-sep"></div>
         <div id="com-precio-wrap">${comPrecioHTML(p)}</div>
         <div id="com-lista" class="com-lista"></div>
         <div class="com-acciones">
@@ -1153,6 +1160,7 @@ function openDetalle(id) {
     }
   });
 
+  cargarResenas(p.id);                        // reseñas con estrellas de la comunidad
   cargarComentarios(p.id);                    // trae los comentarios de la gente
   cargarFotos(p.id);                          // trae las fotos de la gente
   renderCurva(p);                             // "mejor hora para venir" (Pro) o teaser
@@ -1263,6 +1271,103 @@ window.enviarComentario = (id) => {
   if (!t) { toast('Escribe algo'); return; }
   enviarAporte(id, { texto: t });
 };
+
+// --- Reseñas con estrellas (opiniones PROPIAS de la app) --------------------
+// Dibuja 5 estrellas, llenas hasta `v` (redondeado). Es el rating REAL de la
+// comunidad; nunca se inventa (solo aparece si hay reseñas).
+function estrellasFijas(v, size = 14) {
+  const full = Math.round(v);
+  let s = '';
+  for (let i = 0; i < 5; i++) s += ic(i < full ? 'starFull' : 'starOutline', size);
+  return `<span class="stars">${s}</span>`;
+}
+// Cabecera del bloque de reseñas: promedio grande + estrellas + nº, o invitación.
+function resenaAvgHTML(promedio, n) {
+  if (n > 0) {
+    return `<div class="resena-avg"><span class="ra-num">${promedio.toFixed(1)}</span>${estrellasFijas(promedio, 17)}<span class="ra-n">${n} reseña${n > 1 ? 's' : ''}</span></div>`;
+  }
+  return `<div class="resena-vacia">Aún no hay reseñas — <b>sé el primero</b> en contar cómo es.</div>`;
+}
+function resenasCabHTML(p) {
+  return resenaAvgHTML(p.resena?.promedio || 0, p.resena?.n || 0);
+}
+async function cargarResenas(id) {
+  const el = $('#resenas-lista');
+  if (el && detalleAbiertoId === id) el.innerHTML = _comSkel;
+  try {
+    const r = await fetch(`/api/resenas?id=${encodeURIComponent(id)}`);
+    if (!el || detalleAbiertoId !== id) return;
+    if (!r.ok) { el.innerHTML = ''; return; }
+    const j = await r.json();
+    if (detalleAbiertoId !== id) return;
+    // Cabecera con el promedio FRESCO (no depende del cache de agregados de 15 s).
+    const cab = $('#resenas-cab');
+    if (cab) cab.innerHTML = resenaAvgHTML(j.promedio || 0, j.n || 0);
+    el.innerHTML = (j.resenas || []).map((rs) => `
+      <div class="resena-item">
+        <div class="resena-top">${estrellasFijas(rs.estrellas, 13)}<span class="com-fecha" title="${esc(fechaAbs(rs.ts))}">${fechaCorta(rs.ts)}</span></div>
+        ${rs.texto ? `<div class="resena-texto">${esc(rs.texto)}</div>` : ''}
+      </div>`).join('');
+  } catch {
+    if (el && detalleAbiertoId === id) el.innerHTML = '';
+  }
+}
+// Refresca reseñas EN SITIO tras publicar (sin reabrir el detalle → sin saltar scroll).
+// cargarResenas actualiza cabecera + lista con dato fresco; cargar() refresca el
+// promedio en la tarjeta de la lista (vía el cache de agregados, hasta ~15 s después).
+function refrescarResenas(id) {
+  if (detalleAbiertoId === id) cargarResenas(id);
+  cargar();
+}
+
+let _resenaStars = 0;                           // estrellas elegidas en el modal (0 = ninguna)
+function setStars(n) {
+  _resenaStars = n;
+  const picker = $('#star-picker');
+  if (!picker) return;
+  picker.querySelectorAll('.star-btn').forEach((btn, i) => {
+    btn.innerHTML = ic(i < n ? 'starFull' : 'starOutline', 32);
+    btn.classList.toggle('on', i < n);
+    btn.setAttribute('aria-checked', i === n - 1 ? 'true' : 'false');
+  });
+}
+window.dejarResena = (id) => {
+  _resenaStars = 0;
+  $('#modal').innerHTML = `
+    <h3>${ic('starFull', 18)} Deja tu reseña</h3>
+    <p>¿Cómo fue tu experiencia? Toca las estrellas.</p>
+    <div class="star-picker" id="star-picker" role="radiogroup" aria-label="Puntuación en estrellas">
+      ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star-btn" data-n="${n}" aria-label="${n} estrella${n > 1 ? 's' : ''}" aria-checked="false" role="radio">${ic('starOutline', 32)}</button>`).join('')}
+    </div>
+    <input id="resena-texto" type="text" maxlength="280" placeholder="Cuenta cómo es (opcional): acceso, seguridad, trato…" />
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="enviarResena('${id}')">Publicar reseña</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
+  abrirModal();
+  const picker = $('#star-picker');
+  picker?.querySelectorAll('.star-btn').forEach((btn) => btn.addEventListener('click', () => setStars(Number(btn.dataset.n))));
+  setTimeout(() => $('#resena-texto')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviarResena(id); }), 60);
+};
+window.enviarResena = (id) => {
+  if (!_resenaStars) { toast('Elige cuántas estrellas ⭐'); return; }
+  const texto = ($('#resena-texto')?.value || '').trim();
+  enviarResenaReq(id, _resenaStars, texto);
+};
+async function enviarResenaReq(id, estrellas, texto) {
+  const btns = [...($('#modal')?.querySelectorAll('button') || [])];
+  const primary = $('#modal')?.querySelector('.btn-primary');
+  const txtPrev = primary?.textContent;
+  btns.forEach((b) => (b.disabled = true));
+  if (primary) primary.textContent = 'Enviando…';
+  const rehab = () => { btns.forEach((b) => (b.disabled = false)); if (primary && txtPrev) primary.textContent = txtPrev; };
+  try {
+    const r = await fetch('/api/resena', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, estrellas, texto }) });
+    const j = await r.json();
+    if (j.ok) { track('resena', ciudadActual); cerrarModal(); toast('¡Gracias por tu reseña! ⭐'); if (detalleAbiertoId === id) refrescarResenas(id); else cargar(); }
+    else { toast('No se pudo enviar la reseña'); rehab(); }
+  } catch { toast('Sin conexión'); rehab(); }
+}
 
 // --- Reportar un problema de la ficha (crowdsource de corrección) ------------
 window.reportarProblema = (id) => {
