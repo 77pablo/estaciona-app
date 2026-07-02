@@ -1080,6 +1080,7 @@ function openDetalle(id) {
     </div>
     <div class="det-body">
       <div class="det-hero"><span class="hero-ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 30)}</span><span class="hero-nm">${esc(p.nombre)}</span></div>
+      ${p.resena && p.resena.n > 0 ? `<button class="det-rating" onclick="document.querySelector('.comunidad')?.scrollIntoView({behavior:'smooth',block:'start'})" aria-label="${p.resena.promedio} de 5 estrellas, ${p.resena.n} reseñas — ver reseñas">${estrellasFijas(p.resena.promedio, 15)} <b>${p.resena.promedio.toFixed(1)}</b> <span>· ${p.resena.n} reseña${p.resena.n > 1 ? 's' : ''}</span></button>` : ''}
       <div class="det-status" id="det-status-line">${lineaDisponibilidad(p)}</div>
       ${adDe(p) ? `<div class="aviso-dest">${ic('starFull', 15)} <b>${esc(p.destacadoEtiqueta || 'Destacado')}</b>${p.destacadoTagline ? ' · ' + esc(p.destacadoTagline) : ''} · espacio destacado (publicidad)</div>` : ''}
       ${p.reportado ? `<div class="aviso-com">${ic('users', 16)} Estacionamiento <b>aportado por la comunidad</b> — gracias por sumar. Si algo está mal, coméntalo abajo.</div>` : ''}
@@ -1127,10 +1128,8 @@ function openDetalle(id) {
         <div id="resenas-lista" class="resenas-lista"></div>
         <div class="com-sep"></div>
         <div id="com-precio-wrap">${comPrecioHTML(p)}</div>
-        <div id="com-lista" class="com-lista"></div>
         <div class="com-acciones">
           <button class="btn btn-second" onclick="reportarPrecio('${p.id}')">${ic('wallet', 16)} Reportar precio</button>
-          <button class="btn btn-second" onclick="comentar('${p.id}')">${ic('edit', 16)} Comentar</button>
         </div>
       </div>
     </div>
@@ -1161,7 +1160,6 @@ function openDetalle(id) {
   });
 
   cargarResenas(p.id);                        // reseñas con estrellas de la comunidad
-  cargarComentarios(p.id);                    // trae los comentarios de la gente
   cargarFotos(p.id);                          // trae las fotos de la gente
   renderCurva(p);                             // "mejor hora para venir" (Pro) o teaser
 
@@ -1199,28 +1197,14 @@ function comPrecioHTML(p) {
     ? `<div class="com-precio">${ic('wallet', 14)} La gente reporta <b>~${CLP(p.comunidad.precioReportado)}/hr</b> · ${p.comunidad.nPrecios} reporte${p.comunidad.nPrecios > 1 ? 's' : ''}</div>`
     : '';
 }
-// Refresca la sección "comunidad" EN SITIO (sin reabrir el detalle → sin saltar
-// el scroll). cargar() ya actualiza el precio reportado vía refrescarDetalle;
-// aquí solo falta recargar la lista de comentarios.
+// Refresca la línea "la gente reporta ~$X/hr" EN SITIO tras un aporte de precio
+// (sin reabrir el detalle → sin saltar el scroll).
 async function refrescarComunidad(id) {
   await cargar();
-  if (detalleAbiertoId === id) cargarComentarios(id);
-}
-async function cargarComentarios(id) {
-  const el = $('#com-lista');
-  if (el && detalleAbiertoId === id) el.innerHTML = _comSkel;   // mientras carga, esqueleto
-  try {
-    const r = await fetch(`/api/aportes?id=${encodeURIComponent(id)}`);
-    if (!el || detalleAbiertoId !== id) return;
-    if (!r.ok) { el.innerHTML = '<div class="com-vacio">No pudimos cargar los comentarios.</div>'; return; }
-    const j = await r.json();
-    if (detalleAbiertoId !== id) return;
-    el.innerHTML = j.comentarios?.length
-      ? j.comentarios.map((c) => `<div class="com-item"><span class="com-texto">${esc(c.texto)}</span><span class="com-fecha" title="${esc(fechaAbs(c.ts))}">${fechaCorta(c.ts)}</span></div>`).join('')
-      : `<div class="com-vacio">${ic('edit', 16)}<span>Aún no hay comentarios. ¡Sé el primero en contar cómo es!</span></div>`;
-  } catch {
-    if (el && detalleAbiertoId === id) el.innerHTML = '<div class="com-vacio">Sin conexión: no pudimos cargar los comentarios.</div>';
-  }
+  if (detalleAbiertoId !== id) return;
+  const p = DATA.find((x) => x.id === id);
+  const wrap = $('#com-precio-wrap');
+  if (wrap && p) wrap.innerHTML = comPrecioHTML(p);
 }
 window.reportarPrecio = (id) => {
   const p = DATA.find((x) => x.id === id);
@@ -1251,26 +1235,8 @@ window.enviarPrecio = (id) => {
   if (v > 20000) { toast('Ese precio parece muy alto (máx $20.000/hr)'); return; }
   enviarAporte(id, { precio: v });
 };
-window.comentar = (id) => {
-  $('#modal').innerHTML = `
-    <h3>${ic('edit', 18)} Agregar comentario</h3>
-    <p>Cuenta cómo es: acceso, seguridad, el servicio…</p>
-    <input id="ap-texto" type="text" maxlength="280" placeholder="Ej: amplio, seguro, fácil de entrar" />
-    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
-      <button class="btn btn-primary" onclick="enviarComentario('${id}')">Publicar</button>
-      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
-    </div>`;
-  abrirModal();
-  setTimeout(() => {
-    const i = $('#ap-texto');
-    if (i) { i.focus(); i.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviarComentario(id); }); }
-  }, 60);
-};
-window.enviarComentario = (id) => {
-  const t = ($('#ap-texto')?.value || '').trim();
-  if (!t) { toast('Escribe algo'); return; }
-  enviarAporte(id, { texto: t });
-};
+// (Los comentarios de texto sueltos se reemplazaron por las RESEÑAS con estrellas,
+// que ya incluyen un comentario opcional — un solo lugar para opinar.)
 
 // --- Reseñas con estrellas (opiniones PROPIAS de la app) --------------------
 // Dibuja 5 estrellas, llenas hasta `v` (redondeado). Es el rating REAL de la

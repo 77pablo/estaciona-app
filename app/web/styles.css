@@ -465,6 +465,10 @@ main, .view { flex: 1; min-height: 0; }
 /* Reseñas con estrellas (opiniones propias de la comunidad). */
 .stars { display: inline-flex; align-items: center; gap: 1px; }
 .stars .ic-svg { color: #f5b301; }
+/* Chip de rating arriba del detalle (toca para bajar a las reseñas). */
+.det-rating { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 10px; padding: 4px 4px; background: none; border: none; cursor: pointer; color: var(--text); }
+.det-rating b { font-family: var(--font-mono); font-size: 15px; }
+.det-rating span { font-size: 13px; color: var(--muted); }
 .resenas-cab { margin: 4px 0 12px; }
 .resena-avg { display: flex; align-items: center; gap: 10px; }
 .resena-avg .ra-num { font-family: var(--font-mono); font-size: 26px; font-weight: 700; line-height: 1; }
