@@ -456,6 +456,11 @@ main, .view { flex: 1; min-height: 0; }
 /* Precio = dato clave: fila con más aire y monto resaltado. */
 .det-row.precio-row { padding: 14px 0; font-size: 15px; }
 .det-row.precio-row .precio-val { font-weight: 700; }
+/* Contacto (teléfono / web): links en color de acento. */
+.contacto-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.contacto-links a { color: var(--accent); text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.contacto-links a:hover { text-decoration: underline; }
+.contacto-links .sep { color: var(--muted); }
 .attrs { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
 .attr { background: transparent; border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 11px; font-size: 12px; }
 .calc { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px; margin: 16px 0; box-shadow: var(--shadow-soft); }

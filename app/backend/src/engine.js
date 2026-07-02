@@ -222,6 +222,7 @@ export function shapeFichas(fichas) {
       lat: e.lat, lng: e.lng, precioHora: e.precioHora, precioMin: e.precioMin, fraccion: e.fraccion,
       gratisInfo: e.gratis, gratisAhora: gratis, horario: e.horario,
       abierto, verificado: e.verificado, fuente: e.fuente, atributos: e.atributos,
+      telefono: e.telefono, web: e.web,   // contacto (datos oficiales verificados, si hay)
       reportado: e.reportado || false,   // true = aportado por la comunidad (sin verificar)
     };
 

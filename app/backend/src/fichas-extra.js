@@ -184,8 +184,9 @@ export const FICHAS_EXTRA = [
     id: 'x-temuco-recabarren', tipo: 'privado', ciudad: 'Temuco', region: 'La Araucanía',
     categoria: null, nombre: 'Subterráneo Plaza Manuel Recabarren', direccion: 'Av. San Martín 751, Temuco',
     lat: -38.73985, lng: -72.58935, precioHora: 1500, fraccion: null,
-    gratis: null, horario: '07:30–22:00', verificado: false,
-    fuente: 'horario oficial estacionamientosaraucania.cl; precio ref. Tripadvisor/chilopina (~$1.500/hr, no oficial)',
+    gratis: null, horario: 'Lun a Vie 07:30–22:00, Sáb 09:00–14:30, Dom cerrado', verificado: false,
+    telefono: '+56 9 9454 4477', web: 'estacionamientosaraucania.cl',
+    fuente: 'horario/contacto oficial estacionamientosaraucania.cl; precio ref. Tripadvisor/chilopina (~$1.500/hr, no oficial)',
     atributos: { techado: true, ev: false, accesible: true, camaras: true },
   },
   {

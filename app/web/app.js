@@ -145,6 +145,8 @@ const ICONS = {
   pinPlus:'<path d="M19 11c0 4.5-7 10-7 10s-7-5.5-7-10a7 7 0 0 1 13.2-3.2"/><path d="M16 4.5h5M18.5 2v5"/>',
   compare:'<path d="M3 8h14l-3.5-3.5M21 16H7l3.5 3.5"/>',
   flag:'<path d="M5 21V4M5 4.5h11l-2 3 2 3H5"/>',
+  phone:'<path d="M6.5 3.5h3l1.5 4-2 1.5a11 11 0 0 0 4.5 4.5l1.5-2 4 1.5v3a1.5 1.5 0 0 1-1.6 1.5A15.5 15.5 0 0 1 5 5.1 1.5 1.5 0 0 1 6.5 3.5Z"/>',
+  globe:'<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.4 3.5 5.4 3.5 8.5s-1.2 6.1-3.5 8.5c-2.3-2.4-3.5-5.4-3.5-8.5s1.2-6.1 3.5-8.5Z"/>',
 };
 // Devuelve un <svg> inline del ícono pedido (hereda color y se alinea al texto).
 function ic(name, size = 18) {
@@ -232,6 +234,23 @@ function precioHTML(p) {
   if (p.precioHora == null) return `<b class="precio-est-num">Pago</b><small>sin dato</small>`;
   if (p.verificado) return `<b>${CLP(p.precioHora)}</b><small>/hr</small>`;
   return `<b class="precio-est-num">~${CLP(p.precioHora)}</b><small>est.</small>`;
+}
+
+// Bloque de contacto (teléfono / sitio web) en el detalle, si la ficha los tiene.
+// Los datos vienen de fuentes oficiales verificadas (ver correcciones.js/fichas-extra.js).
+function contactoHTML(p) {
+  if (!p.telefono && !p.web) return '';
+  const partes = [];
+  if (p.telefono) {
+    const tel = p.telefono.replace(/[^\d+]/g, '');
+    partes.push(`<a href="tel:${esc(tel)}">${ic('phone', 14)} ${esc(p.telefono)}</a>`);
+  }
+  if (p.web) {
+    const url = /^https?:\/\//.test(p.web) ? p.web : 'https://' + p.web;
+    const label = p.web.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    partes.push(`<a href="${esc(url)}" target="_blank" rel="noopener">${ic('globe', 14)} ${esc(label)}</a>`);
+  }
+  return `<div class="det-row det-contacto"><span class="k">${ic(p.telefono ? 'phone' : 'globe')}</span><span class="contacto-links">${partes.join('<span class="sep"> · </span>')}</span></div>`;
 }
 
 // --- Cálculo de costo realista (descuenta horas gratis y cerradas) ----------
@@ -1069,6 +1088,7 @@ function openDetalle(id) {
       <div class="det-row"><span class="k">${ic('clock')}</span><span>${p.horario ? esc(p.horario) + ' · ' : ''}${p.abierto ? '<b style="color:var(--green)">Abierto ahora</b>' : '<b style="color:var(--red)">Cerrado</b>'}</span></div>
       <div class="det-row"><span class="k">${ic('pin')}</span><span>${esc(p.direccion)} · ${Math.round(haversine(USER, p))} m · ${ic('walk', 13)} ${walkMin(haversine(USER, p))} min caminando</span></div>
       <div class="det-row"><span class="k">${ic('car')}</span><span id="det-eta">${carMin(haversine(USER, p))} min en auto · ${trafHTML()}</span></div>
+      ${contactoHTML(p)}
       <div class="attrs">${attrs.map((a) => `<span class="attr">${a}</span>`).join('')}</div>
       ${p.precioHora > 0 ? `
       <div class="calc">
