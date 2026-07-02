@@ -20,6 +20,7 @@ import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
 import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto, validarFoto } from './fotos.js';
+import { r2Enabled } from './r2.js';
 import { registrarLugar, lugaresDe, lugaresRecientes, eliminarLugar, contarLugares, lugarExiste } from './lugares.js';
 import { registrarEvento, resumenAnalytics, vistasLugar } from './analytics.js';
 import { agregarDestacado, quitarDestacado, mapaDestacados, listarDestacados } from './destacados.js';
@@ -404,14 +405,15 @@ server.listen(PORT, () => {
   console.log('  Ctrl+C para detener.');
   // Persistencia: votos/aportes/lugares/destacados/analítica viven en la base de
   // datos (Postgres administrado si hay DATABASE_URL; si no, SQLite en SQLITE_PATH,
-  // que debe apuntar al volumen, ej. /data/estaciona.sqlite). Las fotos siguen como
-  // archivos (define FOTOS_DIR al volumen).
+  // que debe apuntar al volumen, ej. /data/estaciona.sqlite). Las fotos van a
+  // object storage externo (R2) si hay variables R2_*; si no, a archivos (FOTOS_DIR).
   const persist = (env) => process.env[env] ? `${process.env[env]}  (persiste)` : `local efímero — SE BORRA en redeploy (define ${env})`;
   console.log('  Persistencia:');
   // Refleja el estado REAL del backend: si no cargó, NADA se guarda.
   if (dbReady && dbBackend === 'postgres') console.log('   · base de datos → PostgreSQL administrado vía DATABASE_URL  (persiste, multi-instancia)');
   else if (dbReady) console.log(`   · base de datos → SQLite ${persist('SQLITE_PATH')}`);
   else console.log('   · base de datos → ⚠️  NO cargó: votos/aportes/lugares/analítica NO se guardan (revisa DATABASE_URL / SQLITE_PATH / Node ≥22.5)');
-  console.log(`   · fotos         → ${persist('FOTOS_DIR')}`);
+  if (r2Enabled) console.log('   · fotos         → Cloudflare R2 (object storage externo)  (persiste, multi-instancia)');
+  else console.log(`   · fotos         → ${persist('FOTOS_DIR')}`);
   console.log('');
 });
