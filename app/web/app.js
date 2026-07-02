@@ -2091,6 +2091,7 @@ function limpiarBusqueda() {
   const inp = $('#search');
   query = '';
   if (inp) { inp.value = ''; inp.focus(); }
+  cerrarSugerencias();                          // cierra el desplegable de búsqueda nacional
   actualizarBotonLimpiar();
   renderLista();
 }
@@ -2517,6 +2518,7 @@ document.addEventListener('keydown', (e) => {
 // --- Navegación entre vistas ------------------------------------------------
 function irA(view) {
   cerrarMapCard();                              // oculta la card flotante del mapa al cambiar de vista
+  cerrarSugerencias();                          // cierra el desplegable de búsqueda nacional (no debe flotar sobre otra vista)
   // Cierra overlays abiertos (en PC el detalle tapaba la columna izquierda de la vista nueva).
   if ($('#detalle')?.classList.contains('open')) cerrarDetalle();
   if ($('#modal-bg')?.classList.contains('open')) cerrarModal();
@@ -2813,8 +2815,8 @@ async function init() {
   });
   // Cerrar el desplegable al hacer clic fuera del buscador.
   document.addEventListener('click', (e) => { if (!e.target.closest('.searchbar')) cerrarSugerencias(); });
-  // Botón "X": limpia la búsqueda y vuelve a la ciudad actual.
-  $('#search-clear').addEventListener('click', () => { cerrarSugerencias(); limpiarBusqueda(); });
+  // Botón "X": limpia la búsqueda (y cierra el desplegable) y vuelve a la ciudad actual.
+  $('#search-clear').addEventListener('click', limpiarBusqueda);
   // Botón "Buscar en esta zona": fija el usuario al centro del mapa y recarga.
   $('#btn-zona').addEventListener('click', () => {
     if (!map) return;
