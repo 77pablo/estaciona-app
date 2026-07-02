@@ -36,7 +36,10 @@ function credenciales() {
   return user && secret ? { user, secret } : null;
 }
 
-const MODELS = 'nudity-2.1,weapon,drug,gore-2.0';
+// Nombres de modelos de Sightengine (verificados contra la API real, jul-2026):
+// el de drogas es 'recreational_drug' (NO 'drug' → daba "Unknown model 'drug'").
+// Los campos de la respuesta ya se leen como r.recreational_drug / r.gore.
+const MODELS = 'nudity-2.1,weapon,recreational_drug,gore-2.0';
 const ENDPOINT = 'https://api.sightengine.com/1.0/check.json';
 
 // POST multipart/form-data a Sightengine con el buffer de la imagen.
