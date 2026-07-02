@@ -20,6 +20,7 @@
 
   /* Acción = teal eléctrico */
   --accent: #2dd4bf;
+  --star: #f5b301;         /* dorado de las estrellas de reseñas */
   --on-accent: #062925;    /* texto sobre teal */
   --signal: #2dd4bf;       /* foco + "tú estás aquí" */
 
@@ -464,7 +465,7 @@ main, .view { flex: 1; min-height: 0; }
 
 /* Reseñas con estrellas (opiniones propias de la comunidad). */
 .stars { display: inline-flex; align-items: center; gap: 1px; }
-.stars .ic-svg { color: #f5b301; }
+.stars .ic-svg { color: var(--star); }
 /* Chip de rating arriba del detalle (toca para bajar a las reseñas). */
 .det-rating { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 10px; padding: 4px 4px; background: none; border: none; cursor: pointer; color: var(--text); }
 .det-rating b { font-family: var(--font-mono); font-size: 15px; }
@@ -482,14 +483,14 @@ main, .view { flex: 1; min-height: 0; }
 .com-sep { height: 1px; background: var(--line); margin: 16px 0; }
 /* Selector de estrellas del modal (tocar para calificar). */
 .star-picker { display: flex; justify-content: center; gap: 6px; margin: 8px 0 4px; }
-.star-btn { background: none; border: none; cursor: pointer; padding: 4px; line-height: 0; color: #6b7180; transition: transform .1s; }
+.star-btn { background: none; border: none; cursor: pointer; padding: 4px; line-height: 0; color: var(--muted); transition: transform .1s; }
 .star-btn .ic-svg { color: inherit; }
-.star-btn.on { color: #f5b301; }
+.star-btn.on { color: var(--star); }
 .star-btn:hover { transform: scale(1.12); }
 .star-btn:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
 /* Estrella promedio en la tarjeta de la lista. */
-.card-star { display: inline-flex; align-items: center; gap: 3px; color: #f5b301; font-weight: 700; }
-.card-star .ic-svg { color: #f5b301; }
+.card-star { display: inline-flex; align-items: center; gap: 3px; color: var(--star); font-weight: 700; }
+.card-star .ic-svg { color: var(--star); }
 .attrs { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
 .attr { background: transparent; border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 11px; font-size: 12px; }
 .calc { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px; margin: 16px 0; box-shadow: var(--shadow-soft); }
@@ -822,12 +823,7 @@ main, .view { flex: 1; min-height: 0; }
 .comunidad h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
 .com-precio { font-size: 14px; margin-bottom: 12px; }
 .com-precio b { color: var(--accent); }
-.com-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
-.com-item { background: var(--surface-2); border: 1px solid var(--line); border-left: 2px solid var(--line-2); border-radius: var(--r); padding: 10px 12px; font-size: 13.5px; display: flex; flex-direction: column; gap: 5px; }
-.com-item .com-texto { line-height: 1.45; word-break: break-word; }
-.com-item .com-fecha { font-size: 11.5px; color: var(--muted); align-self: flex-start; white-space: nowrap; }
-.com-vacio { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 14px; line-height: 1.4; border: 1px dashed var(--line-2); border-radius: var(--r-lg); background: var(--surface-2); }
-.com-vacio svg { opacity: .7; flex-shrink: 0; }
+.com-fecha { font-size: 11.5px; color: var(--muted); white-space: nowrap; }   /* fecha de cada reseña (dentro de .resena-top) */
 .com-skel { height: 42px; border-radius: var(--r); }
 .com-acciones { display: flex; gap: 10px; }
 .com-acciones .btn { flex: 1; padding: 11px; font-size: 13px; }

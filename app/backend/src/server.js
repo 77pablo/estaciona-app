@@ -279,6 +279,9 @@ const server = http.createServer(async (req, res) => {
       // Búsqueda NACIONAL por texto: una sola caja para todo Chile. Devuelve
       // coincidencias livianas (nombre/ciudad/precio) de cualquier ciudad, para
       // que el frontend muestre sugerencias y salte directo a esa ficha.
+      // Rate-limit holgado (no molesta al tecleo real, debounced) que frena floods
+      // — cada llamada recorre el índice nacional (~1700 fichas).
+      if (!rateLimit(req, 90, 60000)) return sendJSON(res, 429, { resultados: [] });
       const q = url.searchParams.get('q') || '';
       return sendJSON(res, 200, { resultados: buscarFichas(q, 24) });
     }
@@ -400,7 +403,7 @@ const server = http.createServer(async (req, res) => {
         if (tipo === 'comentario') ok = (await eliminarAporte(id, ts)) > 0;
         else if (tipo === 'foto') ok = await eliminarFoto(id, file);
         else if (tipo === 'lugar') ok = await eliminarLugar(id);
-        else if (tipo === 'reporte') ok = (await eliminarReporte(id, ts)) > 0;
+        else if (tipo === 'reporte') ok = (await eliminarReporte(id)) > 0;   // borra TODOS los reportes de la ficha (feed agrupado por ficha)
         else if (tipo === 'resena') ok = (await eliminarResena(id, ts)) > 0;
         if (ok && tipo === 'foto') _fotoCache.delete(id);   // refleja el borrado al instante
         sendJSON(res, ok ? 200 : 400, { ok });

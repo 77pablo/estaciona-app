@@ -7,14 +7,15 @@
 // una señal para el moderador (mantiene la honestidad de los datos).
 // ============================================================================
 
-import { run, all, get } from './db.js';
+import { ready, run, all, get } from './db.js';
 
 const ID_OK = (id) => typeof id === 'string' && /^[a-z0-9-]{1,64}$/.test(id);
 // Motivos cerrados (el frontend ofrece exactamente estos).
-export const MOTIVOS = new Set(['cerrado', 'no-existe', 'precio', 'datos', 'otro']);
+const MOTIVOS = new Set(['cerrado', 'no-existe', 'precio', 'datos', 'otro']);
 
 // Registra un reporte. Devuelve true si se guardó.
 export async function registrarReporte(id, motivo) {
+  if (!ready) return false;                            // DB no cargó: no fingir que se guardó
   if (!ID_OK(id) || !MOTIVOS.has(motivo)) return false;
   await run('INSERT INTO reportes(id, motivo, ts) VALUES(?, ?, ?)', [id, motivo, Date.now()]);
   // Poda: conserva los 20.000 más recientes.

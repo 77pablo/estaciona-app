@@ -355,7 +355,7 @@ function cambiarCiudad(nombre, mover = true) {
   const sel = $('#ciudad-select');
   if (sel) { sel.value = nombre; sel.title = `Ciudad: ${nombre}`; }
   if (mover) {
-    USER = { lat: z.lat, lng: z.lng };
+    USER = { lat: z.lat, lng: z.lng }; userReal = false;   // el centro de la ciudad NO es tu ubicación real
     if (map) { map.setView([z.lat, z.lng], 15); meMarker?.setLatLng([z.lat, z.lng]); }
   }
   DATA = [];                 // limpia mientras llega la ciudad nueva
@@ -1416,7 +1416,7 @@ async function enviarAporte(id, body) {
   try {
     const r = await fetch('/api/aporte', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) });
     const j = await r.json();
-    if (j.ok) { track(body.precio != null ? 'reporte_precio' : 'comentario', ciudadActual); cerrarModal(); toast('¡Gracias por tu aporte!'); if (detalleAbiertoId === id) refrescarComunidad(id); else cargar(); }
+    if (j.ok) { track('reporte_precio', ciudadActual); cerrarModal(); toast('¡Gracias por tu aporte!'); if (detalleAbiertoId === id) refrescarComunidad(id); else cargar(); }
     else { toast('No se pudo enviar el aporte'); rehabilitar(); }
   } catch { toast('Sin conexión'); rehabilitar(); }
 }
@@ -1968,7 +1968,7 @@ window.irAFav = (id) => {
 window.irLugar = (k) => {
   const l = LUGARES[k];
   if (!l.set) { editarLugar(k); return; }   // aún sin fijar: pide la dirección en vez de saltar a un sector por defecto
-  USER = { lat: l.lat, lng: l.lng }; irA('buscar');
+  USER = { lat: l.lat, lng: l.lng }; userReal = false; irA('buscar');   // Casa/Trabajo guardado NO es tu ubicación real ahora
   ciudadPorPunto(USER);                 // ajusta la ciudad a la del lugar guardado
   if (map) { map.setView([l.lat, l.lng], 15); meMarker?.setLatLng([l.lat, l.lng]); }
   cargar(); toast(`Mostrando cerca de ${LUGARES_DEF[k].nombre}`);
@@ -2123,7 +2123,7 @@ async function geocodificar(texto) {
     if (!arr.length) { toast('No encontré ese lugar — filtro la lista'); renderLista(); return; }
     const lat = parseFloat(arr[0].lat), lng = parseFloat(arr[0].lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) { toast('Esa dirección no trae coordenadas'); renderLista(); return; }
-    USER = { lat, lng };
+    USER = { lat, lng }; userReal = false;   // dirección buscada, NO tu ubicación real
     ciudadPorPunto(USER);                 // salta a la ciudad más cercana
     query = ''; $('#search').value = '';  // limpia la búsqueda para ver esa ciudad
     if (map) { map.setView([lat, lng], 15); meMarker?.setLatLng([lat, lng]); }
@@ -2195,6 +2195,7 @@ function renderSugerencias(resultados) {
 
 function cerrarSugerencias() {
   _sugResultados = []; _sugSel = -1;
+  _sugSeq++;                                    // invalida cualquier fetch en vuelo (no reabrir el desplegable al resolver)
   const box = $('#search-suggest');
   if (box) { box.hidden = true; box.innerHTML = ''; }
 }
@@ -2821,7 +2822,7 @@ async function init() {
   $('#btn-zona').addEventListener('click', () => {
     if (!map) return;
     const c = map.getCenter();
-    USER = { lat: c.lat, lng: c.lng };
+    USER = { lat: c.lat, lng: c.lng }; userReal = false;   // centro del mapa, NO tu ubicación real
     meMarker?.setLatLng([c.lat, c.lng]);
     ciudadPorPunto(USER);                 // si el centro quedó en otra ciudad, cámbiala
     $('#btn-zona').classList.remove('show');
