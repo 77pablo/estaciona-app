@@ -2023,13 +2023,10 @@ window.fijarLugarDireccion = async () => {
   if (!q) { toast('Escribe una dirección'); return; }
   toast('Buscando dirección…');
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=cl&limit=1&accept-language=es`;
-    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    const arr = await r.json();
-    if (!arr.length) { toast('No encontré esa dirección'); return; }
-    const lat = parseFloat(arr[0].lat), lng = parseFloat(arr[0].lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) { toast('Esa dirección no trae coordenadas'); return; }
-    guardarLugar(_lugarEdit, lat, lng, (arr[0].display_name || q).split(',')[0]);
+    const r = await fetch('/api/geocode?q=' + encodeURIComponent(q));
+    const j = await r.json();
+    if (!j.ok) { toast('No encontré esa dirección'); return; }
+    guardarLugar(_lugarEdit, j.lat, j.lng, j.nombre || q);
     finLugar();
   } catch { toast('No se pudo buscar la dirección'); }
 };
@@ -2116,19 +2113,16 @@ async function geocodificar(texto) {
   track('search', ciudadActual);
   toast('Buscando “' + q + '”…');
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=cl&limit=1&accept-language=es`;
-    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const r = await fetch('/api/geocode?q=' + encodeURIComponent(q));
     if (!r.ok) throw new Error('http ' + r.status);
-    const arr = await r.json();
-    if (!arr.length) { toast('No encontré ese lugar — filtro la lista'); renderLista(); return; }
-    const lat = parseFloat(arr[0].lat), lng = parseFloat(arr[0].lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) { toast('Esa dirección no trae coordenadas'); renderLista(); return; }
-    USER = { lat, lng }; userReal = false;   // dirección buscada, NO tu ubicación real
+    const j = await r.json();
+    if (!j.ok) { toast('No encontré ese lugar — filtro la lista'); renderLista(); return; }
+    USER = { lat: j.lat, lng: j.lng }; userReal = false;   // dirección buscada, NO tu ubicación real
     ciudadPorPunto(USER);                 // salta a la ciudad más cercana
     query = ''; $('#search').value = '';  // limpia la búsqueda para ver esa ciudad
-    if (map) { map.setView([lat, lng], 15); meMarker?.setLatLng([lat, lng]); }
+    if (map) { map.setView([j.lat, j.lng], 15); meMarker?.setLatLng([j.lat, j.lng]); }
     cargar();
-    toast('📍 ' + (arr[0].display_name || q).split(',')[0]);
+    toast('📍 ' + (j.nombre || q));
   } catch {
     // Degrada con gracia: si no hay internet/falla, queda el filtro de lista.
     toast('No se pudo buscar la dirección — filtro la lista');
@@ -2315,11 +2309,10 @@ function abrirFormularioReporte() {
 async function prefillDireccionReporte() {
   if (!_reportePos) return;
   try {
-    const u = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${_reportePos.lat}&lon=${_reportePos.lng}&accept-language=es&zoom=18`;
-    const r = await fetch(u, { headers: { 'Accept': 'application/json' } });
+    const r = await fetch(`/api/reverse?lat=${_reportePos.lat}&lng=${_reportePos.lng}`);
     const j = await r.json();
     const inp = $('#rep-dir');
-    if (inp && !inp.value && j && j.display_name) inp.value = j.display_name.split(',').slice(0, 2).join(',').trim();
+    if (inp && !inp.value && j && j.ok && j.direccion) inp.value = j.direccion;
   } catch { /* sin dirección sugerida: el usuario la escribe o se deja vacía */ }
 }
 

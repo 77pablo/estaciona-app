@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
 import { snapshotCiudad, shapeFichas, curvaDisponibilidad, idExiste, buscarFichas } from './engine.js';
+import { geocodificar, geocodificarInverso, geocoderInfo } from './geocoder.js';
 import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } from './reportes.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { registrarVoto, tallyReciente, contarVotos } from './votos.js';
@@ -173,8 +174,9 @@ async function agregados() {
 const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html', '/terminos': '/terminos.html', '/privacidad': '/privacidad.html', '/operadores': '/operadores.html', '/pro': '/pro.html' };
 
 // Content-Security-Policy: whitelist de los orígenes que la app REALMENTE usa
-// (mapas MapTiler, tiles OSM, tráfico TomTom, geocoding Nominatim, fuentes Google,
-// Leaflet en unpkg, nsfwjs/tfjs en jsdelivr, Tailwind CDN, y las fotos en R2).
+// (mapas MapTiler, tiles OSM, tráfico TomTom, fuentes Google, Leaflet en unpkg,
+// nsfwjs/tfjs en jsdelivr, Tailwind CDN, y las fotos en R2). El geocoding ya NO va
+// directo del navegador: pasa por el backend (/api/geocode), fuera de esta lista.
 // Se mantiene 'unsafe-inline' en script/style porque el frontend usa onclick inline
 // + Tailwind CDN (quitarlo exige refactor a addEventListener + compilar Tailwind);
 // aun así bloquea exfiltración a orígenes no listados, framing y secuestro de <base>.
@@ -186,7 +188,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com https://cdn.tailwindcss.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   `img-src 'self' data: blob: https://unpkg.com https://api.maptiler.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://api.tomtom.com ${R2_ORIGEN}`,
-  "connect-src 'self' https://api.maptiler.com https://api.tomtom.com https://nominatim.openstreetmap.org https://cdn.jsdelivr.net",
+  "connect-src 'self' https://api.maptiler.com https://api.tomtom.com https://cdn.jsdelivr.net",
   "worker-src 'self' blob:",
   "frame-ancestors 'none'",
   "object-src 'none'",
@@ -284,6 +286,19 @@ const server = http.createServer(async (req, res) => {
       if (!rateLimit(req, 90, 60000)) return sendJSON(res, 429, { resultados: [] });
       const q = url.searchParams.get('q') || '';
       return sendJSON(res, 200, { resultados: buscarFichas(q, 24) });
+    }
+    if (url.pathname === '/api/geocode' && req.method === 'GET') {
+      // Dirección → coordenadas. El proveedor lo elige el backend (geocoder.js) por
+      // env var; la key queda en el servidor. Rate-limit por IP (protege cuota/costo).
+      if (!rateLimit(req, 40, 60000)) return sendJSON(res, 429, { ok: false });
+      const r = await geocodificar(url.searchParams.get('q') || '');
+      return sendJSON(res, 200, r ? { ok: true, ...r } : { ok: false });
+    }
+    if (url.pathname === '/api/reverse' && req.method === 'GET') {
+      // Coordenadas → dirección (para prellenar el formulario de "reportar lugar").
+      if (!rateLimit(req, 40, 60000)) return sendJSON(res, 429, { ok: false });
+      const r = await geocodificarInverso(url.searchParams.get('lat'), url.searchParams.get('lng'));
+      return sendJSON(res, 200, r ? { ok: true, ...r } : { ok: false });
     }
     if (url.pathname === '/api/aporte' && req.method === 'POST') {
       const okRate = rateLimit(req, 20, 600000);   // máx 20 aportes / 10 min por IP (anti-spam)
@@ -520,5 +535,6 @@ server.listen(PORT, () => {
   else console.log('   · base de datos → ⚠️  NO cargó: votos/aportes/lugares/analítica NO se guardan (revisa DATABASE_URL / SQLITE_PATH / Node ≥22.5)');
   if (r2Enabled) console.log('   · fotos         → Cloudflare R2 (object storage externo)  (persiste, multi-instancia)');
   else console.log(`   · fotos         → ${persist('FOTOS_DIR')}`);
+  console.log(`   · geocoder      → ${geocoderInfo}`);
   console.log('');
 });

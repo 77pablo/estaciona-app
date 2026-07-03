@@ -64,19 +64,25 @@ osmfoundation.org/wiki/Licence/Attribution_Guidelines
 
 ## §2 — Nominatim (geocodificación): riesgo a resolver 🔴
 
-La app hoy usa el **servidor público** `nominatim.openstreetmap.org` para buscar
-direcciones. La Usage Policy oficial de OSM **prohíbe el uso comercial / de alto
-volumen** en ese servidor público y dice que *"las aplicaciones cuya función
-principal sea geocodificar deben correr su propio servicio"*. Límite duro: 1
-request/segundo global.
+La app usa geocodificación para buscar direcciones y para prellenar la dirección
+al reportar un lugar. El **servidor público** `nominatim.openstreetmap.org` (default
+hoy) **prohíbe el uso comercial / de alto volumen**: la Usage Policy dice que *"las
+aplicaciones cuya función principal sea geocodificar deben correr su propio
+servicio"*. Límite duro: 1 request/segundo. Es aceptable para el **piloto**, no para
+producción comercial.
 
-**Qué hacer antes de una operación comercial seria:**
-- Migrar la geocodificación a **(a)** una instancia propia de Nominatim (self-host;
-  sigue siendo dato OSM → aplica atribución), o **(b)** un proveedor comercial con
-  términos de SaaS (LocationIQ, Mapbox, HERE, Google…).
-- Mientras tanto (piloto): mandar un User-Agent identificable y respetar 1 req/s.
-  Es aceptable para pruebas, **no** para producción comercial.
+**✅ YA PREPARADO — el cambio de proveedor es solo CONFIGURACIÓN.** La geocodificación
+se abstrajo en `app/backend/src/geocoder.js` detrás de `/api/geocode` y `/api/reverse`
+(el navegador ya NO llama a Nominatim directo; la key vive en el servidor). El
+proveedor se elige por la env var **`GEOCODER`**, sin tocar código:
 
+| Para producción comercial | Env vars |
+|---|---|
+| **Nominatim self-host** (dato OSM, gratis, control total) | `NOMINATIM_URL=https://tu-nominatim.tld` |
+| **LocationIQ** (compatible Nominatim, plan pago) | `GEOCODER=locationiq` + `LOCATIONIQ_KEY=…` |
+| **MapTiler** (usa la MAPTILER_KEY que ya tenés) | `GEOCODER=maptiler` |
+
+El log de arranque del server muestra qué proveedor está activo (`geocoder → …`).
 Fuente: operations.osmfoundation.org/policies/nominatim/
 
 ---
@@ -101,7 +107,8 @@ Fuente: operations.osmfoundation.org/policies/nominatim/
 
 ## Acciones priorizadas (para dejar la app "limpia" para B2B)
 
-1. **P1 — Geocoder:** sacar Nominatim público de producción (self-host o proveedor pago). 🔴
+1. **P1 — Geocoder:** ✅ código ya abstraído (`GEOCODER` env var). Falta solo la
+   DECISIÓN de proveedor para producción (self-host / LocationIQ / MapTiler) y setear la env var. 🟡
 2. **P2 — MapTiler:** pasar a plan pago antes de operar comercialmente. 🔴
 3. **P3 — Definir la estrategia de la base de datos** frente a ODbL: ¿se muestra
    (produced work, solo atribución) o se entrega/white-label (la base va bajo ODbL)?
