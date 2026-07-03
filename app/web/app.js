@@ -3076,17 +3076,21 @@ function initSheetDrag() {
   const head = sheet?.querySelector('.sheet-head');
   const phone = document.querySelector('.phone');
   if (!sheet || !head || !phone) return;
-  const ESTADOS = [0.12, 0.45, 0.85];     // mini, medio, completo (fracción del alto)
+  const ESTADOS = [0.10, 0.5, 0.88];      // mini (mapa completo), medio, completo (solo lista, mapa oculto)
   const esMovil = () => window.matchMedia('(max-width: 859px)').matches;
   // Alto de referencia = el contenedor de la hoja (en móvil la hoja es un overlay
   // absoluto dentro de #view-buscar), NO toda la ventana: así el arrastre y los
   // estados calzan con el área visible (la hoja nunca queda cortada bajo la barra).
   const contH = () => (sheet.offsetParent && sheet.offsetParent.clientHeight) || phone.clientHeight;
-  const setFrac = (f) => { sheet.style.height = (f * 100) + '%'; };
+  const setFrac = (f) => {
+    sheet.style.height = (f * 100) + '%';
+    // Al subir la hoja, esconde "Buscar cerca de aquí" para que no quede encima.
+    if (f > 0.2) document.querySelector('#btn-zona')?.classList.remove('show');
+  };
 
   // En PC se limpia el alto inline (manda el CSS de columna). En móvil, estado medio.
   function aplicarLayout() {
-    if (esMovil()) { sheet.style.maxHeight = '88%'; if (!sheet.style.height) setFrac(ESTADOS[1]); }
+    if (esMovil()) { sheet.style.maxHeight = '90%'; if (!sheet.style.height) setFrac(ESTADOS[1]); }
     else { sheet.style.height = ''; sheet.style.maxHeight = ''; }
   }
   aplicarLayout();
@@ -3103,7 +3107,7 @@ function initSheetDrag() {
   head.addEventListener('pointermove', (e) => {
     if (!dragging) return;
     const c = contH();
-    const h = Math.max(c * 0.08, Math.min(c * 0.9, startH + (startY - e.clientY)));
+    const h = Math.max(c * 0.09, Math.min(c * 0.90, startH + (startY - e.clientY)));
     sheet.style.height = (h / c * 100) + '%';
   });
   function endDrag() {
