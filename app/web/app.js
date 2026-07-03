@@ -610,7 +610,7 @@ function initMap() {
 
   // Leyenda del semáforo (qué significan los colores de los pines).
   const LegendCtrl = L.Control.extend({
-    options: { position: 'bottomleft' },
+    options: { position: 'topleft' },   // bajo el zoom +/−; la hoja de resultados ya no la tapa
     onAdd() {
       const d = L.DomUtil.create('div', 'mapa-leyenda');
       d.setAttribute('role', 'button');
