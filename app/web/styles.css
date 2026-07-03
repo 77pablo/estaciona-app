@@ -226,6 +226,10 @@ main, .view { flex: 1; min-height: 0; }
 .pin-p.verde { background: var(--green); } .pin-p.amarillo { background: var(--amber); }
 .pin-p.rojo { background: var(--red); color: #fff; } .pin-p.cerrado { background: #5b606b; color: #fff; }
 .pin-p.sel { transform: translate(-50%, -50%) scale(1.22); z-index: 1000; box-shadow: 0 0 0 4px rgba(45,212,191,.3), 0 6px 18px rgba(0,0,0,.6); }
+/* Pin de "tu auto": badge cuadrado BLANCO con aro teal (inconfundible entre los
+   pines redondos de colores de los estacionamientos). */
+.auto-pin { position: relative; width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: #fff; color: #0E0F12; border: 2px solid var(--accent); box-shadow: 0 0 0 4px rgba(45,212,191,.3), 0 4px 14px rgba(0,0,0,.6); transform: translate(-50%, -50%); cursor: pointer; }
+.auto-pin .ic-svg { color: #0E0F12; }
 .pin-precio {
   position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%);
   background: var(--surface-2); color: var(--accent); font-family: var(--font-mono);

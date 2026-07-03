@@ -49,7 +49,7 @@ let TOMTOM_KEY = '';               // key de TomTom (del backend); vacío => ETA
 let ciudadActual = 'Temuco';       // ciudad que se está mirando ahora
 let USER = { ...CENTRO };          // "estás aquí" (Temuco por defecto)
 let userReal = false;              // ¿USER viene de geolocalización real? (no del centro de la ciudad)
-let map = null, markers = {}, meMarker = null;
+let map = null, markers = {}, meMarker = null, autoMarker = null;
 let markerLayer = null;             // dónde viven los pines: clúster (si hay lib) o el propio mapa
 let CLUSTER = false;                // true si leaflet.markercluster cargó (agrupa pines)
 let miniMap = null;                 // mini-mapa de la vista "Mi auto"
@@ -624,6 +624,7 @@ function initMap() {
   });
   // Al mover el mapa: si el centro se aleja del usuario, ofrece "Buscar en esta zona".
   map.on('moveend', onMapMove);
+  actualizarAutoMarker();   // muestra el pin del auto si ya había uno guardado
 }
 
 // Muestra/oculta el botón "Buscar en esta zona" según cuánto se alejó el centro.
@@ -663,6 +664,27 @@ function clusterIcon(cluster) {
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
+}
+
+// Pin de "tu auto" en el mapa principal: un badge distinto (cuadrado teal con
+// ícono de auto) para ver dónde lo dejaste mientras navegas el mapa. Se crea /
+// mueve / quita según el auto guardado; tocarlo lleva a "Mi auto".
+function actualizarAutoMarker() {
+  if (!map) return;
+  const a = LS.getAuto();
+  if (a && Number.isFinite(a.lat) && Number.isFinite(a.lng)) {
+    if (autoMarker) {
+      autoMarker.setLatLng([a.lat, a.lng]);
+    } else {
+      autoMarker = L.marker([a.lat, a.lng], {
+        icon: L.divIcon({ className: '', html: `<div class="auto-pin" title="Tu auto">${ic('car', 18)}</div>`, iconSize: [0, 0] }),
+        zIndexOffset: 1200,   // por encima de los pines de estacionamientos
+      }).addTo(map);
+      autoMarker.on('click', () => irA('miauto'));
+    }
+  } else if (autoMarker) {
+    map.removeLayer(autoMarker); autoMarker = null;
+  }
 }
 
 // HTML del pin de un estacionamiento (con estado "seleccionado").
@@ -1759,6 +1781,7 @@ window.guardarEstacione = () => {
     alarmaTs: min > 0 ? Date.now() + min * 60000 : null, alarmaSonó: false, nota, foto: _estFoto,
   });
   _estFoto = null;
+  actualizarAutoMarker();   // pinta el auto en el mapa
   cerrarModal(); cerrarDetalle(); irA('miauto');
   if (min > 0) avisarAlarmaPuesta(min);
   else toast('Guardado ✓');
@@ -2019,6 +2042,7 @@ function finalizarAuto(a, pagado) {
   });
   LS.setHist(h.slice(0, esPro() ? 500 : 30));   // tope 30 (Pro: 500)
   LS.clearAuto(); renderMiAuto();
+  actualizarAutoMarker();   // quita el pin del auto del mapa
   toast(pagado != null ? '¡Gracias! Sumaste un precio real 🙌' : '¡Listo, buen viaje! 🚗');
 }
 
