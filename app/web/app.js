@@ -3103,6 +3103,25 @@ async function init() {
     if (document.visibilityState !== 'visible') { detenerSeguimiento(); return; }
     if (userReal && $('#view-buscar').classList.contains('active')) iniciarSeguimiento();
   });
+  // Indicador honesto de "sin conexión": la app funciona offline (PWA) con datos
+  // guardados, pero avisamos para que sepas que puede no estar 100% al día.
+  window.addEventListener('online', actualizarOffline);
+  window.addEventListener('offline', actualizarOffline);
+  actualizarOffline();
+}
+// Muestra/quita una píldora "Sin conexión — datos guardados" según navigator.onLine.
+function actualizarOffline() {
+  const off = !navigator.onLine;
+  let bar = $('#offline-bar');
+  if (off && !bar) {
+    bar = document.createElement('div');
+    bar.id = 'offline-bar';
+    bar.setAttribute('role', 'status');
+    bar.innerHTML = `${ic('wifiOff', 14)} Sin conexión — datos guardados`;
+    (document.querySelector('.phone') || document.body).appendChild(bar);
+  } else if (!off && bar) {
+    bar.remove();
+  }
 }
 init();
 
