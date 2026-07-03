@@ -2026,7 +2026,9 @@ function actualizarMiAutoVivo() {
   const set = (id, txt) => { const e = $(id); if (e) e.textContent = txt; };
   const setHtml = (id, html) => { const e = $(id); if (e) e.innerHTML = html; };
   set('#ma-tiempo', hh > 0 ? `${hh}h ${mm}min` : `${mm} min`);   // bajo 1 h no muestra "0h"
-  set('#ma-costo', !a.precioHora ? 'Gratis' : costo === 0 ? 'Gratis ahora' : CLP(costo));
+  // Distingue null (pago sin dato) de 0 (gratis): mostrar "Gratis" en un pago cuyo
+  // precio no conocemos sería deshonesto (y luego terminarAuto sí pide cuánto pagó).
+  set('#ma-costo', a.precioHora == null ? '—' : !a.precioHora ? 'Gratis' : costo === 0 ? 'Gratis ahora' : CLP(costo));
   setHtml('#ma-alarma', `${ic('clock', 14)} ${alarmaTxt}`);
   $('#ma-alarma')?.classList.toggle('urgente', alarmaVencida);   // resalta cuando ya venció
   // ETA de vuelta solo si sabemos dónde estás (geolocalización real); si no, no inventamos distancia.
@@ -2785,6 +2787,10 @@ function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(_toastT); _toastT = setTimeout(() => t.classList.remove('show'), 2200);
 }
+// El #banner es COMPARTIDO por la alarma anti-multa (urgente) y los recordatorios
+// amigables. La alarma tiene prioridad: mientras siga visible sin cerrar, los
+// recordatorios NO deben pisarla (podrías perderte el aviso de la multa).
+const bannerUrgenteVisible = () => { const b = $('#banner'); return !!b && b.classList.contains('show') && b.classList.contains('urgent'); };
 function chequearAlarma() {
   const a = LS.getAuto();
   if (a && a.alarmaTs && !a.alarmaSonó && Date.now() >= a.alarmaTs) {
@@ -2851,14 +2857,19 @@ function chequearRecordatorios() {
   if (!recs.length) return;
   const ahora = Date.now();
   let cambió = false;
-  for (const r of recs) {
-    if (!r.sono && ahora >= r.ts) {
-      r.sono = true; cambió = true;
-      const b = $('#banner');
-      b.innerHTML = `<span>${ic('clock', 16)} Revisa ${esc(r.nombre)} — ¿hay cupo ahora?</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
-      b.classList.remove('urgent'); b.classList.add('show');   // recordatorio amigable (borde teal)
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('Estaciona 🅿️', { body: `Revisa ${r.nombre} — ¿encontraste cupo?` });
+  // No pisar la alarma anti-multa; y mostrar UN recordatorio por tick (si hay
+  // varios vencidos, los demás salen en ticks siguientes en vez de pisarse).
+  if (!bannerUrgenteVisible()) {
+    for (const r of recs) {
+      if (!r.sono && ahora >= r.ts) {
+        r.sono = true; cambió = true;
+        const b = $('#banner');
+        b.innerHTML = `<span>${ic('clock', 16)} Revisa ${esc(r.nombre)} — ¿hay cupo ahora?</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
+        b.classList.remove('urgent'); b.classList.add('show');   // recordatorio amigable (borde teal)
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('Estaciona 🅿️', { body: `Revisa ${r.nombre} — ¿encontraste cupo?` });
+        }
+        break;
       }
     }
   }
@@ -2874,6 +2885,7 @@ function chequearRecordatorioAuto() {
   const distintoDia = inicio.toDateString() !== new Date().toDateString();
   const horas = (Date.now() - a.inicio) / 3600000;
   if (!distintoDia && horas < 20) return;
+  if (bannerUrgenteVisible()) return;   // no pisar la alarma anti-multa; reintenta el próximo tick
   a.recordado = true; LS.setAuto(a);
   const fecha = inicio.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' });
   const b = $('#banner');
