@@ -8,7 +8,7 @@
 // en estacionamientos subterráneos, donde no hay internet).
 // ============================================================================
 
-const CACHE = 'estaciona-v3';
+const CACHE = 'estaciona-v4';
 
 // App shell que se precachea al instalar (para que abra offline desde el vamos).
 // Incluye Leaflet (servido local): así el mapa carga aunque no haya red — los
@@ -47,6 +47,19 @@ function cacheable(req, url) {
   return true;                                                         // estáticos propios (html/js/css/íconos/vendor)
 }
 
+// Clave de caché NORMALIZADA. Para /api/estacionamientos ignoramos el parámetro
+// `init` (solo pide de más las zonas del selector la 1ª carga; NO cambia los datos
+// de la ciudad). Sin esto, guardar/leer no coinciden: en sesión se cachea
+// `?ciudad=X` (sin init), pero al reabrir OFFLINE la carga en frío pide
+// `?ciudad=X&init=1` → miss → pantalla de error justo en el subterráneo. Con la
+// clave normalizada, ambas variantes comparten entrada y la ciudad vista abre offline.
+function cacheKey(req, url) {
+  if (url.pathname !== '/api/estacionamientos' || !url.search) return req;
+  const u = new URL(url.href);
+  u.searchParams.delete('init');
+  return u.href;
+}
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   const url = new URL(req.url);
@@ -58,14 +71,14 @@ self.addEventListener('fetch', (e) => {
       .then((res) => {
         if (res && res.ok) {
           const copia = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copia)).catch(() => {});
+          caches.open(CACHE).then((c) => c.put(cacheKey(req, url), copia)).catch(() => {});
         }
         return res;
       })
       .catch(async () => {
         // Sin conexión: usa lo guardado. Para navegaciones, cae a la app cacheada.
         const cache = await caches.open(CACHE);
-        const hit = await cache.match(req);
+        const hit = await cache.match(cacheKey(req, url));
         if (hit) return hit;
         if (req.mode === 'navigate') return (await cache.match('/app')) || Response.error();
         return Response.error();

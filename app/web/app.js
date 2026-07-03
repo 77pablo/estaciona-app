@@ -1948,9 +1948,11 @@ window.exportarHistorial = () => {
   for (const e of h) filas.push([e.nombre, e.ciudad || '', e.direccion || '', new Date(e.inicio).toLocaleString('es-CL'), new Date(e.fin).toLocaleString('es-CL'), Math.round((e.dur || 0) / 60000), e.precioHora == null ? '' : e.costo]);
   const csv = '﻿' + filas.map((f) => f.map(esc2).join(',')).join('\n');   // BOM para que Excel respete acentos
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const objUrl = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.href = objUrl;
   a.download = 'estaciona-historial.csv';
   document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(objUrl);   // libera el Blob (si no, vive hasta descargar la página)
   toast('Historial exportado ✓');
 };
 
