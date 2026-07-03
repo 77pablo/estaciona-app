@@ -697,8 +697,10 @@ function iconHtml(p) {
   const zoom = map ? map.getZoom() : 16;
   if (zoom < 15 && !esSel && !adDe(p)) return `<div class="pin-dot ${nivel}"></div>`;
   // Pin "P" circular (estilo parkspot); el seleccionado muestra el precio arriba.
+  // Los favoritos llevan una estrellita dorada en la esquina (igual que en la lista).
   const precio = esSel ? `<span class="pin-precio">${precioCorto(p)}</span>` : '';
-  return `<div class="pin-p ${nivel}${esSel ? ' sel' : ''}${dest}">${precio}P</div>`;
+  const fav = LS.isFav(p.id) ? `<span class="pin-fav">${ic('starFull', 9)}</span>` : '';
+  return `<div class="pin-p ${nivel}${esSel ? ' sel' : ''}${dest}">${precio}P${fav}</div>`;
 }
 
 // Seleccionar = centrar el mapa en el lugar y resaltar su pin.
@@ -747,7 +749,7 @@ function updateMarkers(lista) {
     const nivel = p.disponibilidad.nivel, sel = p.id === selectedId;
     // Firma de lo que afecta el aspecto del pin: si no cambió, no re-seteamos el
     // icono (cada setIcon fuerza refresco del clúster → caro cada 6 s).
-    const sig = `${nivel}|${sel ? 's' : ''}|${simpl && !sel && !adDe(p) ? 'd' : 'p'}|${adDe(p) ? 'D' : ''}`;
+    const sig = `${nivel}|${sel ? 's' : ''}|${simpl && !sel && !adDe(p) ? 'd' : 'p'}|${adDe(p) ? 'D' : ''}|${LS.isFav(p.id) ? 'f' : ''}`;
     let mk = markers[p.id];
     if (mk) {
       if (mk._sig !== sig) { mk.setIcon(L.divIcon({ className: '', html: iconHtml(p), iconSize: [0, 0] })); mk._sig = sig; }
