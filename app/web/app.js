@@ -69,8 +69,14 @@ let detalleAbiertoId = null;
 const filtrosVacios = () => ({
   gratis: false, barato: false, techado: false, abierto: false,
   ev: false, accesible: false, camaras: false, verificado: false,
-  soloPublicos: false, tipo: 'todos', distMax: 0,
+  soloPublicos: false, cupo: false, tipo: 'todos', distMax: 0,
 });
+// "Con cupo": lugares con cupo REPORTADO recién por la gente (o en vivo por un
+// operador) — la señal fresca, no la mera estimación. Base del filtro/orden.
+const cupoConfirmado = (p) => {
+  const d = p.disponibilidad || {};
+  return (d.fuente === 'gente' && d.nivel === 'verde') || (d.fuente === 'live' && d.nivel !== 'rojo');
+};
 let filtros = filtrosVacios();
 
 // Lugares de Favoritos (Casa/Trabajo). Por defecto son sectores de Temuco, pero
@@ -403,6 +409,9 @@ const LS = {
   // alimentar la señal de la gente cuando vuelvas a la app.
   getCupoAsk: () => { try { return JSON.parse(localStorage.getItem('estaciona_cupoask') || '[]'); } catch { return []; } },
   setCupoAsk: (a) => lsSet('estaciona_cupoask', JSON.stringify(a)),
+  // Estacionamientos vistos recientemente (para acceso rápido desde el buscador).
+  getVistos: () => { try { return JSON.parse(localStorage.getItem('estaciona_vistos') || '[]'); } catch { return []; } },
+  setVistos: (v) => lsSet('estaciona_vistos', JSON.stringify(v)),
   // Historial: estacionamientos pasados (se guarda al "Terminar" un auto).
   getHist: () => { try { return JSON.parse(localStorage.getItem('estaciona_historial') || '[]'); } catch { return []; } },
   setHist: (h) => lsSet('estaciona_historial', JSON.stringify(h)),
@@ -794,6 +803,7 @@ function listaFiltrada() {
       if (filtros.verificado && !p.verificado) return false;   // solo precios confirmados
       if (filtros.abierto && !p.abierto) return false;
       if (filtros.soloPublicos && p.categoria) return false;   // oculta hospitales/colegios/etc.
+      if (filtros.cupo && !cupoConfirmado(p)) return false;     // solo con cupo reportado fresco
       if (filtros.tipo !== 'todos' && p.tipo !== filtros.tipo) return false;
       if (filtros.distMax > 0 && p.dist > filtros.distMax) return false;
       return true;
@@ -821,7 +831,7 @@ function listaFiltrada() {
 // Cuenta filtros activos para el badge del botón ⚙️.
 function contarFiltros() {
   let n = 0;
-  for (const k of ['gratis', 'barato', 'techado', 'abierto', 'ev', 'accesible', 'camaras', 'verificado', 'soloPublicos']) if (filtros[k]) n++;
+  for (const k of ['gratis', 'barato', 'techado', 'abierto', 'ev', 'accesible', 'camaras', 'verificado', 'soloPublicos', 'cupo']) if (filtros[k]) n++;
   if (filtros.tipo !== 'todos') n++;
   if (filtros.distMax > 0) n++;
   return n;
@@ -1162,10 +1172,18 @@ function lineaDisponibilidad(p) {
   return `<span class="disp-pill ${nivel}"><span class="dot ${nivel}"></span>${etiqueta}</span>${sub}`;
 }
 
+// Guarda un lugar en "vistos recientemente" (acceso rápido desde el buscador).
+function pushVisto(p) {
+  if (!p || !p.id) return;
+  const v = LS.getVistos().filter((x) => x.id !== p.id);
+  v.unshift({ id: p.id, nombre: p.nombre, ciudad: p.ciudad, lat: p.lat, lng: p.lng });
+  LS.setVistos(v.slice(0, 6));
+}
 function openDetalle(id) {
   const p = DATA.find((x) => x.id === id);
   if (!p) { toast('Este lugar ya no está disponible'); return; }
   detalleAbiertoId = id;
+  pushVisto(p);                 // registra el lugar como visto reciente
   track('detalle', p.ciudad, p.id);
   panselect(p);                 // centrar mapa + resaltar el pin del lugar
 
@@ -1887,7 +1905,7 @@ window.guardarEstacione = () => {
   _estFoto = null;
   actualizarAutoMarker();   // pinta el auto en el mapa
   cerrarModal(); cerrarDetalle(); irA('miauto');
-  if (min > 0) avisarAlarmaPuesta(min);
+  if (min > 0) { avisarAlarmaPuesta(min); programarAlarmaBg(auto.alarmaTs, auto.nombre); }   // suena aunque cierres la app
   else toast('Guardado ✓');
 };
 // Formato corto y en es-CL: "30 min", "1 h", "1,5 h", "2 h".
@@ -2150,7 +2168,7 @@ function finalizarAuto(a, pagado) {
     pagado, dur: Date.now() - a.inicio,
   });
   LS.setHist(h.slice(0, esPro() ? 500 : 30));   // tope 30 (Pro: 500)
-  LS.clearAuto(); renderMiAuto();
+  LS.clearAuto(); cancelarAlarmaBg(); renderMiAuto();
   actualizarAutoMarker();   // quita el pin del auto del mapa
   toast(pagado != null ? '¡Gracias! Sumaste un precio real 🙌' : '¡Listo, buen viaje! 🚗');
 }
@@ -2307,7 +2325,12 @@ function usarMiUbicacion() {
 // Ubicación al ARRANCAR (automática y silenciosa). Si estás dentro de una ciudad
 // cubierta, fija tu punto real, cambia a esa ciudad si hace falta y centra ahí.
 // Si estás lejos de toda ciudad con datos, NO molesta: queda la ciudad actual.
-function ubicarInicio(me) {
+function ubicarInicio(me, intentos = 0) {
+  // El GPS suele resolver ANTES de que cargue ZONAS (fix cache). Sin ZONAS,
+  // zonaMasCercana no encuentra nada y la ubicación no haría efecto → espera a
+  // que carguen (máx ~6 s) y recién ahí resuelve. Sin esto, la app se quedaba en
+  // la ciudad por defecto aunque supiéramos dónde estás.
+  if (!ZONAS.length) { if (intentos < 12) setTimeout(() => ubicarInicio(me, intentos + 1), 500); return; }
   const { zona, dist } = zonaMasCercana(me);
   if (!zona || dist > 30000) return;                 // fuera de cobertura: en silencio
   USER = me; userReal = true;
@@ -2621,14 +2644,35 @@ function mostrarPanelBusqueda() {
   _sugResultados = []; _sugSel = -1;            // no hay resultados nacionales navegables aquí
   const presets = PRESETS.map((p, i) =>
     `<button class="sug-preset" type="button" onmousedown="event.preventDefault()" onclick="aplicarPreset(${i})">${ic(p.icono, 14)} ${esc(p.label)}</button>`).join('');
+  const vistos = LS.getVistos();
+  const vistosHtml = vistos.length
+    ? `<div class="sug-sec">Vistos recientemente</div>` +
+      vistos.map((v, i) => `<button class="sug-item sug-recent" type="button" onmousedown="event.preventDefault()" onclick="abrirVisto(${i})"><span class="sug-ic">${ic('parking', 15)}</span><span class="sug-main"><span class="sug-nom">${esc(v.nombre)}</span><span class="sug-sub">${esc(v.ciudad || '')}</span></span></button>`).join('')
+    : '';
   const hist = getHistBusq();
   const recientes = hist.length
-    ? `<div class="sug-sec">Recientes <button class="sug-clear" type="button" onmousedown="event.preventDefault()" onclick="limpiarHistBusq()">borrar</button></div>` +
+    ? `<div class="sug-sec">Búsquedas recientes <button class="sug-clear" type="button" onmousedown="event.preventDefault()" onclick="limpiarHistBusq()">borrar</button></div>` +
       hist.map((t, i) => `<button class="sug-item sug-recent" type="button" onmousedown="event.preventDefault()" onclick="usarBusquedaReciente(${i})"><span class="sug-ic">${ic('clock', 15)}</span><span class="sug-main"><span class="sug-nom">${esc(t)}</span></span></button>`).join('')
     : '';
-  box.innerHTML = `<div class="sug-sec">Accesos rápidos</div><div class="sug-presets">${presets}</div>${recientes}`;
+  box.innerHTML = `<div class="sug-sec">Accesos rápidos</div><div class="sug-presets">${presets}</div>${vistosHtml}${recientes}`;
   box.hidden = false;
 }
+// Abre un lugar visto recientemente (salta a su ciudad si hace falta).
+window.abrirVisto = (i) => {
+  const v = LS.getVistos()[i];
+  if (!v) return;
+  cerrarSugerencias();
+  const inp = $('#search'); if (inp) inp.value = ''; query = ''; actualizarBotonLimpiar();
+  if (v.ciudad === ciudadActual && DATA.some((p) => p.id === v.id)) { openDetalle(v.id); return; }
+  const z = ZONAS.find((x) => x.nombre === v.ciudad);
+  if (z) {
+    toast('Yendo a ' + v.nombre + '…');
+    cambiarCiudad(v.ciudad, true).then(() => {
+      if (DATA.some((p) => p.id === v.id)) openDetalle(v.id);
+      else if (map && Number.isFinite(v.lat)) map.setView([v.lat, v.lng], 16);
+    });
+  } else if (map && Number.isFinite(v.lat)) { map.setView([v.lat, v.lng], 16); }
+};
 
 // --- Reportar un lugar nuevo (crowdsource estilo Waze) ----------------------
 // Flujo: 1) el usuario mueve el mapa para apuntar el lugar con un crosshair;
@@ -2941,6 +2985,40 @@ function toast(msg) {
 // amigables. La alarma tiene prioridad: mientras siga visible sin cerrar, los
 // recordatorios NO deben pisarla (podrías perderte el aviso de la multa).
 const bannerUrgenteVisible = () => { const b = $('#banner'); return !!b && b.classList.contains('show') && b.classList.contains('urgent'); };
+// ¿Hay CUALQUIER banner visible? Los avisos amigables (recordatorios, "¿hay
+// cupo?") no deben pisarse entre sí ni pisar la alarma; solo la alarma anti-multa
+// (chequearAlarma, sin guard) puede sobreescribir por prioridad.
+const bannerVisible = () => !!$('#banner')?.classList.contains('show');
+// Notificación del sistema robusta: vía el Service Worker (persiste y funciona con
+// la pestaña en segundo plano, soporta vibración) y, si no, la Notification directa.
+function notificar(title, body, extra = {}) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const opts = { body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', renotify: true, ...extra };
+  if (navigator.serviceWorker?.ready) navigator.serviceWorker.ready.then((reg) => reg.showNotification(title, opts)).catch(() => { try { new Notification(title, opts); } catch {} });
+  else { try { new Notification(title, opts); } catch {} }
+}
+// Programa la alarma anti-multa para que suene AUNQUE cierres la app (Chrome con
+// Notification Triggers). Sin soporte, igual suena con la app abierta (timer).
+function programarAlarmaBg(ts, nombre) {
+  if (!(ts > Date.now()) || !('Notification' in window) || Notification.permission !== 'granted') return;
+  if (!('serviceWorker' in navigator) || typeof TimestampTrigger === 'undefined') return;
+  navigator.serviceWorker.ready.then((reg) => {
+    try {
+      reg.showNotification('Estaciona ⏰', {
+        body: `Revisa tu estacionamiento en ${nombre}`, tag: 'estaciona-alarma', renotify: true,
+        requireInteraction: true, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png',
+        showTrigger: new TimestampTrigger(ts),
+      });
+    } catch { /* no soportado: queda la alarma in-app */ }
+  }).catch(() => {});
+}
+// Cancela la alarma programada (al terminar el estacionamiento) para no avisar de más.
+function cancelarAlarmaBg() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.ready
+    .then((reg) => reg.getNotifications({ tag: 'estaciona-alarma', includeTriggered: true }).then((ns) => ns.forEach((n) => n.close())).catch(() => {}))
+    .catch(() => {});
+}
 function chequearAlarma() {
   const a = LS.getAuto();
   if (a && a.alarmaTs && !a.alarmaSonó && Date.now() >= a.alarmaTs) {
@@ -2948,9 +3026,7 @@ function chequearAlarma() {
     const b = $('#banner');
     b.innerHTML = `<span>${ic('clock', 16)} ¡Revisa tu estacionamiento! (${esc(a.nombre)})</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
     b.classList.add('show', 'urgent');   // alarma anti-multa = urgente (borde rojo)
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('Estaciona ⏰', { body: `Revisa tu estacionamiento en ${a.nombre}` });
-    }
+    notificar('Estaciona ⏰', `Revisa tu estacionamiento en ${a.nombre}`, { tag: 'estaciona-alarma', requireInteraction: true, vibrate: [200, 100, 200] });
   }
 }
 
@@ -3007,9 +3083,9 @@ function chequearRecordatorios() {
   if (!recs.length) return;
   const ahora = Date.now();
   let cambió = false;
-  // No pisar la alarma anti-multa; y mostrar UN recordatorio por tick (si hay
+  // No pisar NINGÚN banner visible; y mostrar UN recordatorio por tick (si hay
   // varios vencidos, los demás salen en ticks siguientes en vez de pisarse).
-  if (!bannerUrgenteVisible()) {
+  if (!bannerVisible()) {
     for (const r of recs) {
       if (!r.sono && ahora >= r.ts) {
         r.sono = true; cambió = true;
@@ -3035,7 +3111,7 @@ function chequearRecordatorioAuto() {
   const distintoDia = inicio.toDateString() !== new Date().toDateString();
   const horas = (Date.now() - a.inicio) / 3600000;
   if (!distintoDia && horas < 20) return;
-  if (bannerUrgenteVisible()) return;   // no pisar la alarma anti-multa; reintenta el próximo tick
+  if (bannerVisible()) return;   // no pisar ningún banner visible; reintenta el próximo tick
   a.recordado = true; LS.setAuto(a);
   const fecha = inicio.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' });
   const b = $('#banner');
@@ -3048,7 +3124,7 @@ function chequearRecordatorioAuto() {
 // se vuelve un dato. Solo pregunta una vez por lugar, si ya pasó tiempo de llegar
 // (≥2 min) y no demasiado (≤2 h), y nunca sobre la alarma anti-multa urgente.
 function chequearCupoAsk() {
-  if (bannerUrgenteVisible() || $('#onboard')?.classList.contains('show')) return;
+  if (bannerVisible() || $('#onboard')?.classList.contains('show')) return;
   const asks = LS.getCupoAsk();
   if (!asks.length) return;
   const ahora = Date.now();
@@ -3227,7 +3303,9 @@ async function cargarConfig() {
 // lo soporta, así que se muestran las instrucciones (Compartir → Agregar a inicio).
 let _installEvt = null;
 const esStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+// Solo iOS SAFARI: las instrucciones "Compartir → Agregar a inicio" no aplican a
+// Chrome/Firefox/Edge en iOS (CriOS/FxiOS/EdgiOS), así que no se les muestran.
+const esIOSSafari = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !/CriOS|FxiOS|OPiOS|EdgiOS|GSA/i.test(navigator.userAgent);
 function puedeMostrarInstall() {
   if (esStandalone() || $('#install-bar')) return false;              // ya instalada / ya visible
   if ($('#onboard')?.classList.contains('show')) return false;        // primero la bienvenida
@@ -3235,12 +3313,12 @@ function puedeMostrarInstall() {
     if (localStorage.getItem('estaciona_installed')) return false;
     if (Date.now() - (+localStorage.getItem('estaciona_install_dismiss') || 0) < 14 * 24 * 3600 * 1000) return false;
   } catch { /* sin localStorage: seguimos */ }
-  return !!_installEvt || esIOS();                                    // Android (evento) o iOS (instrucciones)
+  return !!_installEvt || esIOSSafari();                                    // Android (evento) o iOS (instrucciones)
 }
 function ocultarInstall() { const b = $('#install-bar'); if (b) { b.classList.remove('show'); setTimeout(() => b.remove(), 250); } }
 function mostrarInstall() {
   if (!puedeMostrarInstall()) return;
-  const ios = !_installEvt && esIOS();
+  const ios = !_installEvt && esIOSSafari();
   const bar = document.createElement('div');
   bar.id = 'install-bar'; bar.className = 'install-bar'; bar.setAttribute('role', 'dialog'); bar.setAttribute('aria-label', 'Instalar Estaciona');
   bar.innerHTML = `<span class="ib-ic">${ic('parking', 20)}</span>` +
@@ -3399,7 +3477,7 @@ async function init() {
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); _installEvt = e; setTimeout(mostrarInstall, 4000); });
   window.addEventListener('appinstalled', () => { _installEvt = null; ocultarInstall(); try { localStorage.setItem('estaciona_installed', '1'); } catch {} });
   // iOS no dispara el evento: muestra las instrucciones tras un rato (una vez, con cooldown).
-  if (esIOS()) setTimeout(mostrarInstall, 16000);
+  if (esIOSSafari()) setTimeout(mostrarInstall, 16000);
 }
 // Muestra/quita una píldora "Sin conexión — datos guardados" según navigator.onLine.
 function actualizarOffline() {
