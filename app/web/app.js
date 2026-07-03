@@ -341,6 +341,7 @@ function ciudadPorPunto(pt, maxDist = 40000) {
   const { zona, dist } = zonaMasCercana(pt);
   if (zona && dist < maxDist) {
     ciudadActual = zona.nombre;
+    lsSet('estaciona_ciudad', zona.nombre);   // recordar para la próxima visita
     const sel = $('#ciudad-select');
     if (sel) { sel.value = zona.nombre; sel.title = `Ciudad: ${zona.nombre}`; }
     return true;
@@ -352,6 +353,7 @@ function cambiarCiudad(nombre, mover = true) {
   const z = ZONAS.find((x) => x.nombre === nombre);
   if (!z) return Promise.resolve();   // siempre promesa (irAFav encadena .then)
   ciudadActual = nombre;
+  lsSet('estaciona_ciudad', nombre);   // recordar para la próxima visita
   track('ciudad', nombre);
   const sel = $('#ciudad-select');
   if (sel) { sel.value = nombre; sel.title = `Ciudad: ${nombre}`; }
@@ -2869,7 +2871,8 @@ function mostrarBienvenida() {
       <li>${ic('wallet', 16)} <span>Los precios son <b>referenciales</b>: confírmalos siempre en el lugar.</span></li>
       <li>${ic('starOutline', 16)} <span>Funciona <b>sin cuenta</b>: favoritos y tu auto se guardan solo en este teléfono.</span></li>
     </ul>
-    <button class="btn btn-primary" onclick="cerrarBienvenida()">Entendido</button>
+    <button class="btn btn-primary" onclick="cerrarBienvenidaYUbicar()">${ic('locate', 16)} Usar mi ubicación</button>
+    <button class="btn btn-ghost" onclick="cerrarBienvenida()">Explorar el mapa</button>
     <p class="onboard-legal">Al continuar aceptas los <a href="/terminos" target="_blank" rel="noopener">Términos</a> y la <a href="/privacidad" target="_blank" rel="noopener">Privacidad</a>.</p>
   </div>`;
   o.classList.add('show');
@@ -2879,6 +2882,9 @@ window.cerrarBienvenida = () => {
   $('#onboard')?.classList.remove('show');   // cierra SIEMPRE (aunque no se pueda persistir)
   lsSet('estaciona_onboarded', '1');
 };
+// Cierra la bienvenida y pide la ubicación (el clic es el gesto que el navegador
+// necesita para permitir el permiso de geolocalización).
+window.cerrarBienvenidaYUbicar = () => { cerrarBienvenida(); usarMiUbicacion(); };
 
 // Tarjetas "esqueleto" con shimmer mientras carga la primera vez.
 function skeletonHtml() {
@@ -2981,14 +2987,24 @@ async function init() {
   setTimeout(() => map && map.invalidateSize(), 350);
   window.addEventListener('resize', () => map && map.invalidateSize());
 
-  // Deep link: si llegó con ?lugar=<id>&ciudad=<ciudad> (link compartido), carga esa
-  // ciudad y abre su detalle al terminar. Tiene prioridad sobre ?q=.
+  // Ciudad inicial (prioridad): deep link ?ciudad= > última ciudad guardada > default.
+  // Deep link: ?lugar=<id>&ciudad=<ciudad> (link compartido) abre además ese detalle.
   const params = new URLSearchParams(location.search);
   const lugarInicial = params.get('lugar');
   const ciudadInicial = params.get('ciudad');
-  if (lugarInicial && ciudadInicial) ciudadActual = ciudadInicial;   // primera carga = esa ciudad
+  if (lugarInicial && ciudadInicial) ciudadActual = ciudadInicial;
+  else { try { const guardada = localStorage.getItem('estaciona_ciudad'); if (guardada) ciudadActual = guardada; } catch { /* sin acceso a localStorage */ } }
 
-  cargar().then(() => { if (lugarInicial && DATA.some((p) => p.id === lugarInicial)) openDetalle(lugarInicial); });
+  cargar().then(() => {
+    // Si se restauró una ciudad distinta a la de por defecto (Temuco), centra el
+    // mapa ahí (el mapa arrancó en el centro por defecto).
+    const z = (ciudadActual !== CENTRO_DEFAULT.nombre && ZONAS.length) ? ZONAS.find((x) => x.nombre === ciudadActual) : null;
+    if (z && map) {
+      USER = { lat: z.lat, lng: z.lng };
+      map.setView([z.lat, z.lng], 15); meMarker?.setLatLng([z.lat, z.lng]);
+    }
+    if (lugarInicial && DATA.some((p) => p.id === lugarInicial)) openDetalle(lugarInicial);
+  });
   track('pageview', ciudadActual);   // estadística de uso anónima
   // Si llegó desde la landing con ?q=… (buscador de la portada), busca eso al abrir.
   const qInicial = params.get('q');
