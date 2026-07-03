@@ -117,6 +117,7 @@ function readBody(req, maxBytes) {
     req.on('data', (c) => {
       size += c.length;
       if (size > maxBytes) {
+        if (!tooBig) logSeg('cuerpo-excede-limite', req, `>${maxBytes}B`);   // solo la 1ª vez
         tooBig = true;   // deja de bufferear; si es un poco pasado, igual drena y responde 413
         // pero si el flujo sigue MUY por encima del tope (4×), es un flood: corta el
         // socket (el cliente pierde el 413, aceptable para un abuso deliberado de banda).
@@ -143,6 +144,16 @@ function clientIp(req) {
   return xff.length ? (xff[xff.length - HOPS] || xff[0]) : (req.socket.remoteAddress || 'x');
 }
 
+// Log de seguridad: deja rastro de eventos sospechosos (rate-limit excedido,
+// fuerza-bruta de la clave admin, inputs rechazados) para poder detectar abuso
+// en los logs de Railway. Registra SOLO metadatos seguros — IP, método y ruta
+// (sin query) + un contador/código — y NUNCA el cuerpo, la clave, tokens ni
+// texto de usuario. La IP acá es telemetría de seguridad, no dato personal.
+function logSeg(evento, req, extra) {
+  const path = (req.url || '').split('?')[0];
+  console.warn(`[seg] ${evento} ip=${clientIp(req)} ${req.method || '?'} ${path}${extra ? ' ' + extra : ''}`);
+}
+
 const _ipHits = new Map();
 function rateLimit(req, max, ventanaMs) {
   const ip = clientIp(req);
@@ -151,7 +162,11 @@ function rateLimit(req, max, ventanaMs) {
   arr.push(ahora);
   _ipHits.set(ip, arr);
   if (_ipHits.size > 5000) for (const [k, v] of _ipHits) if (!v.some((t) => ahora - t < ventanaMs)) _ipHits.delete(k);   // poda entradas viejas
-  return arr.length <= max;
+  const ok = arr.length <= max;
+  // Log solo al CRUZAR el límite (arr.length === max+1), no en cada hit por encima:
+  // evita inundar el log durante un flood (un log-DoS sería otro problema).
+  if (!ok && arr.length === max + 1) logSeg('rate-limit', req, `hits=${arr.length} max=${max}/${Math.round(ventanaMs / 1000)}s`);
+  return ok;
 }
 
 // Anti fuerza-bruta de la clave admin: cuenta intentos FALLIDOS por IP y bloquea
@@ -170,6 +185,7 @@ function adminFallo(req) {
   arr.push(Date.now());
   _adminFails.set(ip, arr);
   if (_adminFails.size > 5000) for (const [k, v] of _adminFails) if (!v.length) _adminFails.delete(k);
+  logSeg('admin-clave-incorrecta', req, `intentos=${arr.length}/15`);   // fuerza-bruta de /admin
 }
 
 // Agregados de TODO el país (votos recientes, precios/comentarios, destacados).
@@ -411,7 +427,7 @@ const server = http.createServer(async (req, res) => {
         // El id DEBE ser un estacionamiento real (del dataset) o un lugar reportado
         // existente. Sin esto, alguien podía subir fotos a millones de ids inventados
         // y llenar el disco (cada id crea su carpeta). Se valida antes de nada.
-        if (!idExiste(id) && !(await lugarExiste(id))) { sendJSON(res, 400, { ok: false, error: 'lugar' }); return; }
+        if (!idExiste(id) && !(await lugarExiste(id))) { logSeg('foto-id-inexistente', req); sendJSON(res, 400, { ok: false, error: 'lugar' }); return; }
         // Validar formato + tamaño ANTES de moderar: así una imagen inválida o
         // >700KB no gasta una llamada de Sightengine (cuota gratis ~2.000/mes).
         if (!validarFoto(dataUrl)) { sendJSON(res, 400, { ok: false }); return; }
@@ -421,6 +437,7 @@ const server = http.createServer(async (req, res) => {
           // 'no-disponible'/'no-config' = no se pudo verificar → 503 (reintentable),
           // NO se guarda (fail-closed): nunca servimos una foto sin revisar.
           const st = rev.code === 'bloqueada' ? 422 : rev.code === 'formato' ? 400 : 503;
+          if (rev.code === 'bloqueada') logSeg('foto-rechazada-moderacion', req);   // rev.code es un enum seguro, sin datos del usuario
           sendJSON(res, st, { ok: false, motivo: rev.motivo });
           return;
         }
