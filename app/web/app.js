@@ -3217,6 +3217,44 @@ async function cargarConfig() {
   } catch { /* sin config: usamos OSM */ }
 }
 
+// --- Instalar como app (PWA) ------------------------------------------------
+// Aviso sutil y descartable para agregar Estaciona a la pantalla de inicio:
+// Android/Chrome usan el evento beforeinstallprompt (un toque instala); iOS no
+// lo soporta, así que se muestran las instrucciones (Compartir → Agregar a inicio).
+let _installEvt = null;
+const esStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+function puedeMostrarInstall() {
+  if (esStandalone() || $('#install-bar')) return false;              // ya instalada / ya visible
+  if ($('#onboard')?.classList.contains('show')) return false;        // primero la bienvenida
+  try {
+    if (localStorage.getItem('estaciona_installed')) return false;
+    if (Date.now() - (+localStorage.getItem('estaciona_install_dismiss') || 0) < 14 * 24 * 3600 * 1000) return false;
+  } catch { /* sin localStorage: seguimos */ }
+  return !!_installEvt || esIOS();                                    // Android (evento) o iOS (instrucciones)
+}
+function ocultarInstall() { const b = $('#install-bar'); if (b) { b.classList.remove('show'); setTimeout(() => b.remove(), 250); } }
+function mostrarInstall() {
+  if (!puedeMostrarInstall()) return;
+  const ios = !_installEvt && esIOS();
+  const bar = document.createElement('div');
+  bar.id = 'install-bar'; bar.className = 'install-bar'; bar.setAttribute('role', 'dialog'); bar.setAttribute('aria-label', 'Instalar Estaciona');
+  bar.innerHTML = `<span class="ib-ic">${ic('parking', 20)}</span>` +
+    `<span class="ib-txt">${ios ? 'Instala Estaciona: toca Compartir y luego “Agregar a inicio”.' : 'Instala Estaciona — acceso directo y pantalla completa.'}</span>` +
+    (ios ? '' : '<button class="ib-go" type="button">Instalar</button>') +
+    '<button class="ib-x" type="button" aria-label="Cerrar">' + ic('x', 16) + '</button>';
+  document.querySelector('.phone').appendChild(bar);
+  requestAnimationFrame(() => bar.classList.add('show'));
+  bar.querySelector('.ib-x').onclick = () => { try { localStorage.setItem('estaciona_install_dismiss', String(Date.now())); } catch {} ocultarInstall(); };
+  const go = bar.querySelector('.ib-go');
+  if (go) go.onclick = async () => {
+    if (!_installEvt) return;
+    _installEvt.prompt();
+    try { await _installEvt.userChoice; } catch {}
+    _installEvt = null; ocultarInstall();
+  };
+}
+
 async function init() {
   $('#lista').innerHTML = skeletonHtml();   // esqueleto con shimmer mientras carga
   mostrarBienvenida();                       // tarjeta de bienvenida (1ª vez)
@@ -3352,6 +3390,12 @@ async function init() {
   window.addEventListener('online', actualizarOffline);
   window.addEventListener('offline', actualizarOffline);
   actualizarOffline();
+
+  // PWA: capturar el evento de instalación (Android/Chrome) y ofrecerla con tacto.
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); _installEvt = e; setTimeout(mostrarInstall, 4000); });
+  window.addEventListener('appinstalled', () => { _installEvt = null; ocultarInstall(); try { localStorage.setItem('estaciona_installed', '1'); } catch {} });
+  // iOS no dispara el evento: muestra las instrucciones tras un rato (una vez, con cooldown).
+  if (esIOS()) setTimeout(mostrarInstall, 16000);
 }
 // Muestra/quita una píldora "Sin conexión — datos guardados" según navigator.onLine.
 function actualizarOffline() {

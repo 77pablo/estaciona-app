@@ -239,6 +239,20 @@ main, .view { flex: 1; min-height: 0; }
 /* Indicador "sin conexión" (píldora ámbar, sobre la barra inferior). */
 #offline-bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(72px + env(safe-area-inset-bottom, 0px)); z-index: 65; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: var(--amber); color: #0E0F12; font-size: 12.5px; font-weight: 700; box-shadow: 0 4px 14px rgba(0,0,0,.5); white-space: nowrap; }
 #offline-bar .ic-svg { color: #0E0F12; }
+/* Aviso "Instalar app" (PWA): barra descartable sobre la barra inferior. */
+.install-bar {
+  position: absolute; left: 50%; bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+  width: min(440px, calc(100% - 24px)); z-index: 70; display: flex; align-items: center; gap: 10px;
+  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 14px;
+  padding: 10px 12px; box-shadow: 0 10px 34px rgba(0,0,0,.55);
+  transform: translateX(-50%) translateY(24px); opacity: 0; transition: transform .25s ease, opacity .25s ease;
+}
+.install-bar.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.ib-ic { flex-shrink: 0; display: inline-flex; color: var(--accent); }
+.ib-txt { flex: 1; font-size: 13px; line-height: 1.3; color: var(--text); }
+.ib-go { flex-shrink: 0; background: var(--accent); color: var(--on-accent); border: none; border-radius: 10px; padding: 9px 15px; font-weight: 700; font-family: var(--font-ui); cursor: pointer; }
+.ib-x { flex-shrink: 0; display: inline-flex; background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 4px; }
+.ib-x:hover { color: var(--text); }
 .pin-precio {
   position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%);
   background: var(--surface-2); color: var(--accent); font-family: var(--font-mono);
