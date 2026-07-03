@@ -1639,23 +1639,39 @@ async function copiarTexto(texto) {
     return ok;
   } catch (_) { return false; }
 }
+// Precio en texto plano (sin HTML) para compartir. Honesto: marca "~/aprox." lo
+// estimado y respeta gratis / solo-clientes / pago-sin-dato.
+function precioTextoCorto(p) {
+  if (esGratisClientes(p)) return 'Gratis para clientes';
+  if (p.gratisAhora || esGratisReal(p)) return 'Gratis';
+  if (p.precioHora == null) return '';
+  return (p.verificado ? CLP(p.precioHora) + '/hr' : '~' + CLP(p.precioHora) + '/hr aprox.');
+}
+// Comparte con un helper único: Web Share nativo (celular) o copiar al portapapeles.
+function compartirTexto(texto, url) {
+  const copiar = () => copiarTexto(texto).then((ok) => toast(ok ? 'Copiado 📋 — pégalo donde quieras' : 'No pude copiar; mantén presionado el texto'));
+  if (navigator.share) {
+    navigator.share({ title: 'Estaciona', text: texto, url }).catch((e) => { if (e && e.name === 'AbortError') return; copiar(); });
+    return;
+  }
+  copiar();
+}
 window.compartir = (id) => {
   // Mismo criterio que "Llévame": el lugar puede venir de la lista, de Casa/Trabajo o del auto guardado.
   const auto = LS.getAuto();
   const p = DATA.find((x) => x.id === id) || LUGARES[id] || (auto && auto.id === id ? auto : null);
   if (!p) return;
-  const mapsUrl = `https://www.google.com/maps?q=${p.lat},${p.lng}`;
-  const texto = `📍 ${p.nombre || 'Estacionamiento'}${p.direccion ? ' · ' + p.direccion : ''}\nUbicación: ${mapsUrl}`;
-  const copiar = () => copiarTexto(texto).then((ok) =>
-    toast(ok ? 'Enlace copiado 📋' : 'No pude copiar; mantén presionado el link'));
-  if (navigator.share) {
-    navigator.share({ title: 'Estaciona', text: texto, url: mapsUrl }).catch((e) => {
-      if (e && e.name === 'AbortError') return;   // el usuario canceló: no hacemos nada
-      copiar();                                    // cualquier otro fallo: caemos a copiar
-    });
-    return;
-  }
-  copiar();
+  // Link que abre Estaciona JUSTO en ese estacionamiento (crece la app; el
+  // destinatario ve el detalle y desde ahí navega). Ver manejo de ?lugar= al cargar.
+  const url = `${location.origin}/app?lugar=${encodeURIComponent(id)}&ciudad=${encodeURIComponent(p.ciudad || ciudadActual)}`;
+  const precio = precioTextoCorto(p);
+  const texto = `🅿️ ${p.nombre || 'Estacionamiento'}${p.direccion ? ' · ' + p.direccion : ''}${precio ? '\n' + precio : ''}\nMíralo en Estaciona 👉 ${url}`;
+  compartirTexto(texto, url);
+};
+// Invitar a un amigo / difundir la app (crecimiento).
+window.compartirApp = () => {
+  const url = `${location.origin}/app`;
+  compartirTexto(`¿Buscas dónde estacionar? Con Estaciona ves precios, si es gratis, horario y disponibilidad en todo Chile 🅿️\n${url}`, url);
 };
 
 // --- Estacioné aquí + alarma anti-multa -------------------------------------
@@ -1943,6 +1959,7 @@ function renderFavoritos() {
       <div class="empty-tit">Aún no guardas lugares</div>
       <p>Toca la ${ic('starOutline', 14)} de un estacionamiento para guardarlo aquí y volver rápido.</p>
     </div>`}
+    <button class="btn btn-second btn-invitar" onclick="compartirApp()">${ic('share', 16)} Invitar a un amigo</button>
     ${proCardHTML()}
     <div class="app-legal">
       <a href="/terminos" target="_blank" rel="noopener">Términos</a> · <a href="/privacidad" target="_blank" rel="noopener">Privacidad</a>
@@ -2922,11 +2939,18 @@ async function init() {
   setTimeout(() => map && map.invalidateSize(), 350);
   window.addEventListener('resize', () => map && map.invalidateSize());
 
-  cargar();
+  // Deep link: si llegó con ?lugar=<id>&ciudad=<ciudad> (link compartido), carga esa
+  // ciudad y abre su detalle al terminar. Tiene prioridad sobre ?q=.
+  const params = new URLSearchParams(location.search);
+  const lugarInicial = params.get('lugar');
+  const ciudadInicial = params.get('ciudad');
+  if (lugarInicial && ciudadInicial) ciudadActual = ciudadInicial;   // primera carga = esa ciudad
+
+  cargar().then(() => { if (lugarInicial && DATA.some((p) => p.id === lugarInicial)) openDetalle(lugarInicial); });
   track('pageview', ciudadActual);   // estadística de uso anónima
   // Si llegó desde la landing con ?q=… (buscador de la portada), busca eso al abrir.
-  const qInicial = new URLSearchParams(location.search).get('q');
-  if (qInicial) {
+  const qInicial = params.get('q');
+  if (!lugarInicial && qInicial) {
     const s = $('#search'); if (s) s.value = qInicial;
     query = qInicial;
     actualizarBotonLimpiar();

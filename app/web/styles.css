@@ -500,6 +500,8 @@ main, .view { flex: 1; min-height: 0; }
 /* Estrella promedio en la tarjeta de la lista. */
 .card-star { display: inline-flex; align-items: center; gap: 3px; color: var(--star); font-weight: 700; }
 .card-star .ic-svg { color: var(--star); }
+/* Botón "Invitar a un amigo" (Favoritos): difundir la app. */
+.btn-invitar { width: 100%; margin: 16px 0 4px; }
 .attrs { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
 .attr { background: transparent; border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 11px; font-size: 12px; }
 .calc { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px; margin: 16px 0; box-shadow: var(--shadow-soft); }
