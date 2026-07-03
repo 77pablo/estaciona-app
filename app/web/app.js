@@ -399,6 +399,10 @@ const LS = {
   // Recordatorios "Avísame": avisos locales para revisar un lugar a cierta hora.
   getRecs: () => { try { return JSON.parse(localStorage.getItem('estaciona_recs') || '[]'); } catch { return []; } },
   setRecs: (r) => lsSet('estaciona_recs', JSON.stringify(r)),
+  // "¿Encontraste cupo?": preguntas pendientes tras tocar "Cómo llegar", para
+  // alimentar la señal de la gente cuando vuelvas a la app.
+  getCupoAsk: () => { try { return JSON.parse(localStorage.getItem('estaciona_cupoask') || '[]'); } catch { return []; } },
+  setCupoAsk: (a) => lsSet('estaciona_cupoask', JSON.stringify(a)),
   // Historial: estacionamientos pasados (se guarda al "Terminar" un auto).
   getHist: () => { try { return JSON.parse(localStorage.getItem('estaciona_historial') || '[]'); } catch { return []; } },
   setHist: (h) => lsSet('estaciona_historial', JSON.stringify(h)),
@@ -1720,6 +1724,14 @@ window.irRuta = (app) => {
     ? `https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`
     : `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`;
   window.open(url, '_blank', 'noopener');
+  // Anota una pregunta "¿encontraste cupo?" para cuando vuelvas (crowdsourcing).
+  // Solo para estacionamientos: no "volver a mi auto" (p.inicio) ni ítems del
+  // historial (p.fin), ni el lugar donde ya está tu auto.
+  if (p.id && !p.inicio && !p.fin && p.id !== LS.getAuto()?.id) {
+    const asks = LS.getCupoAsk().filter((a) => a.id !== p.id);   // una por lugar (la última)
+    asks.push({ id: p.id, nombre: p.nombre, ts: Date.now(), sono: false });
+    LS.setCupoAsk(asks.slice(-8));                               // tope defensivo
+  }
   cerrarModal();
 };
 // Copia texto al portapapeles con fallback para contextos sin Clipboard API.
@@ -3009,6 +3021,33 @@ function chequearRecordatorioAuto() {
   b.classList.remove('urgent'); b.classList.add('show');   // recordatorio amigable (borde teal)
 }
 
+// Al volver a la app tras tocar "Cómo llegar": pregunta "¿encontraste cupo?" para
+// alimentar la señal de la gente. Cierra el círculo del crowdsourcing: cada viaje
+// se vuelve un dato. Solo pregunta una vez por lugar, si ya pasó tiempo de llegar
+// (≥2 min) y no demasiado (≤2 h), y nunca sobre la alarma anti-multa urgente.
+function chequearCupoAsk() {
+  if (bannerUrgenteVisible() || $('#onboard')?.classList.contains('show')) return;
+  const asks = LS.getCupoAsk();
+  if (!asks.length) return;
+  const ahora = Date.now();
+  const idx = asks.findIndex((a) => !a.sono && ahora - a.ts >= 120000 && ahora - a.ts <= 7200000);
+  // Poda las vencidas/respondidas (>2 h, o ya sonadas hace >1 h) en todo caso.
+  const vivos = asks.filter((a) => ahora - a.ts <= 7200000);
+  if (idx < 0) { if (vivos.length !== asks.length) LS.setCupoAsk(vivos); return; }
+  const a = asks[idx];
+  a.sono = true; LS.setCupoAsk(asks);
+  const b = $('#banner');
+  b.innerHTML = `<span>${ic('users', 16)} ¿Encontraste cupo en ${esc(a.nombre)}?</span>` +
+    `<span class="banner-si-no"><button class="ban-si" onclick="responderCupoAsk('${a.id}',true)">Sí</button>` +
+    `<button class="ban-no" onclick="responderCupoAsk('${a.id}',false)">No</button></span>`;
+  b.classList.remove('urgent'); b.classList.add('show');
+}
+window.responderCupoAsk = (id, ok) => {
+  $('#banner')?.classList.remove('show');
+  LS.setCupoAsk(LS.getCupoAsk().filter((a) => a.id !== id));   // ya respondida: fuera
+  confirmarCupo(id, ok);                                        // alimenta la señal + toast de gracias
+};
+
 // --- Bottom sheet arrastrable (solo móvil): mini / medio / completo ----------
 function initSheetDrag() {
   const sheet = document.querySelector('.sheet');
@@ -3256,6 +3295,7 @@ async function init() {
   // salta si llegaste por un link a un lugar o con una búsqueda directa de la portada.
   autoUbicarInicio(!!(lugarInicial && ciudadInicial) || !!qInicial);
   chequearRecordatorioAuto();   // aviso "¿sigues con tu auto?" si quedó de otro día
+  setTimeout(chequearCupoAsk, 1500);   // por si reabriste la app tras ir a un lugar
   // Refresco periódico SOLO si vale la pena: pestaña visible y vista del mapa activa.
   // (No reconstruir #lista en segundo plano ni mientras estás en "Mi auto"/"Favoritos".)
   setInterval(() => {
@@ -3279,6 +3319,7 @@ async function init() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') { detenerSeguimiento(); return; }
     if (userReal && $('#view-buscar').classList.contains('active')) iniciarSeguimiento();
+    setTimeout(chequearCupoAsk, 700);   // al volver de "Cómo llegar": ¿encontraste cupo?
   });
   // Indicador honesto de "sin conexión": la app funciona offline (PWA) con datos
   // guardados, pero avisamos para que sepas que puede no estar 100% al día.

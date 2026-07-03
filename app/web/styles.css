@@ -677,6 +677,9 @@ main, .view { flex: 1; min-height: 0; }
 #banner.urgent { border-left-color: var(--red); }   /* solo la alarma anti-multa */
 #banner.show { display: flex; }
 #banner button { background: rgba(243,245,247,.12); border: none; color: var(--text); border-radius: var(--r); padding: 6px 12px; cursor: pointer; font-family: var(--font-ui); }
+/* Aviso "¿encontraste cupo?": botones Sí/No agrupados a la derecha. */
+.banner-si-no { display: inline-flex; gap: 6px; margin-left: auto; }
+#banner .ban-si { background: var(--green-bg); color: var(--green); font-weight: 700; }
 #toast {
   position: absolute; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%) translateY(20px);
   background: var(--surface-2); color: var(--text); padding: 11px 18px; border-radius: var(--r); font-size: 13.5px;
