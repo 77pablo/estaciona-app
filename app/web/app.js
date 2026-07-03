@@ -56,7 +56,7 @@ let miniMap = null;                 // mini-mapa de la vista "Mi auto"
 let selectedId = null;
 let watchId = null;                 // seguimiento de ubicación (watchPosition)
 let query = '';
-let orden = 'cercania';            // orden de la lista: 'cercania' | 'precio'
+let orden = 'recomendado';         // orden de la lista: 'recomendado' | 'cercania' | 'precio' | 'disponible'
 let comparar = [];                 // ids seleccionados para comparar lado a lado (máx 3)
 let _ciudadCargada = null;         // última ciudad realmente cargada (para vaciar la comparación al cambiar)
 let cargado = false;
@@ -66,11 +66,12 @@ let _focoPrevio = null;            // foco previo del detalle, para restaurarlo 
 let _focoModal = null;             // foco previo del modal (separado: un modal puede abrirse SOBRE el detalle)
 let _onCerrarModal = null;         // callback opcional al cerrar el modal (p.ej. revertir filtros no aplicados)
 let detalleAbiertoId = null;
-let filtros = {
+const filtrosVacios = () => ({
   gratis: false, barato: false, techado: false, abierto: false,
   ev: false, accesible: false, camaras: false, verificado: false,
   soloPublicos: false, tipo: 'todos', distMax: 0,
-};
+});
+let filtros = filtrosVacios();
 
 // Lugares de Favoritos (Casa/Trabajo). Por defecto son sectores de Temuco, pero
 // el usuario los puede fijar a su dirección real (se guarda solo en el teléfono).
@@ -635,6 +636,17 @@ function onMapMove() {
 // Ícono de un clúster (grupo de pines). Color = mejor disponibilidad del grupo
 // (verde > amarillo > rojo > cerrado): de un vistazo se ve "dónde suele haber".
 const NIVEL_RANK = { verde: 3, amarillo: 2, rojo: 1, cerrado: 0 };
+// Puntaje "Recomendado" (menor = mejor): combina cercanía + precio + disponibilidad
+// estimada, todo en una escala comparable (≈ puntos). Así el 1º de la lista es un
+// buen equilibrio, no solo el más cercano o el más barato.
+function scoreRecomendado(p) {
+  const km = (p.dist || 0) / 1000;                                   // ~1 punto por km
+  const precio = (p.gratisAhora || p.precioHora === 0) ? 0           // gratis = 0
+    : (p.precioHora == null ? 1.2 : p.precioHora / 1000);            // ~1 punto por $1.000/hr; pago sin dato: penaliza suave
+  const nivel = p.disponibilidad?.nivel;
+  const disp = nivel === 'verde' ? 0 : nivel === 'amarillo' ? 0.6 : nivel === 'rojo' ? 1.5 : 4;   // cerrado al fondo
+  return km + precio + disp;
+}
 function clusterIcon(cluster) {
   let best = 'cerrado';
   for (const m of cluster.getAllChildMarkers()) {
@@ -757,7 +769,10 @@ function listaFiltrada() {
     .sort((a, b) => {
       // Destacados (patrocinados) primero, sin importar el orden elegido (salvo Pro: sin avisos).
       if (adDe(a) !== adDe(b)) return adDe(a) ? -1 : 1;
-      if (orden === 'precio') {
+      if (orden === 'recomendado') {
+        const sa = scoreRecomendado(a), sb = scoreRecomendado(b);
+        if (sa !== sb) return sa - sb;
+      } else if (orden === 'precio') {
         // Precio efectivo: gratis (o gratis ahora) cuenta como 0. Empate → cercanía.
         const pa = (a.gratisAhora || a.precioHora === 0) ? 0 : (a.precioHora == null ? Infinity : a.precioHora);
         const pb = (b.gratisAhora || b.precioHora === 0) ? 0 : (b.precioHora == null ? Infinity : b.precioHora);
@@ -2117,6 +2132,7 @@ async function geocodificar(texto) {
     if (!r.ok) throw new Error('http ' + r.status);
     const j = await r.json();
     if (!j.ok) { toast('No encontré ese lugar — filtro la lista'); renderLista(); return; }
+    addHistBusq(q);                       // guarda la búsqueda en el historial
     USER = { lat: j.lat, lng: j.lng }; userReal = false;   // dirección buscada, NO tu ubicación real
     ciudadPorPunto(USER);                 // salta a la ciudad más cercana
     query = ''; $('#search').value = '';  // limpia la búsqueda para ver esa ciudad
@@ -2151,7 +2167,7 @@ function precioSug(r) {
 
 async function buscarNacional(texto) {
   const q = (texto || '').trim();
-  if (q.length < 2) { cerrarSugerencias(); return; }
+  if (q.length < 2) { mostrarPanelBusqueda(); return; }   // caja vacía → accesos rápidos + recientes
   const seq = ++_sugSeq;
   try {
     const r = await fetch('/api/buscar?q=' + encodeURIComponent(q));
@@ -2214,6 +2230,7 @@ window.elegirSugerencia = (i) => {
   query = '';
   actualizarBotonLimpiar();
   track('search', r.ciudad);
+  addHistBusq(r.nombre);                        // guarda en el historial de búsquedas
   // Ya estás en su ciudad y está cargada → abre directo.
   if (r.ciudad === ciudadActual && DATA.some((p) => p.id === r.id)) { openDetalle(r.id); return; }
   const z = ZONAS.find((x) => x.nombre === r.ciudad);
@@ -2227,6 +2244,69 @@ window.elegirSugerencia = (i) => {
     map.setView([r.lat, r.lng], 16);
   }
 };
+
+// --- Búsqueda inteligente: accesos rápidos + historial ----------------------
+// Cuando la caja de búsqueda está enfocada y VACÍA, el desplegable muestra
+// "accesos rápidos" (combinaciones de filtros+orden en un toque) y las búsquedas
+// recientes. Al teclear ≥2 letras, pasa a las sugerencias nacionales.
+const HIST_MAX = 6;
+function getHistBusq() { try { return JSON.parse(localStorage.getItem('estaciona_busq') || '[]'); } catch { return []; } }
+function addHistBusq(texto) {
+  const t = (texto || '').trim();
+  if (t.length < 2) return;
+  const h = getHistBusq().filter((x) => x.toLowerCase() !== t.toLowerCase());
+  h.unshift(t);
+  lsSet('estaciona_busq', JSON.stringify(h.slice(0, HIST_MAX)));
+}
+
+// Accesos rápidos = filtros + orden aplicados de una. Reemplazan el estado (parten
+// de filtros vacíos) para dar exactamente lo que dice la etiqueta.
+const PRESETS = [
+  { label: 'Barato y cerca', icono: 'wallet', aplica: () => { filtros = filtrosVacios(); filtros.barato = true; orden = 'recomendado'; } },
+  { label: 'Gratis y abierto', icono: 'tag', aplica: () => { filtros = filtrosVacios(); filtros.gratis = true; filtros.abierto = true; } },
+  { label: 'Con techo', icono: 'home', aplica: () => { filtros = filtrosVacios(); filtros.techado = true; } },
+  { label: 'Precio confirmado', icono: 'check', aplica: () => { filtros = filtrosVacios(); filtros.verificado = true; } },
+  { label: 'Mejor disponibilidad', icono: 'traffic', aplica: () => { filtros = filtrosVacios(); orden = 'disponible'; } },
+];
+window.aplicarPreset = (i) => {
+  const p = PRESETS[i];
+  if (!p) return;
+  p.aplica();
+  const inp = $('#search'); if (inp) { inp.value = ''; inp.blur(); }
+  query = ''; actualizarBotonLimpiar();
+  cerrarSugerencias();
+  syncChips(); actualizarBadgeFiltros();
+  const sel = $('#sheet-order'); if (sel) sel.value = orden;
+  renderLista();
+  toast(p.label);
+};
+window.usarBusquedaReciente = (i) => {
+  const h = getHistBusq();
+  const t = h[i];
+  if (!t) return;
+  const inp = $('#search');
+  if (inp) { inp.value = t; inp.focus(); }
+  query = t; actualizarBotonLimpiar();
+  buscarNacional(t);                            // re-muestra las sugerencias de esa búsqueda
+};
+function limpiarHistBusq() { lsRemove('estaciona_busq'); mostrarPanelBusqueda(); }
+window.limpiarHistBusq = limpiarHistBusq;
+
+// Pinta el panel (accesos rápidos + recientes) en el mismo desplegable del buscador.
+function mostrarPanelBusqueda() {
+  const box = $('#search-suggest');
+  if (!box) return;
+  _sugResultados = []; _sugSel = -1;            // no hay resultados nacionales navegables aquí
+  const presets = PRESETS.map((p, i) =>
+    `<button class="sug-preset" type="button" onmousedown="event.preventDefault()" onclick="aplicarPreset(${i})">${ic(p.icono, 14)} ${esc(p.label)}</button>`).join('');
+  const hist = getHistBusq();
+  const recientes = hist.length
+    ? `<div class="sug-sec">Recientes <button class="sug-clear" type="button" onmousedown="event.preventDefault()" onclick="limpiarHistBusq()">borrar</button></div>` +
+      hist.map((t, i) => `<button class="sug-item sug-recent" type="button" onmousedown="event.preventDefault()" onclick="usarBusquedaReciente(${i})"><span class="sug-ic">${ic('clock', 15)}</span><span class="sug-main"><span class="sug-nom">${esc(t)}</span></span></button>`).join('')
+    : '';
+  box.innerHTML = `<div class="sug-sec">Accesos rápidos</div><div class="sug-presets">${presets}</div>${recientes}`;
+  box.hidden = false;
+}
 
 // --- Reportar un lugar nuevo (crowdsource estilo Waze) ----------------------
 // Flujo: 1) el usuario mueve el mapa para apuntar el lugar con un crosshair;
@@ -2445,7 +2525,7 @@ function abrirFiltros() {
 }
 window.aplicarFiltros = () => { _onCerrarModal = null; cerrarModal(); syncChips(); actualizarBadgeFiltros(); renderLista(); };
 window.limpiarFiltros = () => {
-  filtros = { gratis: false, barato: false, techado: false, abierto: false, ev: false, accesible: false, camaras: false, verificado: false, soloPublicos: false, tipo: 'todos', distMax: 0 };
+  filtros = filtrosVacios();
   _onCerrarModal = null;   // ya aplicamos el "limpiar": no revertir al cerrar
   cerrarModal(); syncChips(); actualizarBadgeFiltros(); renderLista(); toast('Filtros limpiados');
 };
@@ -2799,6 +2879,8 @@ async function init() {
     renderListaDeb();               // filtra también la ciudad cargada (por si el lugar está aquí)
     buscarNacionalDeb(e.target.value);
   });
+  // Al enfocar la caja vacía: accesos rápidos + búsquedas recientes.
+  $('#search').addEventListener('focus', (e) => { if (!e.target.value.trim()) mostrarPanelBusqueda(); });
   $('#search').addEventListener('keydown', (e) => {
     const abierto = _sugResultados.length > 0 && !$('#search-suggest')?.hidden;
     if (e.key === 'ArrowDown' && abierto) { e.preventDefault(); resaltarSugerencia((_sugSel + 1) % _sugResultados.length); }

@@ -187,6 +187,15 @@ main, .view { flex: 1; min-height: 0; }
 .sug-precio { flex-shrink: 0; font-family: var(--font-mono, monospace); font-size: 12.5px; color: var(--text); font-weight: 600; }
 .sug-foot { padding: 7px 10px 4px; font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; border-top: 1px solid var(--line); margin-top: 3px; }
 .sug-empty { padding: 14px 12px; font-size: 13px; color: var(--muted); text-align: center; }
+/* Panel de búsqueda inteligente: accesos rápidos + recientes. */
+.sug-sec { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.sug-clear { background: none; border: none; color: var(--accent); font-size: 11px; cursor: pointer; text-transform: none; letter-spacing: 0; }
+.sug-clear:hover { text-decoration: underline; }
+.sug-presets { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 8px 8px; }
+.sug-preset { display: inline-flex; align-items: center; gap: 5px; padding: 7px 11px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text); font-size: 12.5px; font-family: var(--font-ui); cursor: pointer; transition: border-color .12s, background .12s; }
+.sug-preset:hover { border-color: var(--accent); }
+.sug-preset .ic-svg { color: var(--accent); }
+.sug-recent .sug-ic { color: var(--muted); }
 
 /* Solo para lectores de pantalla (no afecta el layout). */
 .sr-only {
