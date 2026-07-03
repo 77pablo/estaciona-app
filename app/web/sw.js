@@ -8,11 +8,15 @@
 // en estacionamientos subterráneos, donde no hay internet).
 // ============================================================================
 
-const CACHE = 'estaciona-v1';
+const CACHE = 'estaciona-v2';
 
 // App shell que se precachea al instalar (para que abra offline desde el vamos).
+// Incluye Leaflet (servido local): así el mapa carga aunque no haya red — los
+// pines se dibujan; solo las teselas de fondo necesitan internet.
 const SHELL = [
   '/app', '/app.js', '/styles.css',
+  '/vendor/leaflet.js', '/vendor/leaflet.css',
+  '/vendor/leaflet.markercluster.js', '/vendor/MarkerCluster.css',
   '/icons/icon-192.png',
 ];
 
@@ -38,10 +42,10 @@ function cacheable(req, url) {
   if (sameOrigin) {
     if (url.pathname === '/api/estacionamientos') return true;          // la ciudad vista → sirve offline
     if (url.pathname.startsWith('/api/')) return false;                 // resto de API: no cachear
-    return true;                                                        // estáticos propios (html/js/css/íconos)
+    return true;                                                        // estáticos propios (html/js/css/íconos/vendor)
   }
-  // CDNs de librerías (Leaflet, markercluster, tfjs): estables y versionadas.
-  return /(^|\.)unpkg\.com$|(^|\.)jsdelivr\.net$/.test(url.hostname);
+  // CDN de jsdelivr (nsfwjs/tfjs, versionados). Leaflet ya es local (mismo origen).
+  return /(^|\.)jsdelivr\.net$/.test(url.hostname);
 }
 
 self.addEventListener('fetch', (e) => {

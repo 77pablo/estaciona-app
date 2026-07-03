@@ -17,22 +17,19 @@
   <!-- Color de barra del navegador (app siempre oscura, tema movilidad urbana). -->
   <meta name="theme-color" content="#0d0f14" />
   <!-- Pistas de carga: abrir conexión a los orígenes externos antes de pedirles
-       nada. unpkg sirve Leaflet (CSS+JS, bloqueantes) y maptiler los tiles del
-       mapa (decenas de peticiones al cargar) → preconnect. El resto son orígenes
-       diferidos/opcionales (geocoder, tráfico, modelo de fotos, tiles OSM de
-       respaldo) → dns-prefetch, más barato. NO cambia el orden de los scripts. -->
-  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+       nada. Leaflet ahora es LOCAL (/vendor); maptiler sirve los tiles del mapa
+       (decenas de peticiones al cargar) → preconnect. El resto son orígenes
+       diferidos/opcionales (tráfico, modelo de fotos, tiles OSM de respaldo) →
+       dns-prefetch, más barato. NO cambia el orden de los scripts. -->
   <link rel="preconnect" href="https://api.maptiler.com" crossorigin />
   <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
   <link rel="dns-prefetch" href="https://api.tomtom.com" />
   <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="/vendor/leaflet.css" />
   <!-- Agrupado de pines (clustering) cuando hay muchos. Solo el CSS núcleo
        (animaciones/posición); el estilo del clúster lo da styles.css para el
        tema oscuro. Si el script falla, la app cae a pines sueltos (ver app.js). -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
-        integrity="sha256-YU3qCpj/P06tdPBJGPax0bm6Q1wltfwjsho5TR4+TYc=" crossorigin="" />
+  <link rel="stylesheet" href="/vendor/MarkerCluster.css" />
   <!-- Tipografía: Urbanist (UI + títulos) + Geist Mono (precios y datos numéricos). -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -133,12 +130,10 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <!-- Clustering de pines. Si no carga (CDN bloqueado), app.js detecta la
-       ausencia de L.markerClusterGroup y usa pines sueltos sin romperse. -->
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
-          integrity="sha256-Hk4dIpcqOSb0hZjgyvFOP+cEmDXUKKNE/tT542ZbNQg=" crossorigin=""></script>
+  <script src="/vendor/leaflet.js"></script>
+  <!-- Clustering de pines. Si no carga, app.js detecta la ausencia de
+       L.markerClusterGroup y usa pines sueltos sin romperse. -->
+  <script src="/vendor/leaflet.markercluster.js"></script>
   <script src="/app.js"></script>
   <!-- Píldora de fecha del header: muestra el día de hoy (informativo). -->
   <script>(function(){var e=document.getElementById('fecha-hoy');if(e){var d=new Date().toLocaleDateString('es-CL',{weekday:'short',day:'numeric',month:'short'});e.textContent='Hoy · '+d;}})();</script>

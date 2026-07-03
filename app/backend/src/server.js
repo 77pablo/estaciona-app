@@ -188,8 +188,9 @@ async function agregados() {
 const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html', '/terminos': '/terminos.html', '/privacidad': '/privacidad.html', '/operadores': '/operadores.html', '/pro': '/pro.html' };
 
 // Content-Security-Policy: whitelist de los orígenes que la app REALMENTE usa
-// (mapas MapTiler, tiles OSM, tráfico TomTom, fuentes Google, Leaflet en unpkg,
-// nsfwjs/tfjs en jsdelivr, Tailwind CDN, y las fotos en R2). El geocoding ya NO va
+// (mapas MapTiler, tiles OSM, tráfico TomTom, fuentes Google, nsfwjs/tfjs en
+// jsdelivr, Tailwind CDN, y las fotos en R2). Leaflet ahora se sirve LOCAL (no
+// depende de un CDN externo que pueda estar bloqueado/caído). El geocoding ya NO va
 // directo del navegador: pasa por el backend (/api/geocode), fuera de esta lista.
 // Se mantiene 'unsafe-inline' en script/style porque el frontend usa onclick inline
 // + Tailwind CDN (quitarlo exige refactor a addEventListener + compilar Tailwind);
@@ -198,10 +199,10 @@ const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.ht
 const R2_ORIGEN = (() => { try { return new URL(process.env.R2_PUBLIC_URL).origin; } catch { return 'https://*.r2.dev'; } })();
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://cdn.tailwindcss.com",
-  "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com https://cdn.tailwindcss.com",
+  "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
   "font-src 'self' https://fonts.gstatic.com data:",
-  `img-src 'self' data: blob: https://unpkg.com https://api.maptiler.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://api.tomtom.com ${R2_ORIGEN}`,
+  `img-src 'self' data: blob: https://api.maptiler.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://api.tomtom.com ${R2_ORIGEN}`,
   "connect-src 'self' https://api.maptiler.com https://api.tomtom.com https://cdn.jsdelivr.net",
   "worker-src 'self' blob:",
   "frame-ancestors 'none'",
