@@ -663,7 +663,12 @@ function scoreRecomendado(p) {
     : (p.precioHora == null ? 1.2 : p.precioHora / 1000);            // ~1 punto por $1.000/hr; pago sin dato: penaliza suave
   const nivel = p.disponibilidad?.nivel;
   const disp = nivel === 'verde' ? 0 : nivel === 'amarillo' ? 0.6 : nivel === 'rojo' ? 1.5 : 4;   // cerrado al fondo
-  return km + precio + disp;
+  // Un cupo REPORTADO fresco por la gente (o en vivo por un operador) vale más que
+  // la mera estimación: sube los confirmados y baja los "reportan sin cupo".
+  let bonus = 0;
+  if (cupoConfirmado(p)) bonus = -0.6;
+  else if (p.disponibilidad?.fuente === 'gente' && nivel === 'rojo') bonus = 0.8;
+  return km + precio + disp + bonus;
 }
 function clusterIcon(cluster) {
   let best = 'cerrado';
@@ -884,6 +889,15 @@ function renderLista() {
         <div class="empty-tit">Sin coincidencias para “${esc(query)}”</div>
         <p>¿Es una dirección o lugar? Búscalo directamente en el mapa.</p>
         <button class="btn btn-primary" style="margin-top:14px" onclick="buscarComoDireccion()">${ic('pin', 16)} Buscar “${esc(query)}” en el mapa</button>
+      </div>`;
+    } else if (filtros.cupo) {
+      // El filtro "Con cupo" depende de reportes frescos de la gente: al principio
+      // está casi vacío. Mensaje honesto que invita a reportar (alimenta la señal).
+      $('#lista').innerHTML = `<div class="empty-big">
+        <span class="em">${ic('users', 44)}</span>
+        <div class="empty-tit">Nadie reportó cupo por acá todavía</div>
+        <p>Los reportes de cupo los pone la gente, en el momento. Sé el primero: al estacionar, entra a un lugar y toca “¿Hay cupo? Sí”.</p>
+        <button class="btn btn-primary" style="margin-top:14px" onclick="limpiarFiltros()">${ic('filters', 16)} Quitar el filtro</button>
       </div>`;
     } else if (hayFiltros) {
       $('#lista').innerHTML = `<div class="empty-big">
