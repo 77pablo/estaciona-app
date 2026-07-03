@@ -2282,6 +2282,40 @@ function usarMiUbicacion() {
   );
 }
 
+// Ubicación al ARRANCAR (automática y silenciosa). Si estás dentro de una ciudad
+// cubierta, fija tu punto real, cambia a esa ciudad si hace falta y centra ahí.
+// Si estás lejos de toda ciudad con datos, NO molesta: queda la ciudad actual.
+function ubicarInicio(me) {
+  const { zona, dist } = zonaMasCercana(me);
+  if (!zona || dist > 30000) return;                 // fuera de cobertura: en silencio
+  USER = me; userReal = true;
+  if (map) { map.setView([me.lat, me.lng], 15); meMarker?.setLatLng([me.lat, me.lng]); }
+  iniciarSeguimiento();                              // el punto azul te sigue al moverte
+  toast(`📍 Estás en ${zona.nombre}`);
+  if (zona.nombre !== ciudadActual) {                // estás en otra ciudad → cárgala
+    ciudadPorPunto(me);
+    cargar().then(() => { USER = me; userReal = true; renderLista(); });
+  } else {
+    renderLista();                                   // misma ciudad: recalcula distancias desde tu punto real
+  }
+}
+
+// Al abrir la app: intenta ver dónde estás y mostrar ESA zona (no siempre Temuco).
+// Respeta el permiso: si fue DENEGADO no insiste; si aún no se decidió y el
+// onboarding está visible, deja que el onboarding lo pida (no duplica el prompt).
+async function autoUbicarInicio(hayDeepLink) {
+  if (hayDeepLink || !navigator.geolocation) return;
+  let estado = 'prompt';
+  try { if (navigator.permissions?.query) estado = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch { /* sin Permissions API: continuamos */ }
+  if (estado === 'denied') return;                   // respeta que lo haya negado
+  if (estado !== 'granted' && $('#onboard')?.classList.contains('show')) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => ubicarInicio({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+    () => { /* sin permiso o error: queda la ciudad actual, sin molestar */ },
+    { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+  );
+}
+
 // El punto azul "yo" sigue tu movimiento (solo tras activar la ubicación).
 function iniciarSeguimiento() {
   if (watchId !== null || !navigator.geolocation) return;
@@ -3218,6 +3252,9 @@ async function init() {
     actualizarBotonLimpiar();
     setTimeout(() => geocodificar(qInicial), 400);   // deja cargar el mapa primero
   }
+  // Al abrir: intenta ver dónde estás y mostrar esa zona (no siempre Temuco). Se
+  // salta si llegaste por un link a un lugar o con una búsqueda directa de la portada.
+  autoUbicarInicio(!!(lugarInicial && ciudadInicial) || !!qInicial);
   chequearRecordatorioAuto();   // aviso "¿sigues con tu auto?" si quedó de otro día
   // Refresco periódico SOLO si vale la pena: pestaña visible y vista del mapa activa.
   // (No reconstruir #lista en segundo plano ni mientras estás en "Mi auto"/"Favoritos".)
