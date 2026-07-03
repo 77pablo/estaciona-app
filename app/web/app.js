@@ -604,7 +604,7 @@ function initMap() {
       d.setAttribute('tabindex', '0');
       d.setAttribute('aria-label', 'Leyenda de disponibilidad — plegar o desplegar');
       d.setAttribute('aria-expanded', 'true');
-      d.innerHTML = '<b class="leyenda-tit">Disponibilidad</b><span><i class="dot verde"></i>Suele haber</span><span><i class="dot amarillo"></i>Puede costar</span><span><i class="dot rojo"></i>Difícil</span>';
+      d.innerHTML = '<b class="leyenda-tit">Disponibilidad</b><span><i class="dot verde"></i>Suele haber</span><span><i class="dot amarillo"></i>Puede tardar</span><span><i class="dot rojo"></i>Difícil</span>';
       // Plegable en pantallas chicas para no tapar el mapa: toca/Enter para abrir/cerrar.
       const toggle = () => { const pleg = d.classList.toggle('plegada'); d.setAttribute('aria-expanded', pleg ? 'false' : 'true'); };
       d.addEventListener('click', toggle);
@@ -846,7 +846,7 @@ function badgeDisp(p) {
     const t = nivel === 'verde' ? 'Cupo confirmado' : 'Reportan sin cupo';
     return `<span class="badge-disp ${nivel} gente" title="Reportado por la gente ${haceTxt(d.minAgo)}">${t} · ${haceTxt(d.minAgo)}</span>`;
   }
-  const txt = nivel === 'cerrado' ? horaAbre(p) : nivel === 'verde' ? 'Suele haber' : nivel === 'amarillo' ? 'Puede costar' : 'Difícil';
+  const txt = nivel === 'cerrado' ? horaAbre(p) : nivel === 'verde' ? 'Suele haber' : nivel === 'amarillo' ? 'Puede tardar' : 'Difícil';
   return `<span class="badge-disp ${nivel}">${txt}</span>`;
 }
 function renderLista() {
@@ -913,7 +913,6 @@ function renderLista() {
         <div class="card-meta">
           <span>${ic('walk', 12)} ${walkMin(p.dist)} min</span>
           <span class="car-eta" style="color:${trafColor}" title="En auto · tráfico est. ${traf.nivel}">${ic('car', 12)} ${carMin(p.dist)} min</span>
-          <span>${Math.round(p.dist)} m</span>
           ${rating}
           ${votos}
           ${badgeDisp(p)}
@@ -998,7 +997,7 @@ function abrirMapCard(id) {
   $('#lista').querySelectorAll('.card.sel').forEach((c) => c.classList.remove('sel'));  // colapsa la lista
   const d = p.disponibilidad, nivel = d.nivel;
   // Disponibilidad = mejor fuente (live > gente > estimación), igual que lista/detalle.
-  const tipoTxt = p.tipo === 'calle' ? 'En la calle' : (p.atributos?.techado ? 'Techado' : 'Privado');
+  const tipoTxt = p.tipo === 'calle' ? 'En la calle' : 'Privado';   // techado es un servicio, no un tipo
   const dist = Math.round(haversine(USER, p));   // DATA no trae dist (se calcula en la lista)
   const votos = p.votos ? `${ic('check', 12)} ${p.votos.up} confirman · ` : '';
   const el = $('#mapcard');
@@ -1049,10 +1048,10 @@ window.limpiarComparar = () => { comparar = []; renderLista(); actualizarBarraCo
 function precioCmp(p) {
   if (p.gratisAhora || esGratisReal(p)) return '<b class="free">Gratis</b>';
   if (esGratisClientes(p)) return 'Solo clientes';
-  if (p.precioHora == null) return 'Pago <small>s/dato</small>';
+  if (p.precioHora == null) return 'Pago <small>sin dato</small>';
   return `${p.verificado ? '' : '~'}${CLP(p.precioHora)}`;
 }
-const _estadoTxt = (nivel) => nivel === 'cerrado' ? 'Cerrado' : nivel === 'verde' ? 'Suele haber' : nivel === 'amarillo' ? 'Puede costar' : 'Difícil';
+const _estadoTxt = (nivel) => nivel === 'cerrado' ? 'Cerrado' : nivel === 'verde' ? 'Suele haber' : nivel === 'amarillo' ? 'Puede tardar' : 'Difícil';
 window.abrirComparar = () => {
   if (comparar.length < 2) { toast('Elige al menos 2 lugares para comparar'); return; }
   const items = comparar.map((id) => DATA.find((p) => p.id === id)).filter(Boolean);
@@ -1060,8 +1059,8 @@ window.abrirComparar = () => {
   const cols = items.length;
   const filas = [
     ['Precio/hr', items.map((p) => precioCmp(p))],
-    ['Disponible', items.map((p) => `<span class="badge-disp ${p.disponibilidad.nivel}">${_estadoTxt(p.disponibilidad.nivel)}</span>`)],
-    ['Ahora', items.map((p) => p.abierto ? '<b style="color:var(--green)">Abierto</b>' : '<b style="color:var(--red)">Cerrado</b>')],
+    ['Cupo', items.map((p) => badgeDisp(p))],
+    ['Horario', items.map((p) => p.abierto ? '<b style="color:var(--green)">Abierto</b>' : '<b style="color:var(--red)">Cerrado</b>')],
     ['Distancia', items.map((p) => `${Math.round(haversine(USER, p))} m`)],
     ['Caminando', items.map((p) => `${walkMin(haversine(USER, p))} min`)],
     ['En auto', items.map((p) => `${carMin(haversine(USER, p))} min`)],
@@ -1082,9 +1081,9 @@ window.abrirComparar = () => {
         ${items.map((p) => `<div class="cmp-head">${esc(p.nombre)}</div>`).join('')}
         ${filas.map(([lbl, celdas]) => `<div class="cmp-label">${lbl}</div>${celdas.map((c) => `<div class="cmp-cell">${c}</div>`).join('')}`).join('')}
         <div class="cmp-label"></div>
-        ${items.map((p) => `<div class="cmp-cell"><button class="btn btn-primary cmp-go" onclick="llevame('${p.id}')" aria-label="Cómo llegar a ${esc(p.nombre)}">${ic('compass', 14)}</button></div>`).join('')}
+        ${items.map((p) => `<div class="cmp-cell"><button class="btn btn-primary cmp-go" onclick="llevame('${p.id}')" aria-label="Cómo llegar a ${esc(p.nombre)}">${ic('compass', 14)} Ir</button></div>`).join('')}
       </div>
-      <p class="disclaimer">${ic('bulb', 15)} Los precios son estimados salvo los confirmados. Disponibilidad = estimación por hora. Confírmalo en el lugar.</p>
+      <p class="disclaimer">${ic('bulb', 15)} Los precios son estimados salvo los confirmados. El cupo es una estimación por hora, salvo reportes recientes de la gente. Confírmalo en el lugar.</p>
     </div>`;
   detalleAbiertoId = null;                          // no es un detalle individual
   cerrarMapCard();
@@ -1221,13 +1220,13 @@ function openDetalle(id) {
       </div>` : ''}
       <div id="curva-sec" class="curva-sec"></div>
       <div class="det-row"><span class="k">${ic('users')}</span>
-        <span>¿Encontraste cupo aquí?</span>
+        <span>¿Hay cupo ahora?</span>
         <span class="thumbs" style="margin-left:auto;display:flex;gap:6px">
-          <button class="vote-si" onclick="confirmarCupo('${p.id}',true)" aria-label="Sí, había cupo">${ic('check', 16)} Sí</button>
-          <button class="vote-no" onclick="confirmarCupo('${p.id}',false)" aria-label="No había cupo">${ic('x', 16)} No</button>
+          <button class="vote-si" onclick="confirmarCupo('${p.id}',true)" aria-label="Sí, hay cupo">${ic('check', 16)} Sí</button>
+          <button class="vote-no" onclick="confirmarCupo('${p.id}',false)" aria-label="No hay cupo">${ic('x', 16)} No</button>
         </span></div>
       ${p.votos ? `<div class="votos-info">${ic('users', 14)} Últimas 3 h: <b>${p.votos.up}</b> dijeron que había cupo · <b>${p.votos.down}</b> que no</div>` : ''}
-      <p class="disclaimer">${ic('bulb', 15)} ${p.verificado ? 'Precio confirmado con fuente oficial <b>a junio 2026</b>. Las tarifas se reajustan — confírmalo si ha pasado tiempo.' : p.reportado ? '<b>Lugar aportado por la comunidad, sin verificar.</b> Confirma la tarifa y los datos en el lugar.' : '<b>Precio estimado, sin verificar.</b> Es una referencia generada automáticamente — confirma la tarifa real en el lugar.'}</p>
+      <p class="disclaimer">${ic('bulb', 15)} ${p.verificado ? 'Precio <b>confirmado con fuente oficial</b>. Las tarifas se reajustan — confírmalo en el lugar.' : p.reportado ? '<b>Lugar aportado por la comunidad, sin verificar.</b> Confirma la tarifa y los datos en el lugar.' : '<b>Precio estimado, sin verificar.</b> Es una referencia generada automáticamente — confirma la tarifa real en el lugar.'}</p>
       <button class="reporte-link" onclick="reportarProblema('${p.id}')">${ic('flag', 13)} ¿Algo está mal? Reportar</button>
 
       <div class="fotos-sec">
@@ -1745,7 +1744,7 @@ function precioTextoCorto(p) {
   if (esGratisClientes(p)) return 'Gratis para clientes';
   if (p.gratisAhora || esGratisReal(p)) return 'Gratis';
   if (p.precioHora == null) return '';
-  return (p.verificado ? CLP(p.precioHora) + '/hr' : '~' + CLP(p.precioHora) + '/hr aprox.');
+  return (p.verificado ? CLP(p.precioHora) + '/hr' : '~' + CLP(p.precioHora) + '/hr');
 }
 // Comparte con un helper único: Web Share nativo (celular) o copiar al portapapeles.
 function compartirTexto(texto, url) {
@@ -2370,7 +2369,7 @@ let _sugSeq = 0;           // descarta respuestas viejas (búsquedas concurrente
 
 // Precio corto para una sugerencia (mismo criterio honesto que el resto de la app).
 function precioSug(r) {
-  if (r.gratisInfo && /cliente/i.test(r.gratisInfo)) return '🛒 Solo clientes';
+  if (r.gratisInfo && /cliente/i.test(r.gratisInfo)) return ic('cart', 12) + ' Solo clientes';
   if (r.precioHora === 0) return 'Gratis';
   if (r.precioHora == null) return 'Pago';
   return (r.verificado ? '' : '~') + CLP(r.precioHora) + '/hr';
@@ -2697,7 +2696,7 @@ function abrirFiltros() {
       <p class="f-label" id="f-otros-lbl">Otros</p>
       <div class="opts" id="f-otros" role="group" aria-labelledby="f-otros-lbl">
         <button type="button" data-k="abierto" class="${chip(f.abierto)}" aria-pressed="${press(f.abierto)}">${ic('clock', 14)} Abierto ahora</button>
-        <button type="button" data-k="soloPublicos" class="${chip(f.soloPublicos)}" aria-pressed="${press(f.soloPublicos)}">${ic('check', 14)} Solo públicos</button>
+        <button type="button" data-k="soloPublicos" class="${chip(f.soloPublicos)}" aria-pressed="${press(f.soloPublicos)}">${ic('users', 14)} Solo públicos</button>
         <button type="button" data-k="verificado" class="${chip(f.verificado)}" aria-pressed="${press(f.verificado)}">${ic('check', 14)} Precio confirmado</button>
       </div>
       <p class="f-hint">"Solo públicos" oculta hospitales, colegios y otros de uso restringido. "Precio confirmado" muestra solo tarifas verificadas.</p>

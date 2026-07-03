@@ -15,7 +15,7 @@ import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
-import { snapshotCiudad, shapeFichas, curvaDisponibilidad, idExiste, buscarFichas, resolverDisponibilidad, FRESCA_MIN } from './engine.js';
+import { snapshotCiudad, shapeFichas, curvaDisponibilidad, idExiste, buscarFichas, resolverDisponibilidad, FRESCA_MIN, conteoPorCiudad } from './engine.js';
 import { liveOcupacionMapa } from './ocupacion-live.js';
 import { geocodificar, geocodificarInverso, geocoderInfo } from './geocoder.js';
 import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } from './reportes.js';
@@ -34,6 +34,13 @@ import { ready as dbReady, backend as dbBackend } from './db.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = join(__dirname, '..', '..', 'web');
 const PORT = process.env.PORT || 4000;
+
+// Sincroniza el contador de cada ciudad del selector con las fichas realmente
+// servidas (así "Temuco (39)" coincide con "39 en Temuco" de la lista).
+{
+  const conteo = conteoPorCiudad();
+  for (const z of ZONAS) { const n = conteo[z.nombre]; if (n != null) z.cantidad = n; }
+}
 
 // Key de MapTiler: la variable de entorno (Railway) manda; si no, se lee del
 // archivo local `app/backend/maptiler.key` (ignorado por git) para correr en

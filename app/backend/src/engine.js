@@ -259,6 +259,17 @@ export const UMBRAL_SENAL = 0.5;
 // `base`  = disponibilidad estimada de shapeFichas.
 // `senal` = senalReciente()[id] (o undefined) — votos ponderados por frescura.
 // `live`  = { libres, minAgo, umbralBajo? } de un operador (o null/undefined hoy).
+// Conteo REAL de fichas base por ciudad (incluye TODO lo que se sirve por
+// defecto: dataset + calles con parquímetro + fichas extra). Sirve para que el
+// contador del selector de ciudades coincida con lo que muestra la lista (antes
+// ZONAS traía un `cantidad` horneado que dejaba fuera las calles → el selector
+// decía "Temuco (34)" mientras la lista mostraba "39 en Temuco").
+export function conteoPorCiudad() {
+  const m = {};
+  for (const f of FICHAS) if (f.ciudad) m[f.ciudad] = (m[f.ciudad] || 0) + 1;
+  return m;
+}
+
 export function resolverDisponibilidad(base, senal, live) {
   // 1) Operador en vivo: dato real de cupos.
   if (live && Number.isFinite(live.libres)) {
