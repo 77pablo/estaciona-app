@@ -154,10 +154,10 @@ function ic(name, size = 18) {
   return `<svg class="ic-svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 }
 const walkMin = (m) => Math.max(1, Math.round(m / 80));
-// Tráfico ESTIMADO según la hora local (no es tráfico en vivo). Devuelve la
+// Tráfico ESTIMADO según la hora de Chile (no es tráfico en vivo). Devuelve la
 // velocidad urbana promedio y una etiqueta honesta. Hora punta = más lento.
 function trafico() {
-  const d = new Date(); const h = d.getHours(); const dia = d.getDay();
+  const { h, dia } = horaDiaChile(new Date());
   if (dia === 0) return { kmh: 32, nivel: 'fluido' };                 // domingo
   if (h < 7 || h >= 22) return { kmh: 35, nivel: 'fluido' };          // noche
   if ((h >= 8 && h <= 9) || (h >= 13 && h <= 14) || (h >= 18 && h <= 19))
@@ -291,7 +291,8 @@ function costoVentana(precioHora, gratisInfo, horario, inicioMs, minutos) {
   let restante = minutos, cursor = new Date(inicioMs), costo = 0, minPag = 0;
   while (restante > 0.01) {
     const min = Math.min(restante, 60 - cursor.getMinutes());
-    if (pagaEnHora(precioHora, gratisInfo, horario, cursor.getHours(), cursor.getDay())) { costo += precioHora * (min / 60); minPag += min; }
+    const { h, dia } = horaDiaChile(cursor);   // hora chilena real (no la del equipo)
+    if (pagaEnHora(precioHora, gratisInfo, horario, h, dia)) { costo += precioHora * (min / 60); minPag += min; }
     restante -= min;
     cursor = new Date(cursor.getTime() + min * 60000);
   }
@@ -1083,6 +1084,19 @@ function minutosChile() {
     const [h, m] = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()).split(':').map(Number);
     return h * 60 + m;
   } catch { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
+}
+// Hora (0-23) y día de semana (0=dom) en horario de Chile para un instante dado,
+// sin importar la zona del equipo. Lo usan el costo y el tráfico estimados para
+// aplicar horas gratis / ventana de pago / hora punta a la hora chilena real
+// (Chile está a un nº entero de horas de UTC, así que el minuto-de-hora coincide
+// con la hora local: solo hay que corregir la HORA y el DÍA).
+function horaDiaChile(d) {
+  try {
+    const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Santiago', hour: '2-digit', hour12: false, weekday: 'short' }).formatToParts(d);
+    const h = +p.find((x) => x.type === 'hour').value % 24;
+    const dia = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[p.find((x) => x.type === 'weekday').value];
+    return { h, dia };
+  } catch { return { h: d.getHours(), dia: d.getDay() }; }
 }
 // Primer rango "HH:MM–HH:MM" del horario, en minutos { desde, hasta }.
 function rangoHM(txt) {
