@@ -831,6 +831,24 @@ function actualizarBadgeFiltros() {
 }
 
 // --- Lista ------------------------------------------------------------------
+// "hace X" legible para la frescura de un reporte de cupo de la gente.
+function haceTxt(min) {
+  if (!(min > 0)) return 'recién';
+  if (min < 60) return `hace ${min} min`;
+  return `hace ${Math.floor(min / 60)} h`;
+}
+// Badge compacto de disponibilidad (tarjeta/mapa) según la FUENTE resuelta por el
+// backend: operador en vivo > reporte fresco de la gente > estimación (semáforo).
+function badgeDisp(p) {
+  const d = p.disponibilidad || {}, nivel = d.nivel || 'cerrado';
+  if (d.fuente === 'live') return `<span class="badge-disp ${nivel} live" title="Cupos en vivo del operador">${esc(d.label || '')} · en vivo</span>`;
+  if (d.fuente === 'gente') {
+    const t = nivel === 'verde' ? 'Cupo confirmado' : 'Reportan sin cupo';
+    return `<span class="badge-disp ${nivel} gente" title="Reportado por la gente ${haceTxt(d.minAgo)}">${t} · ${haceTxt(d.minAgo)}</span>`;
+  }
+  const txt = nivel === 'cerrado' ? horaAbre(p) : nivel === 'verde' ? 'Suele haber' : nivel === 'amarillo' ? 'Puede costar' : 'Difícil';
+  return `<span class="badge-disp ${nivel}">${txt}</span>`;
+}
 function renderLista() {
   const lista = listaFiltrada();
   updateMarkers(lista);
@@ -875,11 +893,8 @@ function renderLista() {
   const trafColor = traf.nivel === 'fluido' ? 'var(--green)' : traf.nivel === 'medio' ? 'var(--amber)' : 'var(--red)';
   $('#lista').innerHTML = lista.map((p) => {
     const d = p.disponibilidad || {}, nivel = d.nivel || 'cerrado';   // defensivo: nunca tumbar la lista
-    // Disponibilidad = estimación honesta tipo semáforo (NO ocupación real en vivo).
-    // Mismo lenguaje que el detalle ("Suele haber/Puede costar/Difícil"), versión corta.
-    const estadoTxt = nivel === 'cerrado' ? horaAbre(p)   // cerrado → "Abre HH:MM" (si hay horario)
-      : nivel === 'verde' ? 'Suele haber'
-      : nivel === 'amarillo' ? 'Puede costar' : 'Difícil';
+    // Disponibilidad: la MEJOR fuente (operador en vivo > reporte fresco de la
+    // gente > estimación semáforo). badgeDisp(p) resuelve el texto y el estilo.
     // Confirmaciones REALES de la comunidad (cupo confirmado en las últimas 3 h).
     // Check verde — NO una estrella dorada (eso parecería un rating inventado).
     const votos = p.votos ? `<span class="card-rate" title="${p.votos.up} confirmaron cupo (últimas 3 h)">${ic('check', 12)} ${p.votos.up}</span>` : '';
@@ -901,11 +916,15 @@ function renderLista() {
           <span>${Math.round(p.dist)} m</span>
           ${rating}
           ${votos}
-          <span class="badge-disp ${nivel}">${estadoTxt}</span>
+          ${badgeDisp(p)}
         </div>
         ${dispSeg(nivel)}
         <div class="card-expand">
           ${featuresHTML(p)}
+          ${nivel !== 'cerrado' ? `<div class="card-cupo"><span class="card-cupo-q">¿Hay cupo ahora?</span><span class="thumbs">
+            <button class="vote-si" onclick="event.stopPropagation();confirmarCupo('${p.id}',true)" aria-label="Sí, hay cupo en ${esc(p.nombre)}">${ic('check', 15)} Sí</button>
+            <button class="vote-no" onclick="event.stopPropagation();confirmarCupo('${p.id}',false)" aria-label="No hay cupo en ${esc(p.nombre)}">${ic('x', 15)} No</button>
+          </span></div>` : ''}
           <div class="card-actions">
             <button class="btn-reservar" onclick="event.stopPropagation();llevame('${p.id}')">${ic('compass', 16)} Cómo llegar</button>
             <button class="card-vermas" onclick="event.stopPropagation();avisarme('${p.id}')">${ic('clock', 15)} Avísame</button>
@@ -978,9 +997,7 @@ function abrirMapCard(id) {
   panselect(p);                                                  // centra el mapa + resalta el pin
   $('#lista').querySelectorAll('.card.sel').forEach((c) => c.classList.remove('sel'));  // colapsa la lista
   const d = p.disponibilidad, nivel = d.nivel;
-  // Estimación semáforo honesta (NO ocupación real en vivo), igual que la lista/detalle.
-  const estadoTxt = nivel === 'cerrado' ? 'Cerrado'
-    : nivel === 'verde' ? 'Suele haber' : nivel === 'amarillo' ? 'Puede costar' : 'Difícil';
+  // Disponibilidad = mejor fuente (live > gente > estimación), igual que lista/detalle.
   const tipoTxt = p.tipo === 'calle' ? 'En la calle' : (p.atributos?.techado ? 'Techado' : 'Privado');
   const dist = Math.round(haversine(USER, p));   // DATA no trae dist (se calcula en la lista)
   const votos = p.votos ? `${ic('check', 12)} ${p.votos.up} confirman · ` : '';
@@ -993,7 +1010,7 @@ function abrirMapCard(id) {
     <div class="mapcard-body">
       <div class="mapcard-precio">${precioGrande(p)}</div>
       <div class="mapcard-disp">
-        <div class="mapcard-disp-top"><span>Disponibilidad</span><span class="badge-disp ${nivel}">${estadoTxt}</span></div>
+        <div class="mapcard-disp-top"><span>Disponibilidad</span>${badgeDisp(p)}</div>
         ${dispSeg(nivel)}
         <div class="mapcard-meta">${votos}${dist} m · ${tipoTxt}</div>
       </div>
@@ -1127,9 +1144,17 @@ function lineaHorario(p) {
 // --- Detalle ----------------------------------------------------------------
 function lineaDisponibilidad(p) {
   const d = p.disponibilidad, nivel = d.nivel;
+  // La píldora lleva el color del semáforo (lectura de un vistazo); el caption a la
+  // derecha dice HONESTAMENTE de dónde sale el dato (operador / gente / estimación).
+  if (d.fuente === 'live') {
+    return `<span class="disp-pill ${nivel} live"><span class="dot ${nivel}"></span>${esc(d.label || '')}</span> <small class="disp-live"><span class="live-dot"></span>en vivo · oficial</small>`;
+  }
+  if (d.fuente === 'gente') {
+    const personas = (d.up || 0) + (d.down || 0);
+    const quien = personas ? ` · ${personas} ${personas === 1 ? 'persona' : 'personas'}` : '';
+    return `<span class="disp-pill ${nivel} gente"><span class="dot ${nivel}"></span>${esc(d.label || '')}</span> <small class="disp-gente">· reportado ${haceTxt(d.minAgo)}${quien}</small>`;
+  }
   const etiqueta = nivel === 'cerrado' ? 'Cerrado ahora' : d.label;
-  // La etiqueta va en una píldora con el color del semáforo (lectura de un vistazo);
-  // el "· disponibilidad estimada" queda como caption honesto, fuera de la píldora.
   const sub = nivel === 'cerrado' ? '' : ' <small>· disponibilidad estimada</small>';
   return `<span class="disp-pill ${nivel}"><span class="dot ${nivel}"></span>${etiqueta}</span>${sub}`;
 }

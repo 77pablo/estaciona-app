@@ -327,6 +327,21 @@ main, .view { flex: 1; min-height: 0; }
 .badge-disp.amarillo { background: var(--amber-bg); color: var(--amber); }
 .badge-disp.rojo { background: rgba(244,86,91,.15); color: var(--red); }
 .badge-disp.cerrado { background: rgba(138,144,156,.16); color: var(--muted); }
+/* Fuente REAL (reporte de la gente / operador en vivo): anillo fino en el color
+   del nivel para que resalte sobre la mera estimación. */
+.badge-disp.gente, .badge-disp.live { box-shadow: inset 0 0 0 1px currentColor; }
+
+/* Señal de cupo por fuente (detalle) */
+.disp-live { color: var(--green); font-weight: 700; }
+.disp-gente { color: var(--muted); }
+.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 4px; vertical-align: middle; animation: pulseLive 1.5s ease-in-out infinite; }
+@keyframes pulseLive { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+
+/* Voto de cupo de un toque, dentro de la tarjeta expandida (crowdsourcing). */
+.card-cupo { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.card-cupo-q { font-weight: 600; }
+.card-cupo .thumbs { margin-left: auto; }
 
 /* Barra de disponibilidad: VISUAL del semáforo honesto (no un conteo inventado) */
 /* Indicador de disponibilidad: 3 segmentos según NIVEL (no un % de cupos). */
