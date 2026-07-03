@@ -1779,6 +1779,16 @@ window.compartir = (id) => {
   const texto = `🅿️ ${p.nombre || 'Estacionamiento'}${p.direccion ? ' · ' + p.direccion : ''}${precio ? '\n' + precio : ''}\nMíralo en Estaciona 👉 ${url}`;
   compartirTexto(texto, url);
 };
+// Comparte DÓNDE dejaste el auto: un link de Google Maps a las coordenadas exactas
+// (quien lo reciba navega directo al punto, tenga o no la app) + texto claro. Es
+// más útil que el deep-link a la ficha para que alguien te encuentre el auto.
+window.compartirAuto = () => {
+  const a = LS.getAuto();
+  if (!a || !Number.isFinite(a.lat) || !Number.isFinite(a.lng)) { toast('No hay un auto guardado'); return; }
+  const maps = `https://www.google.com/maps/search/?api=1&query=${a.lat},${a.lng}`;
+  const donde = (a.nombre || 'Estacionamiento') + (a.direccion ? ` · ${a.direccion}` : '');
+  compartirTexto(`🚗 Dejé el auto en ${donde}.\nCómo llegar 👉 ${maps}`, maps);
+};
 // Invitar a un amigo / difundir la app (crecimiento).
 window.compartirApp = () => {
   const url = `${location.origin}/app`;
@@ -2051,7 +2061,7 @@ function renderMiAuto() {
     <div id="mini-map" class="mini-map" aria-label="Mapa con la ubicación de tu auto"></div>
     <div class="ma-acciones">
       <button class="btn btn-primary" onclick="llevame('${a.id}')">${ic('compass', 17)} Volver a mi auto</button>
-      <button class="btn btn-second" onclick="compartir('${a.id}')">${ic('share', 16)} Compartir ubicación</button>
+      <button class="btn btn-second" onclick="compartirAuto()">${ic('share', 16)} Compartir dónde lo dejé</button>
       <button class="btn btn-ghost" onclick="terminarAuto()">${ic('check', 16)} Terminar</button>
     </div>${gastoHTML()}${historialHTML()}</div>`;
   crearMiniMapa(a);
