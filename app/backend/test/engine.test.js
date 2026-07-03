@@ -1,7 +1,7 @@
 // Tests del motor de disponibilidad y de la integridad de los datos.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { demandaBaseDe, shapeFichas, curvaDisponibilidad, getEstacionamientos } from '../src/engine.js';
+import { demandaBaseDe, shapeFichas, curvaDisponibilidad, getEstacionamientos, resolverDisponibilidad, FRESCA_MIN } from '../src/engine.js';
 
 // ── Prior de demanda (reemplazó al 0.55 uniforme) ──────────────────────────
 test('demandaBaseDe respeta el valor explícito', () => {
@@ -40,7 +40,64 @@ test('shapeFichas: cada ficha trae disponibilidad válida', () => {
     assert.ok(p.disponibilidad, 'falta disponibilidad');
     assert.ok(niveles.has(p.disponibilidad.nivel), `nivel inválido: ${p.disponibilidad.nivel}`);
     assert.equal(typeof p.disponibilidad.label, 'string');
+    assert.equal(p.disponibilidad.fuente, 'estimacion');
   }
+});
+
+// ── Resolutor de disponibilidad: live > gente fresca > estimación ──────────
+const baseEst = (nivel) => ({ fuente: 'estimacion', nivel, label: 'x' });
+const hace = (min) => Date.now() - min * 60000;
+
+test('resolver: sin señal ni live → queda la estimación', () => {
+  const b = baseEst('amarillo');
+  assert.deepEqual(resolverDisponibilidad(b, undefined, null), b);
+});
+
+test('resolver: reporte fresco "hay cupo" manda sobre la estimación', () => {
+  const r = resolverDisponibilidad(baseEst('rojo'), { up: 3, down: 0, wUp: 2.5, wDown: 0, ultimoTs: hace(2) }, null);
+  assert.equal(r.fuente, 'gente');
+  assert.equal(r.nivel, 'verde');
+  assert.ok(r.minAgo >= 0 && r.minAgo <= 5);
+});
+
+test('resolver: reporte fresco "sin cupo" → rojo', () => {
+  const r = resolverDisponibilidad(baseEst('verde'), { up: 0, down: 2, wUp: 0, wDown: 1.8, ultimoTs: hace(1) }, null);
+  assert.equal(r.fuente, 'gente');
+  assert.equal(r.nivel, 'rojo');
+});
+
+test('resolver: UN voto fresco y claro alcanza para mandar', () => {
+  const r = resolverDisponibilidad(baseEst('rojo'), { up: 1, down: 0, wUp: 0.9, wDown: 0, ultimoTs: hace(3) }, null);
+  assert.equal(r.fuente, 'gente');
+  assert.equal(r.nivel, 'verde');
+});
+
+test('resolver: reporte viejo (fuera de la ventana) NO manda', () => {
+  const r = resolverDisponibilidad(baseEst('amarillo'), { up: 3, down: 0, wUp: 2, wDown: 0, ultimoTs: hace(FRESCA_MIN + 10) }, null);
+  assert.equal(r.fuente, 'estimacion');
+});
+
+test('resolver: señal débil o en conflicto NO manda', () => {
+  const r = resolverDisponibilidad(baseEst('amarillo'), { up: 1, down: 1, wUp: 0.5, wDown: 0.5, ultimoTs: hace(1) }, null);
+  assert.equal(r.fuente, 'estimacion');
+});
+
+test('resolver: cerrado por horario NO lo "abre" un reporte', () => {
+  const r = resolverDisponibilidad(baseEst('cerrado'), { up: 5, down: 0, wUp: 4, wDown: 0, ultimoTs: hace(1) }, null);
+  assert.equal(r.nivel, 'cerrado');
+});
+
+test('resolver: live de operador manda sobre gente y estimación', () => {
+  const r = resolverDisponibilidad(baseEst('rojo'), { up: 5, down: 0, wUp: 4, wDown: 0, ultimoTs: hace(1) }, { libres: 40, minAgo: 1 });
+  assert.equal(r.fuente, 'live');
+  assert.equal(r.nivel, 'verde');
+  assert.equal(r.libres, 40);
+});
+
+test('resolver: live con 0 libres → rojo "sin cupos"', () => {
+  const r = resolverDisponibilidad(baseEst('verde'), undefined, { libres: 0 });
+  assert.equal(r.fuente, 'live');
+  assert.equal(r.nivel, 'rojo');
 });
 
 // ── Curva "mejor hora" ─────────────────────────────────────────────────────

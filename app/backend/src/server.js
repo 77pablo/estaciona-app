@@ -15,11 +15,12 @@ import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
-import { snapshotCiudad, shapeFichas, curvaDisponibilidad, idExiste, buscarFichas } from './engine.js';
+import { snapshotCiudad, shapeFichas, curvaDisponibilidad, idExiste, buscarFichas, resolverDisponibilidad, FRESCA_MIN } from './engine.js';
+import { liveOcupacionMapa } from './ocupacion-live.js';
 import { geocodificar, geocodificarInverso, geocoderInfo } from './geocoder.js';
 import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } from './reportes.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
-import { registrarVoto, tallyReciente, contarVotos } from './votos.js';
+import { registrarVoto, tallyReciente, senalReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
 import { registrarResena, resumenResenas, resenasDe, resenasRecientes, eliminarResena } from './resenas.js';
 import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto, validarFoto } from './fotos.js';
@@ -192,11 +193,13 @@ function adminFallo(req) {
 // Son iguales para todas las ciudades y requests, y su cálculo recorre tablas
 // completas → se cachean unos segundos para que un flood de requests al home NO
 // dispare un escaneo por cada uno (amplificación de DoS). Se refresca al vencer.
-let _agg = { t: 0, tally: null, com: null, dest: null, res: null };
+let _agg = { t: 0, tally: null, com: null, dest: null, res: null, senal: null };
 async function agregados() {
   const ahora = Date.now();
   if (_agg.com && ahora - _agg.t < 15000) return _agg;   // válido 15 s
-  _agg = { t: ahora, tally: await tallyReciente(3), com: await resumenAportes(), dest: await mapaDestacados(), res: await resumenResenas() };
+  // `senal` = votos ponderados por frescura (capa "en vivo" de la gente); `tally`
+  // = conteo de 3 h (contexto histórico que se sigue mostrando).
+  _agg = { t: ahora, tally: await tallyReciente(3), senal: await senalReciente(FRESCA_MIN), com: await resumenAportes(), dest: await mapaDestacados(), res: await resumenResenas() };
   return _agg;
 }
 
@@ -328,12 +331,15 @@ const server = http.createServer(async (req, res) => {
       const base = snapshotCiudad(ciudad);                       // solo esa ciudad (filtra antes de dar forma)
       const reportados = shapeFichas(await lugaresDe(ciudad));   // lugares aportados por la gente
       const lista = [...base, ...reportados];
-      const { tally, com, dest, res: resenasAgg } = await agregados();  // votos + precios/comentarios + destacados + reseñas (cacheados)
+      const { tally, senal, com, dest, res: resenasAgg } = await agregados();  // votos + señal fresca + precios/comentarios + destacados + reseñas (cacheados)
+      const live = await liveOcupacionMapa(lista.map((e) => e.id));   // {} hoy — enchufe de operadores (B2B)
       for (const e of lista) {
-        if (tally[e.id]) e.votos = tally[e.id];
+        if (tally[e.id]) e.votos = tally[e.id];   // contexto 3 h (se sigue mostrando)
         if (com[e.id]) e.comunidad = com[e.id];
         if (resenasAgg[e.id]) e.resena = resenasAgg[e.id];   // { promedio, n } de reseñas con estrellas
         if (dest[e.id]) { e.destacado = true; e.destacadoEtiqueta = dest[e.id].etiqueta; e.destacadoPremium = dest[e.id].premium; e.destacadoTagline = dest[e.id].tagline; }
+        // Disponibilidad final: la mejor fuente (live > gente fresca > estimación).
+        e.disponibilidad = resolverDisponibilidad(e.disponibilidad, senal[e.id], live[e.id]);
       }
       // `zonas` (308 ciudades, ~29 KB) y `regiones` solo se necesitan la 1ª vez
       // (poblar el selector). El frontend pide `&init=1` solo entonces; en los

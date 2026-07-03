@@ -60,3 +60,24 @@ export async function tallyReciente(horas = 3) {
   for (const r of rows) map[r.id] = { up: r.up, down: r.down };
   return map;
 }
+
+// Señal de cupo PONDERADA POR FRESCURA (últimos `ventanaMin` min). Un voto
+// reciente pesa mucho más que uno viejo (peso lineal 1→0 dentro de la ventana),
+// porque el cupo cambia rápido. Devuelve por id: conteos crudos { up, down },
+// el voto más nuevo (ultimoTs) y un score ponderado { wUp, wDown }. Con eso,
+// resolverDisponibilidad() decide si el reporte de la gente "manda" sobre el
+// semáforo estimado. Es la base de la capa en vivo tipo Waze.
+export async function senalReciente(ventanaMin = 45) {
+  await migrar();
+  const desde = Date.now() - ventanaMin * 60000;
+  const rows = await all('SELECT id, ok, ts FROM votos WHERE ts >= ? ORDER BY ts DESC', [desde]);
+  const ahora = Date.now();
+  const map = {};
+  for (const r of rows) {
+    const peso = Math.max(0, 1 - (ahora - r.ts) / 60000 / ventanaMin);   // 1 (recién) → 0 (borde)
+    const m = map[r.id] || (map[r.id] = { up: 0, down: 0, wUp: 0, wDown: 0, ultimoTs: 0 });
+    if (r.ok) { m.up++; m.wUp += peso; } else { m.down++; m.wDown += peso; }
+    if (r.ts > m.ultimoTs) m.ultimoTs = r.ts;
+  }
+  return map;
+}

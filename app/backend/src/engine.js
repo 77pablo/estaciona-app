@@ -235,10 +235,48 @@ export function shapeFichas(fichas) {
         : nivel === 'amarillo' ? 'Puede costar' : 'Difícil ahora';
       return {
         ...base,
-        disponibilidad: { modo: 'estimacion', nivel, label },
+        disponibilidad: { fuente: 'estimacion', nivel, label },
       };
     }
   });
+}
+
+// Umbral de FRESCURA del reporte de la gente (minutos): un reporte más nuevo que
+// esto puede mandar sobre la estimación; más viejo, el cupo ya pudo cambiar
+// demasiado para confiar en él como "cupo ahora".
+export const FRESCA_MIN = 45;
+// Umbral del score ponderado para que la señal de la gente MANDE. 0.5 permite que
+// UN reporte reciente y claro alcance (un voto recién dado pesa ~1), pero exige
+// corroboración si el único voto ya tiene rato, o si hay "hay"/"no hay" en conflicto.
+export const UMBRAL_SENAL = 0.5;
+
+// Resuelve la disponibilidad final tomando la MEJOR fuente disponible, en orden:
+//   1) live       → ocupación REAL de un operador (B2B). Manda siempre.
+//   2) gente      → reporte fresco y claro de usuarios (crowdsourcing). Manda
+//                   sobre la estimación, salvo que el horario lo dé por cerrado
+//                   (no inventamos que abrió).
+//   3) estimacion → el semáforo por hora/día (fallback actual, siempre presente).
+// `base`  = disponibilidad estimada de shapeFichas.
+// `senal` = senalReciente()[id] (o undefined) — votos ponderados por frescura.
+// `live`  = { libres, minAgo, umbralBajo? } de un operador (o null/undefined hoy).
+export function resolverDisponibilidad(base, senal, live) {
+  // 1) Operador en vivo: dato real de cupos.
+  if (live && Number.isFinite(live.libres)) {
+    const nivel = live.libres <= 0 ? 'rojo' : live.libres < (live.umbralBajo ?? 5) ? 'amarillo' : 'verde';
+    return { fuente: 'live', nivel, label: live.libres > 0 ? `${live.libres} cupos libres` : 'Sin cupos ahora', libres: live.libres, minAgo: Math.max(0, Math.round(live.minAgo ?? 0)) };
+  }
+  // 2) Reporte fresco de la gente (no aplica si el horario lo da por cerrado).
+  if (base.nivel !== 'cerrado' && senal && senal.ultimoTs) {
+    const minAgo = Math.round((Date.now() - senal.ultimoTs) / 60000);
+    if (minAgo >= 0 && minAgo <= FRESCA_MIN) {
+      const score = (senal.wUp || 0) - (senal.wDown || 0);   // >0 tiende a "hay", <0 a "no hay"
+      if (score >= UMBRAL_SENAL) return { fuente: 'gente', nivel: 'verde', label: 'Cupo confirmado', minAgo, up: senal.up || 0, down: senal.down || 0 };
+      if (score <= -UMBRAL_SENAL) return { fuente: 'gente', nivel: 'rojo', label: 'Reportan sin cupo', minAgo, up: senal.up || 0, down: senal.down || 0 };
+      // señal débil o en conflicto → no manda: sigue la estimación.
+    }
+  }
+  // 3) Estimación.
+  return base;
 }
 
 // Curva de disponibilidad estimada por hora (beneficio Pro: "mejor hora para ir").
