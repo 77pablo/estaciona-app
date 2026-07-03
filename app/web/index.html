@@ -7,6 +7,13 @@
   <title>Estaciona — estacionamiento en todo Chile</title>
   <!-- Favicon: emoji 🅿️ como SVG en data-URI (sin archivos extra). -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🅿️</text></svg>" />
+  <!-- PWA: instalable en el celular + funciona sin señal (ver sw.js). -->
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Estaciona" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <!-- Color de barra del navegador (app siempre oscura, tema movilidad urbana). -->
   <meta name="theme-color" content="#0d0f14" />
   <!-- Pistas de carga: abrir conexión a los orígenes externos antes de pedirles

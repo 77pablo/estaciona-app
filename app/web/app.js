@@ -2959,3 +2959,9 @@ async function init() {
   });
 }
 init();
+
+// PWA: registra el service worker (app instalable + funciona sin señal). Es
+// progresivo — si el navegador no lo soporta o falla, la app anda igual.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}
