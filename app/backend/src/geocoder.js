@@ -67,9 +67,10 @@ function adaptadorNominatim(base, key) {
 
 // MapTiler Geocoding API (usa la misma MAPTILER_KEY del mapa).
 function adaptadorMapTiler(key) {
+  const k = encodeURIComponent(key);
   return {
     async geocodificar(q) {
-      const j = await pedir(`https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json?key=${key}&country=cl&language=es&limit=1`, { 'User-Agent': UA });
+      const j = await pedir(`https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json?key=${k}&country=cl&language=es&limit=1`, { 'User-Agent': UA });
       const f = j?.features?.[0];
       if (!f || !Array.isArray(f.center)) return null;
       const lng = num(f.center[0]), lat = num(f.center[1]);
@@ -77,7 +78,7 @@ function adaptadorMapTiler(key) {
       return { lat, lng, nombre: (f.text || f.place_name || q) };
     },
     async inverso(lat, lng) {
-      const j = await pedir(`https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${key}&language=es`, { 'User-Agent': UA });
+      const j = await pedir(`https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${k}&language=es`, { 'User-Agent': UA });
       const f = j?.features?.[0];
       if (!f) return null;
       return { direccion: (f.place_name || f.text || '').split(',').slice(0, 2).join(',').trim() };

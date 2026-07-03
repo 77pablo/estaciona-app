@@ -254,13 +254,15 @@ async function serveStatic(req, res, urlPath) {
     // Si no cambió → 304 sin cuerpo (no re-descarga app.js/styles.css). Nunca queda
     // pegado con una versión vieja tras un deploy (el ETag cambia con el mtime).
     if (req.headers['if-none-match'] === e.etag) {
-      res.writeHead(304, { 'ETag': e.etag, 'Cache-Control': 'no-cache' });
+      res.writeHead(304, { 'ETag': e.etag, 'Cache-Control': 'no-cache', 'Vary': 'Accept-Encoding' });
       res.end();
       return;
     }
-    const base = { 'Content-Type': e.type, 'Cache-Control': 'no-cache', 'ETag': e.etag };
+    // Vary SIEMPRE (no solo en la rama gzip): un proxy compartido no debe servir una
+    // variante gzip a un cliente que no la aceptó (ni al revés).
+    const base = { 'Content-Type': e.type, 'Cache-Control': 'no-cache', 'ETag': e.etag, 'Vary': 'Accept-Encoding' };
     if (res._acceptGzip && e.gz) {
-      res.writeHead(200, { ...base, 'Content-Encoding': 'gzip', 'Content-Length': e.gz.length, 'Vary': 'Accept-Encoding' });
+      res.writeHead(200, { ...base, 'Content-Encoding': 'gzip', 'Content-Length': e.gz.length });
       res.end(e.gz);
     } else {
       res.writeHead(200, { ...base, 'Content-Length': e.raw.length });
@@ -282,6 +284,10 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Frame-Options', 'DENY');
   res._acceptGzip = /\bgzip\b/.test(req.headers['accept-encoding'] || '');   // ¿el navegador acepta gzip?
+  // HEAD = como GET pero sin cuerpo (health-checkers, proxies, algunos crawlers).
+  // Corremos la ruta GET y silenciamos el body (las cabeceras, incl. Content-Length,
+  // salen igual — es el comportamiento correcto de HEAD).
+  if (req.method === 'HEAD') { req.method = 'GET'; const fin = res.end.bind(res); res.end = (_c, ...a) => fin('', ...a); }
   //  · HSTS             → fuerza HTTPS un año (Railway sirve TLS); evita downgrade/MITM
   //  · Permissions-Policy → solo geolocalización (la app la usa); cámara/mic/pago off
   //  · CSP              → whitelist de orígenes reales; bloquea exfiltración/framing/base-hijack
@@ -553,7 +559,7 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, { ok: true, db: dbReady });
     }
     if (req.method === 'GET') return await serveStatic(req, res, url.pathname);
-    res.writeHead(405); res.end('Método no permitido');
+    res.writeHead(405, { 'Allow': 'GET, POST, HEAD' }); res.end('Método no permitido');
   } catch (err) {
     console.error('Error:', err);
     sendJSON(res, 500, { error: 'error interno' });

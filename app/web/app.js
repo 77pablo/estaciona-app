@@ -251,7 +251,7 @@ function contactoHTML(p) {
     const label = p.web.replace(/^https?:\/\//, '').replace(/\/+$/, '');
     partes.push(`<a href="${esc(url)}" target="_blank" rel="noopener">${ic('globe', 14)} ${esc(label)}</a>`);
   }
-  return `<div class="det-row det-contacto"><span class="k">${ic(p.telefono ? 'phone' : 'globe')}</span><span class="contacto-links">${partes.join('<span class="sep"> · </span>')}</span></div>`;
+  return `<div class="det-row"><span class="k">${ic(p.telefono ? 'phone' : 'globe')}</span><span class="contacto-links">${partes.join('<span class="sep"> · </span>')}</span></div>`;
 }
 
 // --- Cálculo de costo realista (descuenta horas gratis y cerradas) ----------
@@ -1494,7 +1494,7 @@ function comprimirImagen(file, max = 1000, q = 0.7) {
       c.getContext('2d').drawImage(img, 0, 0, w, h);
       resolve(c.toDataURL('image/jpeg', q));
     };
-    img.onerror = reject;
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('img')); };   // libera el blob también si falla (ej. HEIC)
     img.src = url;
   });
 }
@@ -1777,11 +1777,17 @@ window.guardarEstacione = () => {
       return;
     }
   }
-  LS.setAuto({
+  const auto = {
     id: p.id, nombre: p.nombre, direccion: p.direccion, ciudad: p.ciudad, lat: p.lat, lng: p.lng,
     precioHora: p.precioHora, gratisInfo: p.gratisInfo, horario: p.horario, inicio: Date.now(),
     alarmaTs: min > 0 ? Date.now() + min * 60000 : null, alarmaSonó: false, nota, foto: _estFoto,
-  });
+  };
+  // Si no entra (la foto puede llenar la cuota de localStorage), reintenta SIN la
+  // foto: nunca perder dónde quedó el auto por una foto que no cupo.
+  if (!LS.setAuto(auto) && auto.foto) {
+    auto.foto = null;
+    if (LS.setAuto(auto)) toast('Guardado, pero la foto no cupo en el teléfono');
+  }
   _estFoto = null;
   actualizarAutoMarker();   // pinta el auto en el mapa
   cerrarModal(); cerrarDetalle(); irA('miauto');
@@ -2292,7 +2298,7 @@ function precioSug(r) {
 
 async function buscarNacional(texto) {
   const q = (texto || '').trim();
-  if (q.length < 2) { mostrarPanelBusqueda(); return; }   // caja vacía → accesos rápidos + recientes
+  if (q.length < 2) { _sugSeq++; mostrarPanelBusqueda(); return; }   // caja vacía: descarta fetch viejo + muestra accesos rápidos/recientes
   const seq = ++_sugSeq;
   try {
     const r = await fetch('/api/buscar?q=' + encodeURIComponent(q));
@@ -3063,9 +3069,10 @@ async function init() {
     // Si se restauró una ciudad distinta a la de por defecto (Temuco), centra el
     // mapa ahí (el mapa arrancó en el centro por defecto).
     const z = (ciudadActual !== CENTRO_DEFAULT.nombre && ZONAS.length) ? ZONAS.find((x) => x.nombre === ciudadActual) : null;
-    if (z && map) {
+    if (z) {
       USER = { lat: z.lat, lng: z.lng };
-      map.setView([z.lat, z.lng], 15); meMarker?.setLatLng([z.lat, z.lng]);
+      if (map) { map.setView([z.lat, z.lng], 15); meMarker?.setLatLng([z.lat, z.lng]); }
+      renderLista();   // recalcula distancias desde la ciudad restaurada (no desde Temuco)
     }
     if (lugarInicial && DATA.some((p) => p.id === lugarInicial)) openDetalle(lugarInicial);
   });

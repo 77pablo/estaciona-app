@@ -7,7 +7,7 @@
 // comunidad, legal y que crece con el uso — el foso real de la app.
 // ============================================================================
 
-import { ready, run, all } from './db.js';
+import { ready, run, all, get } from './db.js';
 
 const ID_OK = (id) => typeof id === 'string' && /^[a-z0-9-]{1,64}$/.test(id);
 // Quita '<' '>' y caracteres de control (defensa en profundidad, igual que aportes).
@@ -37,12 +37,14 @@ export async function resumenResenas() {
   return map;
 }
 
-// Reseñas de un lugar (para el detalle): estrellas + texto + fecha, más recientes primero.
+// Reseñas de un lugar (para el detalle): promedio/nº EXACTOS (agregado) + las 100
+// más recientes para mostrar (no volcar miles en una ficha muy reseñada).
 export async function resenasDe(id) {
-  const filas = await all('SELECT estrellas, texto, ts FROM resenas WHERE id = ? ORDER BY ts DESC', [id]);
-  const n = filas.length;
-  const promedio = n ? Math.round((filas.reduce((s, f) => s + f.estrellas, 0) / n) * 10) / 10 : null;
-  return { resenas: filas, promedio, n };
+  const agg = await get('SELECT COUNT(*) AS n, SUM(estrellas) AS suma FROM resenas WHERE id = ?', [id]);
+  const n = agg ? agg.n : 0;
+  const promedio = n ? Math.round((agg.suma / n) * 10) / 10 : null;
+  const resenas = await all('SELECT estrellas, texto, ts FROM resenas WHERE id = ? ORDER BY ts DESC LIMIT 100', [id]);
+  return { resenas, promedio, n };
 }
 
 // Reseñas recientes (panel admin de moderación).

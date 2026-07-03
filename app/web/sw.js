@@ -8,7 +8,7 @@
 // en estacionamientos subterráneos, donde no hay internet).
 // ============================================================================
 
-const CACHE = 'estaciona-v2';
+const CACHE = 'estaciona-v3';
 
 // App shell que se precachea al instalar (para que abra offline desde el vamos).
 // Incluye Leaflet (servido local): así el mapa carga aunque no haya red — los
@@ -33,19 +33,18 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// ¿Vale la pena cachear esta request para offline? Solo GET, y solo cosas cuyo
-// valor offline es real y estable. NO se cachea: config/keys, health, tráfico y
-// teselas de mapa (dinámicas/con key), ni nada que no sea GET.
+// ¿Vale la pena cachear esta request para offline? Solo GET same-origin y solo
+// cosas cuyo valor offline es real y estable. NO se cachea: config/keys, health,
+// tráfico, teselas (dinámicas/con key), las FOTOS de la comunidad (se moderan y
+// borran → no servir una vieja offline; además crecerían sin tope), CDNs cross-
+// origin (respuesta opaca, no cacheable de forma útil), ni nada que no sea GET.
 function cacheable(req, url) {
   if (req.method !== 'GET') return false;
-  const sameOrigin = url.origin === self.location.origin;
-  if (sameOrigin) {
-    if (url.pathname === '/api/estacionamientos') return true;          // la ciudad vista → sirve offline
-    if (url.pathname.startsWith('/api/')) return false;                 // resto de API: no cachear
-    return true;                                                        // estáticos propios (html/js/css/íconos/vendor)
-  }
-  // CDN de jsdelivr (nsfwjs/tfjs, versionados). Leaflet ya es local (mismo origen).
-  return /(^|\.)jsdelivr\.net$/.test(url.hostname);
+  if (url.origin !== self.location.origin) return false;               // cross-origin: dejar pasar (network)
+  if (url.pathname === '/api/estacionamientos') return true;           // la ciudad vista → sirve offline
+  if (url.pathname.startsWith('/api/')) return false;                  // resto de API: no cachear
+  if (url.pathname.startsWith('/fotos/')) return false;                // fotos de la gente: no cachear (se moderan/borran)
+  return true;                                                         // estáticos propios (html/js/css/íconos/vendor)
 }
 
 self.addEventListener('fetch', (e) => {
