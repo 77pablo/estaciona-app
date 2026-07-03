@@ -281,30 +281,31 @@ function pagaEnHora(precioHora, gratisInfo, horario, hora, dia) {
   if (gratisEnHora(gratisInfo, hora, dia)) return false;
   return dentroVentanaPago(horario, hora);
 }
-// Costo de estacionar `horas` enteras desde AHORA (cuenta solo horas que se pagan).
-function costoEstimado(p, horas) {
-  const ahora = new Date();
-  let h = ahora.getHours(), dia = ahora.getDay(), pagadas = 0;
-  for (let i = 0; i < horas; i++) {
-    if (pagaEnHora(p.precioHora, p.gratisInfo, p.horario, h, dia)) pagadas++;
-    if (++h >= 24) { h = 0; dia = (dia + 1) % 7; }
-  }
-  return { total: pagadas * p.precioHora, pagadas, libres: horas - pagadas };
-}
-// Costo acumulado real del auto guardado (recorre minuto a minuto por tramos de hora).
-function costoTranscurrido(a) {
-  if (!a.precioHora) return 0;
-  let restante = (Date.now() - a.inicio) / 60000;   // minutos
-  let cursor = new Date(a.inicio), costo = 0;
+// Costo de pago en la ventana [inicioMs, inicioMs+minutos), contando SOLO los
+// minutos que se pagan (fuera de tramos gratis o cerrados). Avanza por tramos de
+// hora para respetar los cambios de tarifa/horario. Base común del costo ya
+// transcurrido (auto guardado) y del estimado a futuro (calculadora). Preciso al
+// minuto ⇒ correcto también para tarifas por minuto y estadías cortas/fraccionadas.
+function costoVentana(precioHora, gratisInfo, horario, inicioMs, minutos) {
+  if (!precioHora || minutos <= 0) return { costo: 0, minPagados: 0, minLibres: Math.max(0, minutos) };
+  let restante = minutos, cursor = new Date(inicioMs), costo = 0, minPag = 0;
   while (restante > 0.01) {
     const min = Math.min(restante, 60 - cursor.getMinutes());
-    if (pagaEnHora(a.precioHora, a.gratisInfo, a.horario, cursor.getHours(), cursor.getDay())) {
-      costo += a.precioHora * (min / 60);
-    }
+    if (pagaEnHora(precioHora, gratisInfo, horario, cursor.getHours(), cursor.getDay())) { costo += precioHora * (min / 60); minPag += min; }
     restante -= min;
     cursor = new Date(cursor.getTime() + min * 60000);
   }
-  return Math.round(costo);
+  return { costo, minPagados: minPag, minLibres: minutos - minPag };
+}
+// Costo estimado de estacionar `minutos` desde AHORA. Preciso al minuto (no
+// redondea a la hora): 30 min en un lugar por minuto cuesta la mitad, no una hora.
+function costoEstimado(p, minutos) {
+  const r = costoVentana(p.precioHora, p.gratisInfo, p.horario, Date.now(), minutos);
+  return { total: Math.round(r.costo), minLibres: Math.round(r.minLibres) };
+}
+// Costo acumulado real del auto guardado (desde que estacionó hasta ahora).
+function costoTranscurrido(a) {
+  return Math.round(costoVentana(a.precioHora, a.gratisInfo, a.horario, a.inicio, (Date.now() - a.inicio) / 60000).costo);
 }
 
 // --- Zonas / ciudades de la región ------------------------------------------
@@ -1174,7 +1175,7 @@ function openDetalle(id) {
         <h4>${ic('calc', 15)} ¿Cuánto pagaré?</h4>
         Salgo en
         <select id="calc-horas">
-          ${[1, 2, 3, 4, 6, 8].map((h) => `<option value="${h}">${h} hora${h > 1 ? 's' : ''}</option>`).join('')}
+          ${[[30, '30 min'], [60, '1 hora'], [90, '1 h 30'], [120, '2 horas'], [180, '3 horas'], [240, '4 horas'], [360, '6 horas'], [480, '8 horas']].map(([m, t]) => `<option value="${m}"${m === 60 ? ' selected' : ''}>${t}</option>`).join('')}
         </select>
         <div class="total" id="calc-total">${p.verificado ? '' : '~'}${CLP(p.precioHora)}</div>
         <div class="calc-nota" id="calc-nota"></div>
@@ -1219,10 +1220,10 @@ function openDetalle(id) {
   const sel = $('#calc-horas');
   if (sel) {
     const upd = () => {
-      const { total, libres } = costoEstimado(p, Number(sel.value));
+      const { total, minLibres } = costoEstimado(p, Number(sel.value));
       $('#calc-total').textContent = total === 0 ? 'Gratis' : (p.verificado ? '' : '~') + CLP(total);
       const nota = $('#calc-nota');
-      if (nota) nota.textContent = libres > 0 ? `Incluye ${libres} h sin cobro (gratis o cerrado).` : '';
+      if (nota) nota.textContent = minLibres > 0 ? `Incluye ${fmtMin(minLibres)} sin cobro (gratis o cerrado).` : '';
     };
     sel.addEventListener('change', upd); upd();
   }
