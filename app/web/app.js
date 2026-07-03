@@ -2025,7 +2025,7 @@ function renderMiAuto() {
       <span class="em">${ic('car', 46)}</span>
       <div class="empty-tit">Aún no estás estacionado</div>
       <p>Cuando dejes el auto, abre un lugar y toca <b>"Estacioné aquí"</b>. Te guardo dónde quedó, con cronómetro y costo estimado.</p>
-      <button class="btn btn-primary" style="margin-top:18px" onclick="irA('buscar')">${ic('search', 16)} Buscar dónde estacionar</button>
+      <button class="btn btn-primary" style="margin-top:18px" onclick="buscarDondeEstacionar()">${ic('search', 16)} Buscar dónde estacionar</button>
     </div>${gastoHTML()}${historialHTML()}</div>`;
     return;
   }
@@ -2337,6 +2337,18 @@ async function autoUbicarInicio(hayDeepLink) {
     { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
   );
 }
+
+// "Buscar dónde estacionar" (desde Mi auto): va al mapa y CENTRA EN TU UBICACIÓN
+// real, no en la ciudad por defecto. Si ya la sabemos, centra directo; si no, la
+// pide. Así la búsqueda arranca donde estás.
+window.buscarDondeEstacionar = () => {
+  irA('buscar');
+  if (userReal && map) {
+    setTimeout(() => { map.invalidateSize(); map.setView([USER.lat, USER.lng], 15); meMarker?.setLatLng([USER.lat, USER.lng]); }, 120);
+  } else {
+    usarMiUbicacion();   // pide permiso, centra en ti y carga tu zona
+  }
+};
 
 // El punto azul "yo" sigue tu movimiento (solo tras activar la ubicación).
 function iniciarSeguimiento() {
