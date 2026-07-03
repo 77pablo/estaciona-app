@@ -3078,12 +3078,15 @@ function initSheetDrag() {
   if (!sheet || !head || !phone) return;
   const ESTADOS = [0.12, 0.45, 0.85];     // mini, medio, completo (fracción del alto)
   const esMovil = () => window.matchMedia('(max-width: 859px)').matches;
-  const phoneH = () => phone.clientHeight;
+  // Alto de referencia = el contenedor de la hoja (en móvil la hoja es un overlay
+  // absoluto dentro de #view-buscar), NO toda la ventana: así el arrastre y los
+  // estados calzan con el área visible (la hoja nunca queda cortada bajo la barra).
+  const contH = () => (sheet.offsetParent && sheet.offsetParent.clientHeight) || phone.clientHeight;
   const setFrac = (f) => { sheet.style.height = (f * 100) + '%'; };
 
   // En PC se limpia el alto inline (manda el CSS de columna). En móvil, estado medio.
   function aplicarLayout() {
-    if (esMovil()) { sheet.style.maxHeight = '85%'; if (!sheet.style.height) setFrac(ESTADOS[1]); }
+    if (esMovil()) { sheet.style.maxHeight = '88%'; if (!sheet.style.height) setFrac(ESTADOS[1]); }
     else { sheet.style.height = ''; sheet.style.maxHeight = ''; }
   }
   aplicarLayout();
@@ -3099,13 +3102,14 @@ function initSheetDrag() {
   });
   head.addEventListener('pointermove', (e) => {
     if (!dragging) return;
-    const h = Math.max(phoneH() * 0.08, Math.min(phoneH() * 0.9, startH + (startY - e.clientY)));
-    sheet.style.height = (h / phoneH() * 100) + '%';
+    const c = contH();
+    const h = Math.max(c * 0.08, Math.min(c * 0.9, startH + (startY - e.clientY)));
+    sheet.style.height = (h / c * 100) + '%';
   });
   function endDrag() {
     if (!dragging) return;
     dragging = false; sheet.style.transition = '';
-    const frac = sheet.clientHeight / phoneH();
+    const frac = sheet.clientHeight / contH();
     let best = ESTADOS[0], bd = Infinity;
     for (const s of ESTADOS) { const d = Math.abs(s - frac); if (d < bd) { bd = d; best = s; } }
     setFrac(best);

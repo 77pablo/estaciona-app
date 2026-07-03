@@ -983,7 +983,26 @@ main, .view { flex: 1; min-height: 0; }
      así que los flotantes anclados arriba bajan para no tapar el buscador. */
   #banner,
   .reportar-bar { top: calc(112px + env(safe-area-inset-top, 0px)); }
-  .zona-btn { top: calc(160px + env(safe-area-inset-top, 0px)); }
+
+  /* Más aire arriba: el appbar respira entre sus filas y los chips no van pegados. */
+  .appbar { row-gap: 14px; padding-bottom: 14px; }
+  .chips { gap: 10px; padding: 12px 16px 14px; }
+
+  /* Vista mapa como bottom-sheet REAL: la hoja es un overlay absoluto al fondo, así
+     se puede arrastrar hasta arriba sin que el mapa la recorte ni quede cortada
+     bajo la barra. El mapa ocupa todo el fondo. #view-buscar es el marco de
+     referencia (empieza bajo el appbar), por eso los flotantes ya no dependen del notch. */
+  #view-buscar { position: relative; }
+  #view-buscar #map { min-height: 0; }
+  #view-buscar .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 20;
+    max-height: 88%; margin-top: 0; border-top-left-radius: var(--r-lg); border-top-right-radius: var(--r-lg);
+    box-shadow: 0 -14px 40px -18px rgba(0,0,0,.8);
+  }
+  #lista { padding-bottom: 22px; }   /* el último resultado no queda pegado al borde */
+
+  /* "Buscar cerca de aquí": bien debajo de los chips, sobre el mapa (ya no los tapa). */
+  .zona-btn { top: 84px; }
 
   /* Anti-zoom: Safari iOS hace zoom al enfocar un campo de texto < 16px. Subir
      a 16px lo evita (y de paso se lee mejor). Los <select> no disparan zoom. */
