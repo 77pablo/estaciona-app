@@ -593,6 +593,10 @@ main, .view { flex: 1; min-height: 0; }
 .ma-loc-txt { min-width: 0; }
 .ma-loc-txt .lbl { margin-bottom: 2px; }
 .ma-dir { color: var(--muted); font-size: 13px; margin-top: 3px; line-height: 1.35; }
+/* Nota del usuario de dónde dejó el auto (ej. "Nivel 2, columna 34"). */
+.ma-nota-user { display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; padding: 4px 9px; border-radius: 8px; background: var(--green-bg); color: var(--accent); font-size: 12.5px; font-weight: 600; }
+.ma-nota-user .ic-svg { color: var(--accent); }
+.est-nota { margin-top: 12px; }
 
 .ma-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: end; }
 .ma-stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

@@ -1696,6 +1696,7 @@ window.abrirEstacione = (id) => {
       <button data-min="0">Sin alarma</button>
     </div>
     ${bloqueada ? `<p class="alarma-aviso">${ic('bulb', 13)} Tu navegador bloqueó las notificaciones, pero igual te avisaré dentro de la app.</p>` : ''}
+    <input id="est-nota" class="est-nota" type="text" maxlength="60" placeholder="Nota: nivel, columna, sector… (opcional)" aria-label="Nota de dónde dejaste el auto" />
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
       <button class="btn btn-primary" onclick="guardarEstacione()">Listo</button>
       <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
@@ -1709,6 +1710,7 @@ window.abrirEstacione = (id) => {
 };
 window.guardarEstacione = () => {
   const p = _estacionePend, min = _alarmaSel || 0;
+  const nota = (($('#est-nota')?.value || '').trim().slice(0, 60)) || null;   // se lee antes de cerrar el modal
   // Inteligencia: si el lugar está muy cerca de Casa/Trabajo, no es "tu auto".
   for (const k of ['casa', 'trabajo']) {
     const l = LUGARES[k];
@@ -1721,7 +1723,7 @@ window.guardarEstacione = () => {
   LS.setAuto({
     id: p.id, nombre: p.nombre, direccion: p.direccion, ciudad: p.ciudad, lat: p.lat, lng: p.lng,
     precioHora: p.precioHora, gratisInfo: p.gratisInfo, horario: p.horario, inicio: Date.now(),
-    alarmaTs: min > 0 ? Date.now() + min * 60000 : null, alarmaSonó: false,
+    alarmaTs: min > 0 ? Date.now() + min * 60000 : null, alarmaSonó: false, nota,
   });
   cerrarModal(); cerrarDetalle(); irA('miauto');
   if (min > 0) avisarAlarmaPuesta(min);
@@ -1872,6 +1874,7 @@ function renderMiAuto() {
           <div class="lbl">Está en</div>
           <div class="big" style="font-size:20px">${esc(a.nombre)}</div>
           <div class="ma-dir">${esc(a.direccion)}</div>
+          ${a.nota ? `<div class="ma-nota-user">${ic('edit', 13)} ${esc(a.nota)}</div>` : ''}
         </div>
       </div>
       <div class="ma-stats">
