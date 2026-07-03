@@ -2375,18 +2375,46 @@ function precioSug(r) {
   return (r.verificado ? '' : '~') + CLP(r.precioHora) + '/hr';
 }
 
+// Búsqueda POCO específica: palabras de relleno que la gente agrega al buscar una
+// zona ("centro de valdivia", "plaza temuco", "valdivia centro") y que se ignoran
+// para reconocer la ciudad.
+const _RELLENO_BUSQUEDA = new Set(['centro', 'de', 'del', 'la', 'el', 'los', 'las', 'en', 'plaza', 'ciudad', 'comuna', 'pueblo', 'sector', 'a', 'al']);
+const _normBusq = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+// Ciudades (ZONAS) que matchean lo tecleado, ignorando palabras de relleno. Así se
+// puede buscar sin precisión: "centro valdivia" o "valdivia" saltan al centro de
+// Valdivia, sin exigir el nombre exacto de un estacionamiento.
+function buscarCiudades(q) {
+  const toks = _normBusq(q).split(' ').filter((t) => t && !_RELLENO_BUSQUEDA.has(t));
+  if (!toks.length) return [];
+  const out = [];
+  for (const z of ZONAS) {
+    const n = _normBusq(z.nombre), palabras = n.split(' ');
+    let score = 0;
+    for (const t of toks) {
+      if (n === t) score = Math.max(score, 4);                                   // nombre exacto
+      else if (n.startsWith(t)) score = Math.max(score, 3);                      // empieza igual ("valdiv")
+      else if (t.length >= 4 && palabras.some((w) => w.startsWith(t))) score = Math.max(score, 3);  // alguna palabra ("varas" → Puerto Varas)
+    }
+    if (score >= 3) out.push({ z, score });
+  }
+  out.sort((a, b) => b.score - a.score || (b.z.cantidad || 0) - (a.z.cantidad || 0));
+  return out.slice(0, 3).map((s) => ({ _ciudad: true, nombre: s.z.nombre, region: s.z.region, lat: s.z.lat, lng: s.z.lng, cantidad: s.z.cantidad }));
+}
+
 async function buscarNacional(texto) {
   const q = (texto || '').trim();
   if (q.length < 2) { _sugSeq++; mostrarPanelBusqueda(); return; }   // caja vacía: descarta fetch viejo + muestra accesos rápidos/recientes
   const seq = ++_sugSeq;
+  const ciudades = buscarCiudades(q);            // coincidencias de ciudad (instantáneo, ZONAS local)
   try {
     const r = await fetch('/api/buscar?q=' + encodeURIComponent(q));
     if (!r.ok) throw new Error('http ' + r.status);
     const j = await r.json();
     if (seq !== _sugSeq) return;                 // llegó una respuesta más nueva
-    renderSugerencias(j.resultados || []);
+    renderSugerencias([...ciudades, ...(j.resultados || [])]);   // ciudades primero, luego estacionamientos
   } catch {
-    if (seq === _sugSeq) cerrarSugerencias();     // sin conexión: queda el filtro de lista local
+    if (seq === _sugSeq) { if (ciudades.length) renderSugerencias(ciudades); else cerrarSugerencias(); }   // offline: al menos las ciudades
   }
 }
 
@@ -2400,7 +2428,15 @@ function renderSugerencias(resultados) {
     box.hidden = false;
     return;
   }
-  box.innerHTML = resultados.map((r, i) => `
+  box.innerHTML = resultados.map((r, i) => r._ciudad ? `
+    <button class="sug-item sug-ciudad" role="option" data-i="${i}" onmousedown="event.preventDefault()" onclick="elegirSugerencia(${i})">
+      <span class="sug-ic">${ic('pin', 17)}</span>
+      <span class="sug-main">
+        <span class="sug-nom">${esc(r.nombre)}</span>
+        <span class="sug-sub">${esc(r.region || '')} · ${r.cantidad} estacionamiento${r.cantidad === 1 ? '' : 's'}</span>
+      </span>
+      <span class="sug-precio">Ver zona</span>
+    </button>` : `
     <button class="sug-item" role="option" data-i="${i}" onmousedown="event.preventDefault()" onclick="elegirSugerencia(${i})">
       <span class="sug-ic">${ic(r.tipo === 'calle' ? 'road' : 'parking', 17)}</span>
       <span class="sug-main">
@@ -2439,6 +2475,14 @@ window.elegirSugerencia = (i) => {
   if (inp) inp.value = '';
   query = '';
   actualizarBotonLimpiar();
+  // Sugerencia de CIUDAD: salta a su centro y carga sus estacionamientos.
+  if (r._ciudad) {
+    track('search', r.nombre);
+    addHistBusq(r.nombre);
+    toast('Yendo a ' + r.nombre + '…');
+    cambiarCiudad(r.nombre, true);
+    return;
+  }
   track('search', r.ciudad);
   addHistBusq(r.nombre);                        // guarda en el historial de búsquedas
   // Ya estás en su ciudad y está cargada → abre directo.
