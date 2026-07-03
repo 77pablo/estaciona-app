@@ -566,6 +566,59 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// ── Validación de entorno al arrancar ───────────────────────────────────────
+// Falla RÁPIDO ante configuraciones incoherentes (bugs latentes) y, en
+// producción, ante lo crítico: no arrancar "a medias" (datos efímeros, storage
+// mal configurado). En local es permisivo para no estorbar el desarrollo.
+// Prod se detecta por las variables que Railway inyecta, o NODE_ENV=production.
+const EN_PROD = process.env.NODE_ENV === 'production'
+  || !!process.env.RAILWAY_ENVIRONMENT || !!process.env.RAILWAY_ENVIRONMENT_NAME
+  || !!process.env.RAILWAY_PROJECT_ID;
+
+function validarEntorno() {
+  const tiene = (k) => !!(process.env[k] || '').trim();
+  const errores = [];   // fatales → la app NO arranca
+  const avisos = [];    // recomendaciones → arranca igual
+
+  // 1) Coherencia — fatal en cualquier entorno (son errores de configuración).
+  // R2: o están las 5 variables o ninguna. Una config a medias rompe las fotos.
+  const R2 = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET', 'R2_PUBLIC_URL'];
+  const r2Faltan = R2.filter((k) => !tiene(k));
+  if (r2Faltan.length > 0 && r2Faltan.length < R2.length)
+    errores.push(`Config R2 incompleta: falta ${r2Faltan.join(', ')}. Definí las 5 variables R2_* o ninguna.`);
+  // TRUST_PROXY_HOPS, si se define, debe ser entero ≥ 0 (afecta la IP del rate-limit).
+  if (tiene('TRUST_PROXY_HOPS') && !/^\d+$/.test(process.env.TRUST_PROXY_HOPS.trim()))
+    errores.push(`TRUST_PROXY_HOPS="${process.env.TRUST_PROXY_HOPS}" no es un entero ≥ 0.`);
+  // Geocoder pago elegido sin su key: no es fatal (cae a Nominatim), pero se avisa.
+  const geo = (process.env.GEOCODER || 'nominatim').toLowerCase();
+  if (geo === 'maptiler' && !tiene('MAPTILER_KEY')) avisos.push('GEOCODER=maptiler pero falta MAPTILER_KEY → usará Nominatim público.');
+  if (geo === 'locationiq' && !tiene('LOCATIONIQ_KEY')) avisos.push('GEOCODER=locationiq pero falta LOCATIONIQ_KEY → usará Nominatim público.');
+
+  // 2) Requerido en PRODUCCIÓN — fatal solo en prod.
+  if (EN_PROD) {
+    // Sin DATABASE_URL, en prod los datos van a SQLite efímero y SE PIERDEN en cada redeploy.
+    if (!tiene('DATABASE_URL') && process.env.PERMITIR_SIN_DB !== '1')
+      errores.push('Falta DATABASE_URL en producción: votos/aportes/reseñas y la metadata de fotos se PERDERÍAN en cada redeploy. Definí DATABASE_URL, o PERMITIR_SIN_DB=1 si de verdad querés datos efímeros.');
+    // Recomendaciones de prod (no fatales):
+    if (!tiene('ADMIN_CLAVE')) avisos.push('Sin ADMIN_CLAVE: el panel /admin queda sin acceso; no vas a poder moderar.');
+    if (r2Faltan.length === R2.length) avisos.push('Sin R2_*: las fotos van a disco local y se BORRAN en cada redeploy. Configurá Cloudflare R2 para que persistan.');
+    if (!tiene('SIGHTENGINE_USER') || !tiene('SIGHTENGINE_SECRET')) avisos.push('Sin SIGHTENGINE_*: la moderación automática de fotos está desactivada.');
+    if (geo === 'nominatim' && !tiene('NOMINATIM_URL')) avisos.push('Geocoder = Nominatim público: NO permitido para uso comercial (ver LICENCIAS.md). Usá NOMINATIM_URL self-host o GEOCODER=locationiq|maptiler.');
+  }
+
+  for (const a of avisos) console.warn(`  ⚠️  ${a}`);
+  if (errores.length) {
+    console.error('');
+    console.error(`  ❌ No arranco: revisá la configuración de entorno${EN_PROD ? ' (producción)' : ''}:`);
+    for (const e of errores) console.error(`   · ${e}`);
+    console.error('  Referencia de variables → .env.example');
+    console.error('');
+    process.exit(1);
+  }
+}
+
+validarEntorno();
+
 server.listen(PORT, () => {
   console.log('');
   console.log('  🅿️  Estaciona  🅿️');
