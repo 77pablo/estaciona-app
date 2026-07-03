@@ -33,3 +33,6 @@ pro-codes.key
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# Plantilla de variables (sin secretos): SÍ debe subirse
+!.env.example
