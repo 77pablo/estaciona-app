@@ -1822,7 +1822,7 @@ function historialHTML() {
           <div class="sub">${fechaCorta(e.fin)} · ${fmtDur(e.dur)}${e.ciudad ? ' · ' + esc(e.ciudad) : ''}</div>
         </div>
         <div class="hist-right">
-          <div class="hist-costo">${e.precioHora == null ? '—' : !e.precioHora ? 'Gratis' : e.costo === 0 ? 'Gratis' : CLP(e.costo)}</div>
+          <div class="hist-costo">${e.pagado != null ? `${CLP(e.pagado)}<small class="hist-real">pagado</small>` : e.precioHora == null ? '—' : !e.precioHora ? 'Gratis' : e.costo === 0 ? 'Gratis' : `~${CLP(e.costo)}<small class="hist-est">est.</small>`}</div>
           <button class="hist-go" onclick="llevameHist(${i})" title="Cómo llegar" aria-label="Cómo llegar a ${esc(e.nombre)}">${ic('compass', 15)}</button>
         </div>
       </div>`).join('')}
@@ -1925,20 +1925,62 @@ function actualizarMiAutoVivo() {
     : `${ic('walk', 14)} Activa tu ubicación para ver la distancia de vuelta`);
 }
 window.terminarAuto = () => {
-  if (!confirm('¿Terminar y olvidar dónde dejaste tu auto?')) return;   // acción sin retorno
   const a = LS.getAuto();
-  if (a) {
-    // Guarda el episodio en el historial (para volver fácil a los habituales).
-    const h = LS.getHist();
-    h.unshift({
-      id: a.id, nombre: a.nombre, direccion: a.direccion, ciudad: a.ciudad || ciudadActual,
-      lat: a.lat, lng: a.lng, precioHora: a.precioHora, gratisInfo: a.gratisInfo, horario: a.horario,
-      inicio: a.inicio, fin: Date.now(), costo: costoTranscurrido(a), dur: Date.now() - a.inicio,
-    });
-    LS.setHist(h.slice(0, esPro() ? 500 : 30));   // tope 30 (Pro: 500)
+  if (!a) return;
+  // Gratis → cierre simple. Pago (o precio sin dato) → preguntamos cuánto pagó:
+  // es el momento perfecto (justo pagó) y su dato REAL alimenta a la comunidad.
+  if (a.precioHora === 0) {
+    if (!confirm('¿Terminar y olvidar dónde dejaste tu auto?')) return;
+    finalizarAuto(a, null);
+    return;
   }
-  LS.clearAuto(); renderMiAuto(); toast('¡Listo, buen viaje! 🚗');
+  const est = costoTranscurrido(a);
+  $('#modal').innerHTML = `
+    <h3>${ic('check', 18)} Terminar estacionamiento</h3>
+    <p>${esc(a.nombre)} · llevas ${fmtDur(Date.now() - a.inicio)}.</p>
+    <p class="ap-ctx">¿Cuánto pagaste en total? Es opcional, pero <b>tu dato real ayuda a toda la comunidad</b> 🙌</p>
+    <div class="precio-field"><span class="precio-pesos">$</span>
+      <input id="term-pago" type="number" inputmode="numeric" min="0" max="200000" placeholder="${est || 'total'}" aria-label="Total pagado en pesos" />
+      <span class="precio-hora">total</span></div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="confirmarTerminar()">Terminar</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
+  abrirModal();
+  setTimeout(() => { const i = $('#term-pago'); if (i) { i.focus(); i.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmarTerminar(); }); } }, 60);
 };
+window.confirmarTerminar = () => {
+  const a = LS.getAuto();
+  if (!a) { cerrarModal(); return; }
+  const v = Math.round(Number($('#term-pago')?.value));
+  const pagado = Number.isFinite(v) && v > 0 && v <= 200000 ? v : null;
+  cerrarModal();
+  finalizarAuto(a, pagado);
+  // Si dio un total real y la estadía fue razonable, comparte la tarifa/hora con
+  // la comunidad (mediana). No para estadías muy cortas (tarifas mínimas distorsionan).
+  if (pagado != null && a.id) {
+    const horas = (Date.now() - a.inicio) / 3600000;
+    const rate = horas >= 0.25 ? Math.round(pagado / horas) : null;
+    if (rate && rate > 0 && rate <= 20000) {
+      fetch('/api/aporte', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: a.id, precio: rate }) }).catch(() => {});
+      track('reporte_precio', a.ciudad || ciudadActual);
+    }
+  }
+};
+// Guarda el episodio en el historial y limpia "Mi auto". `pagado` = total REAL
+// que ingresó el usuario (o null si no lo dio / era gratis).
+function finalizarAuto(a, pagado) {
+  const h = LS.getHist();
+  h.unshift({
+    id: a.id, nombre: a.nombre, direccion: a.direccion, ciudad: a.ciudad || ciudadActual,
+    lat: a.lat, lng: a.lng, precioHora: a.precioHora, gratisInfo: a.gratisInfo, horario: a.horario,
+    inicio: a.inicio, fin: Date.now(), costo: pagado != null ? pagado : costoTranscurrido(a),
+    pagado, dur: Date.now() - a.inicio,
+  });
+  LS.setHist(h.slice(0, esPro() ? 500 : 30));   // tope 30 (Pro: 500)
+  LS.clearAuto(); renderMiAuto();
+  toast(pagado != null ? '¡Gracias! Sumaste un precio real 🙌' : '¡Listo, buen viaje! 🚗');
+}
 
 // --- Favoritos --------------------------------------------------------------
 function renderFavoritos() {
