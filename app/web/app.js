@@ -3336,20 +3336,34 @@ function mostrarInstall() {
   const bar = document.createElement('div');
   bar.id = 'install-bar'; bar.className = 'install-bar'; bar.setAttribute('role', 'dialog'); bar.setAttribute('aria-label', 'Instalar Estaciona');
   bar.innerHTML = `<span class="ib-ic">${ic('parking', 20)}</span>` +
-    `<span class="ib-txt">${ios ? 'Instala Estaciona: toca Compartir y luego “Agregar a inicio”.' : 'Instala Estaciona — acceso directo y pantalla completa.'}</span>` +
-    (ios ? '' : '<button class="ib-go" type="button">Instalar</button>') +
+    `<span class="ib-txt">${ios ? 'Instala Estaciona en tu iPhone.' : 'Instala Estaciona — acceso directo y pantalla completa.'}</span>` +
+    `<button class="ib-go" type="button">${ios ? 'Ver cómo' : 'Instalar'}</button>` +
     '<button class="ib-x" type="button" aria-label="Cerrar">' + ic('x', 16) + '</button>';
   document.querySelector('.phone').appendChild(bar);
   requestAnimationFrame(() => bar.classList.add('show'));
   bar.querySelector('.ib-x').onclick = () => { try { localStorage.setItem('estaciona_install_dismiss', String(Date.now())); } catch {} ocultarInstall(); };
   const go = bar.querySelector('.ib-go');
   if (go) go.onclick = async () => {
-    if (!_installEvt) return;
+    if (!_installEvt) { instruccionesIOS(); return; }   // iOS: mostrar los pasos
     _installEvt.prompt();
     try { await _installEvt.userChoice; } catch {}
     _installEvt = null; ocultarInstall();
   };
 }
+// Pasos claros para instalar en iPhone (iOS no permite instalar con un toque).
+window.instruccionesIOS = () => {
+  $('#modal').innerHTML = `
+    <h3>${ic('parking', 18)} Instalar en tu iPhone</h3>
+    <p>Queda como una app: con su ícono, a pantalla completa y sin la barra del navegador.</p>
+    <ol class="ios-steps">
+      <li><span class="ios-n">1</span><span>Toca <b>Compartir</b> ${ic('share', 15)} en la barra de abajo de Safari.</span></li>
+      <li><span class="ios-n">2</span><span>Baja y elige <b>“Agregar a inicio”</b> ${ic('pinPlus', 15)}.</span></li>
+      <li><span class="ios-n">3</span><span>Toca <b>“Agregar”</b> arriba a la derecha. ¡Listo!</span></li>
+    </ol>
+    <p class="ap-ctx">${ic('bulb', 13)} Tiene que ser desde <b>Safari</b> (no Chrome ni otro navegador).</p>
+    <button class="btn btn-primary" onclick="cerrarModal()" style="width:100%">Entendido</button>`;
+  abrirModal();
+};
 
 async function init() {
   $('#lista').innerHTML = skeletonHtml();   // esqueleto con shimmer mientras carga

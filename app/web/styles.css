@@ -253,6 +253,11 @@ main, .view { flex: 1; min-height: 0; }
 .ib-go { flex-shrink: 0; background: var(--accent); color: var(--on-accent); border: none; border-radius: 10px; padding: 9px 15px; font-weight: 700; font-family: var(--font-ui); cursor: pointer; }
 .ib-x { flex-shrink: 0; display: inline-flex; background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 4px; }
 .ib-x:hover { color: var(--text); }
+/* Pasos para instalar en iPhone (modal). */
+.ios-steps { list-style: none; display: flex; flex-direction: column; gap: 12px; margin: 14px 0 6px; }
+.ios-steps li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.4; color: var(--text); }
+.ios-steps .ios-n { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
+.ios-steps .ic-svg { vertical-align: -2px; color: var(--accent); }
 .pin-precio {
   position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%);
   background: var(--surface-2); color: var(--accent); font-family: var(--font-mono);

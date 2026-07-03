@@ -8,7 +8,7 @@
 // en estacionamientos subterráneos, donde no hay internet).
 // ============================================================================
 
-const CACHE = 'estaciona-v7';
+const CACHE = 'estaciona-v8';
 
 // App shell que se precachea al instalar (para que abra offline desde el vamos).
 // Incluye Leaflet (servido local): así el mapa carga aunque no haya red — los
