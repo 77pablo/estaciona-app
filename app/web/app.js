@@ -1702,9 +1702,10 @@ window.compartirApp = () => {
 
 // --- Estacioné aquí + alarma anti-multa -------------------------------------
 let _estacionePend = null, _alarmaSel = null, _estFoto = null;
-window.abrirEstacione = (id) => {
-  const p = DATA.find((x) => x.id === id);
-  if (!p) return;
+window.abrirEstacione = (id) => { const p = DATA.find((x) => x.id === id); if (p) _abrirEstacionePara(p); };
+// Volver a estacionar en un lugar del historial, con un toque (sin buscarlo otra vez).
+window.reestacionarHist = (i) => { const e = LS.getHist()[i]; if (e) _abrirEstacionePara(e); };
+function _abrirEstacionePara(p) {
   _estacionePend = p; _alarmaSel = 60; _estFoto = null;   // por defecto: 1 hora (lo más común), editable
   // Si el navegador ya bloqueó las notificaciones, lo decimos con honestidad.
   const bloqueada = 'Notification' in window && Notification.permission === 'denied';
@@ -1892,6 +1893,7 @@ function historialHTML() {
         </div>
         <div class="hist-right">
           <div class="hist-costo">${e.pagado != null ? `${CLP(e.pagado)}<small class="hist-real">pagado</small>` : e.precioHora == null ? '—' : !e.precioHora ? 'Gratis' : e.costo === 0 ? 'Gratis' : `~${CLP(e.costo)}<small class="hist-est">est.</small>`}</div>
+          <button class="hist-go" onclick="reestacionarHist(${i})" title="Estacionar aquí de nuevo" aria-label="Estacionar de nuevo en ${esc(e.nombre)}">${ic('car', 15)}</button>
           <button class="hist-go" onclick="llevameHist(${i})" title="Cómo llegar" aria-label="Cómo llegar a ${esc(e.nombre)}">${ic('compass', 15)}</button>
         </div>
       </div>`).join('')}
