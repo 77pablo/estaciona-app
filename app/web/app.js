@@ -875,7 +875,7 @@ function renderLista() {
     const d = p.disponibilidad || {}, nivel = d.nivel || 'cerrado';   // defensivo: nunca tumbar la lista
     // Disponibilidad = estimación honesta tipo semáforo (NO ocupación real en vivo).
     // Mismo lenguaje que el detalle ("Suele haber/Puede costar/Difícil"), versión corta.
-    const estadoTxt = nivel === 'cerrado' ? 'Cerrado'
+    const estadoTxt = nivel === 'cerrado' ? horaAbre(p)   // cerrado → "Abre HH:MM" (si hay horario)
       : nivel === 'verde' ? 'Suele haber'
       : nivel === 'amarillo' ? 'Puede costar' : 'Difícil';
     // Confirmaciones REALES de la comunidad (cupo confirmado en las últimas 3 h).
@@ -1075,6 +1075,40 @@ window.abrirComparar = () => {
   det.setAttribute('tabindex', '-1'); det.focus();
 };
 
+// --- Horario: "cierra pronto" / "abre a las X" (honesto, según la hora de Chile) --
+// Hora actual en Chile (minutos desde medianoche), sin importar la zona del equipo.
+function minutosChile() {
+  try {
+    const [h, m] = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()).split(':').map(Number);
+    return h * 60 + m;
+  } catch { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
+}
+// Primer rango "HH:MM–HH:MM" del horario, en minutos { desde, hasta }.
+function rangoHM(txt) {
+  const m = (txt || '').match(/(\d{1,2}):(\d{2})\D+(\d{1,2}):(\d{2})/);
+  return m ? { desde: +m[1] * 60 + +m[2], hasta: +m[3] * 60 + +m[4] } : null;
+}
+const hhmm = (mins) => `${String(Math.floor(mins / 60) % 24).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+// "Abre HH:MM" para la tarjeta de un lugar cerrado (o "Cerrado" si no hay horario).
+function horaAbre(p) {
+  const r = (p.horario && !/24h|libre/i.test(p.horario)) ? rangoHM(p.horario) : null;
+  return r ? `Abre ${hhmm(r.desde)}` : 'Cerrado';
+}
+// Texto de la fila de horario: rango + estado, avisando "cierra pronto" (≤60 min)
+// o "abre a las X" si está cerrado. Se apoya en p.abierto (dato del servidor) para
+// abierto/cerrado; el horario solo se usa para MOSTRAR la hora de cierre/apertura.
+function lineaHorario(p) {
+  const base = p.horario ? esc(p.horario) + ' · ' : '';
+  const r = (p.horario && !/24h|libre/i.test(p.horario)) ? rangoHM(p.horario) : null;
+  if (p.abierto) {
+    let falta = r ? r.hasta - minutosChile() : null;
+    if (falta != null && falta < 0 && r.hasta < r.desde) falta += 1440;   // cruza medianoche
+    if (falta != null && falta > 0 && falta <= 60) return base + `<b style="color:var(--amber)">Cierra pronto · ${hhmm(r.hasta)}</b>`;
+    return base + '<b style="color:var(--green)">Abierto ahora</b>';
+  }
+  return base + '<b style="color:var(--red)">Cerrado</b>' + (r ? ` · abre ${hhmm(r.desde)}` : '');
+}
+
 // --- Detalle ----------------------------------------------------------------
 function lineaDisponibilidad(p) {
   const d = p.disponibilidad, nivel = d.nivel;
@@ -1130,7 +1164,7 @@ function openDetalle(id) {
       ${esGratisClientes(p)
         ? `<div class="aviso-cli">${ic('cart', 16)} <b>Gratis solo para clientes</b> — válido con compra en el local, no es estacionamiento público.</div>`
         : p.gratisInfo ? `<div class="det-row"><span class="k">${ic('tag')}</span><span>${esc(p.gratisInfo)}</span></div>` : ''}
-      <div class="det-row"><span class="k">${ic('clock')}</span><span>${p.horario ? esc(p.horario) + ' · ' : ''}${p.abierto ? '<b style="color:var(--green)">Abierto ahora</b>' : '<b style="color:var(--red)">Cerrado</b>'}</span></div>
+      <div class="det-row"><span class="k">${ic('clock')}</span><span>${lineaHorario(p)}</span></div>
       <div class="det-row"><span class="k">${ic('pin')}</span><span>${esc(p.direccion)} · ${Math.round(haversine(USER, p))} m · ${ic('walk', 13)} ${walkMin(haversine(USER, p))} min caminando</span></div>
       <div class="det-row"><span class="k">${ic('car')}</span><span id="det-eta">${carMin(haversine(USER, p))} min en auto · ${trafHTML()}</span></div>
       ${contactoHTML(p)}
