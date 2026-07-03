@@ -983,6 +983,12 @@ main, .view { flex: 1; min-height: 0; }
   /* Selector de orden en la cabecera de la hoja: objetivo táctil más cómodo. */
   .sheet-head select { padding: 8px 10px; font-size: 13px; }
 
+  /* Selectores, filtros y micro-acciones que quedaban < 44px: alto táctil cómodo
+     para el dedo (selects de ciudad/orden/calculadora, filtros de tipo, botones
+     Sí/No de cupo, "buscar cerca de aquí"). */
+  .loc-select, .calc select, .sheet-head select,
+  .thumbs button, .opts button, .zona-btn { min-height: 44px; }
+
   /* Navegación inferior: cada ítem garantiza alto cómodo (≥44px) para tocar. */
   .bottomnav .nav { min-height: 52px; }
 
