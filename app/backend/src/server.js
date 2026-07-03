@@ -8,9 +8,10 @@
 // ============================================================================
 
 import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { timingSafeEqual } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
@@ -86,9 +87,22 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
+// Envía el cuerpo comprimido con gzip si el cliente lo acepta y pesa >1KB. Recorta
+// ~70% el peso de JS/CSS/JSON → carga mucho más rápida, sobre todo en celular.
+// `res._acceptGzip` lo setea el handler principal leyendo Accept-Encoding.
+function enviar(res, status, headers, body) {
+  const buf = Buffer.isBuffer(body) ? body : Buffer.from(body);
+  if (res._acceptGzip && buf.length > 1024) {
+    const gz = gzipSync(buf);
+    res.writeHead(status, { ...headers, 'Content-Encoding': 'gzip', 'Content-Length': gz.length, 'Vary': 'Accept-Encoding' });
+    res.end(gz);
+  } else {
+    res.writeHead(status, { ...headers, 'Content-Length': buf.length });
+    res.end(buf);
+  }
+}
 function sendJSON(res, status, data) {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify(data));
+  enviar(res, status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, JSON.stringify(data));
 }
 
 // Lee el cuerpo de un POST acumulando Buffers y decodificando UTF-8 UNA sola vez.
@@ -214,21 +228,43 @@ async function fotosDeCacheado(id) {
   return fotos;
 }
 
-async function serveStatic(res, urlPath) {
+// Caché en memoria de los estáticos: contenido + versión gzip + ETag, revalidado
+// por mtime. Son pocos archivos (~300 KB) → cabe de sobra y evita leer disco y
+// re-comprimir en cada request.
+const _staticCache = new Map();   // filePath -> { mtimeMs, etag, raw, gz, type }
+const COMPRESIBLE = /javascript|css|html|json|svg|text\//;
+
+async function serveStatic(req, res, urlPath) {
   const rel = ALIAS[urlPath] || urlPath;
   const safe = normalize(rel).replace(/^(\.\.[/\\])+/, '');
   const filePath = join(WEB_DIR, safe);
   if (!filePath.startsWith(WEB_DIR)) { res.writeHead(403); res.end('Prohibido'); return; }
   try {
-    const data = await readFile(filePath);
-    // 'no-cache' = el navegador puede guardar el archivo, pero SIEMPRE revalida
-    // con el servidor antes de usarlo. Evita que se quede pegado con CSS/JS
-    // viejos tras un cambio (causa típica de "no veo el rediseño").
-    res.writeHead(200, {
-      'Content-Type': MIME[extname(filePath)] || 'application/octet-stream',
-      'Cache-Control': 'no-cache',
-    });
-    res.end(data);
+    const st = await stat(filePath);
+    let e = _staticCache.get(filePath);
+    if (!e || e.mtimeMs !== st.mtimeMs) {   // primera vez o el archivo cambió (deploy/edición)
+      const raw = await readFile(filePath);
+      const type = MIME[extname(filePath)] || 'application/octet-stream';
+      const etag = `"${st.size.toString(16)}-${Math.round(st.mtimeMs).toString(16)}"`;
+      e = { mtimeMs: st.mtimeMs, etag, raw, type, gz: COMPRESIBLE.test(type) ? gzipSync(raw) : null };
+      _staticCache.set(filePath, e);
+    }
+    // 'no-cache' = el navegador guarda el archivo pero SIEMPRE revalida con su ETag.
+    // Si no cambió → 304 sin cuerpo (no re-descarga app.js/styles.css). Nunca queda
+    // pegado con una versión vieja tras un deploy (el ETag cambia con el mtime).
+    if (req.headers['if-none-match'] === e.etag) {
+      res.writeHead(304, { 'ETag': e.etag, 'Cache-Control': 'no-cache' });
+      res.end();
+      return;
+    }
+    const base = { 'Content-Type': e.type, 'Cache-Control': 'no-cache', 'ETag': e.etag };
+    if (res._acceptGzip && e.gz) {
+      res.writeHead(200, { ...base, 'Content-Encoding': 'gzip', 'Content-Length': e.gz.length, 'Vary': 'Accept-Encoding' });
+      res.end(e.gz);
+    } else {
+      res.writeHead(200, { ...base, 'Content-Length': e.raw.length });
+      res.end(e.raw);
+    }
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('No encontrado');
@@ -244,6 +280,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Frame-Options', 'DENY');
+  res._acceptGzip = /\bgzip\b/.test(req.headers['accept-encoding'] || '');   // ¿el navegador acepta gzip?
   //  · HSTS             → fuerza HTTPS un año (Railway sirve TLS); evita downgrade/MITM
   //  · Permissions-Policy → solo geolocalización (la app la usa); cámara/mic/pago off
   //  · CSP              → whitelist de orígenes reales; bloquea exfiltración/framing/base-hijack
@@ -275,7 +312,11 @@ const server = http.createServer(async (req, res) => {
         if (resenasAgg[e.id]) e.resena = resenasAgg[e.id];   // { promedio, n } de reseñas con estrellas
         if (dest[e.id]) { e.destacado = true; e.destacadoEtiqueta = dest[e.id].etiqueta; e.destacadoPremium = dest[e.id].premium; e.destacadoTagline = dest[e.id].tagline; }
       }
-      return sendJSON(res, 200, { centro: CENTRO, zonas: ZONAS, regiones: REGIONES, estacionamientos: lista });
+      // `zonas` (308 ciudades, ~29 KB) y `regiones` solo se necesitan la 1ª vez
+      // (poblar el selector). El frontend pide `&init=1` solo entonces; en los
+      // cambios de ciudad y el refresco cada 6 s NO se re-mandan → respuesta liviana.
+      const init = url.searchParams.get('init') === '1';
+      return sendJSON(res, 200, { centro: CENTRO, estacionamientos: lista, ...(init ? { zonas: ZONAS, regiones: REGIONES } : {}) });
     }
     if (url.pathname === '/api/buscar' && req.method === 'GET') {
       // Búsqueda NACIONAL por texto: una sola caja para todo Chile. Devuelve
@@ -510,7 +551,7 @@ const server = http.createServer(async (req, res) => {
       // escrituras se descartan). Sirve para monitorear que la persistencia esté viva.
       return sendJSON(res, 200, { ok: true, db: dbReady });
     }
-    if (req.method === 'GET') return await serveStatic(res, url.pathname);
+    if (req.method === 'GET') return await serveStatic(req, res, url.pathname);
     res.writeHead(405); res.end('Método no permitido');
   } catch (err) {
     console.error('Error:', err);

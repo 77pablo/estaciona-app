@@ -2679,7 +2679,9 @@ function initSheetDrag() {
 async function cargar() {
   const seq = ++cargaSeq;            // marca esta carga; si llega otra más nueva, se descarta
   try {
-    const r = await fetch(`${API}?ciudad=${encodeURIComponent(ciudadActual)}`);
+    // `init=1` solo la 1ª vez (para traer las zonas/regiones del selector). En los
+    // cambios de ciudad y el refresco cada 6 s no se re-piden (ahorra ~29 KB/llamada).
+    const r = await fetch(`${API}?ciudad=${encodeURIComponent(ciudadActual)}${ZONAS.length ? '' : '&init=1'}`);
     if (!r.ok) throw new Error('http ' + r.status);
     const j = await r.json();
     if (seq !== cargaSeq) return;     // llegó una carga más reciente: ignora esta respuesta vieja
