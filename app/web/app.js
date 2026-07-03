@@ -1677,11 +1677,11 @@ window.compartirApp = () => {
 };
 
 // --- Estacioné aquí + alarma anti-multa -------------------------------------
-let _estacionePend = null, _alarmaSel = null;
+let _estacionePend = null, _alarmaSel = null, _estFoto = null;
 window.abrirEstacione = (id) => {
   const p = DATA.find((x) => x.id === id);
   if (!p) return;
-  _estacionePend = p; _alarmaSel = 60;   // por defecto: 1 hora (lo más común), editable
+  _estacionePend = p; _alarmaSel = 60; _estFoto = null;   // por defecto: 1 hora (lo más común), editable
   // Si el navegador ya bloqueó las notificaciones, lo decimos con honestidad.
   const bloqueada = 'Notification' in window && Notification.permission === 'denied';
   $('#modal').innerHTML = `
@@ -1697,6 +1697,8 @@ window.abrirEstacione = (id) => {
     </div>
     ${bloqueada ? `<p class="alarma-aviso">${ic('bulb', 13)} Tu navegador bloqueó las notificaciones, pero igual te avisaré dentro de la app.</p>` : ''}
     <input id="est-nota" class="est-nota" type="text" maxlength="60" placeholder="Nota: nivel, columna, sector… (opcional)" aria-label="Nota de dónde dejaste el auto" />
+    <input id="est-foto-input" type="file" accept="image/*" capture="environment" hidden aria-hidden="true" />
+    <div id="est-foto-row" class="est-foto-row"></div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
       <button class="btn btn-primary" onclick="guardarEstacione()">Listo</button>
       <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
@@ -1706,7 +1708,38 @@ window.abrirEstacione = (id) => {
       $('#alarma-opts').querySelectorAll('button').forEach((x) => x.classList.remove('on'));
       b.classList.add('on'); _alarmaSel = Number(b.dataset.min);
     }));
+  // Foto opcional del lugar (queda SOLO en tu teléfono; se comprime chica).
+  mostrarPrevEstFoto();
+  $('#est-foto-input').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    toast('Procesando foto…');
+    const url = await comprimirImagen(f, 720, 0.5).catch(() => null);
+    if (!url) { toast('No pude usar esa foto'); return; }
+    _estFoto = url; mostrarPrevEstFoto();
+  });
   abrirModal();
+};
+// Muestra el botón "Foto del lugar" o la miniatura elegida (con "quitar").
+function mostrarPrevEstFoto() {
+  const row = $('#est-foto-row');
+  if (!row) return;
+  row.innerHTML = _estFoto
+    ? `<div class="est-foto-prev"><img src="${_estFoto}" alt="Foto del lugar donde dejaste el auto" /><button type="button" class="est-foto-x" onclick="quitarEstFoto()" aria-label="Quitar foto">${ic('x', 15)}</button></div>`
+    : `<button type="button" class="btn btn-second est-foto-btn" onclick="document.getElementById('est-foto-input').click()">${ic('camera', 16)} Foto del lugar (opcional)</button>`;
+}
+window.quitarEstFoto = () => { _estFoto = null; const i = $('#est-foto-input'); if (i) i.value = ''; mostrarPrevEstFoto(); };
+// Visor de la foto del auto a pantalla completa (toca en cualquier parte para cerrar).
+window.verFotoAuto = () => {
+  const a = LS.getAuto();
+  if (!a || !a.foto) return;
+  const ov = document.createElement('div');
+  ov.className = 'foto-lightbox';
+  ov.setAttribute('role', 'dialog');
+  ov.setAttribute('aria-label', 'Foto de dónde dejaste el auto');
+  ov.innerHTML = `<img src="${a.foto}" alt="Foto de dónde dejaste el auto" /><button class="foto-lightbox-x" aria-label="Cerrar">${ic('x', 22)}</button>`;
+  ov.addEventListener('click', () => ov.remove());
+  document.body.appendChild(ov);
 };
 window.guardarEstacione = () => {
   const p = _estacionePend, min = _alarmaSel || 0;
@@ -1723,8 +1756,9 @@ window.guardarEstacione = () => {
   LS.setAuto({
     id: p.id, nombre: p.nombre, direccion: p.direccion, ciudad: p.ciudad, lat: p.lat, lng: p.lng,
     precioHora: p.precioHora, gratisInfo: p.gratisInfo, horario: p.horario, inicio: Date.now(),
-    alarmaTs: min > 0 ? Date.now() + min * 60000 : null, alarmaSonó: false, nota,
+    alarmaTs: min > 0 ? Date.now() + min * 60000 : null, alarmaSonó: false, nota, foto: _estFoto,
   });
+  _estFoto = null;
   cerrarModal(); cerrarDetalle(); irA('miauto');
   if (min > 0) avisarAlarmaPuesta(min);
   else toast('Guardado ✓');
@@ -1877,6 +1911,7 @@ function renderMiAuto() {
           ${a.nota ? `<div class="ma-nota-user">${ic('edit', 13)} ${esc(a.nota)}</div>` : ''}
         </div>
       </div>
+      ${a.foto ? `<button class="ma-foto" onclick="verFotoAuto()" aria-label="Ver foto de dónde dejaste el auto"><img src="${a.foto}" alt="Foto de dónde dejaste el auto" /><span class="ma-foto-zoom">${ic('camera', 14)} Toca para ampliar</span></button>` : ''}
       <div class="ma-stats">
         <div class="ma-stat">
           <div class="lbl">Llevas <span class="ma-live" title="en curso" aria-hidden="true"></span></div>
