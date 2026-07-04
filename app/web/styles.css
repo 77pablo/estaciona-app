@@ -677,6 +677,9 @@ main, .view { flex: 1; min-height: 0; }
 .ma-line .ic-svg { color: var(--muted); }
 .ma-line.urgente { color: var(--red); font-weight: 700; }
 .ma-line.urgente .ic-svg { color: var(--red); }
+/* Botón para poner/cambiar la alarma desde "Mi auto". */
+.ma-alarma-btn { margin-left: auto; background: var(--surface-2); border: 1px solid var(--line-2); color: var(--accent); font-weight: 700; font-size: 12px; padding: 5px 11px; border-radius: 999px; cursor: pointer; font-family: var(--font-ui); }
+.ma-alarma-btn:hover, .ma-alarma-btn:focus-visible { border-color: var(--accent); }
 .ma-nota { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; color: var(--muted); line-height: 1.45; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .ma-nota .ic-svg { color: var(--amber); margin-top: 1px; flex-shrink: 0; }
 .ma-acciones { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }

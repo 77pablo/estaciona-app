@@ -154,6 +154,9 @@ const ICONS = {
   flag:'<path d="M5 21V4M5 4.5h11l-2 3 2 3H5"/>',
   phone:'<path d="M6.5 3.5h3l1.5 4-2 1.5a11 11 0 0 0 4.5 4.5l1.5-2 4 1.5v3a1.5 1.5 0 0 1-1.6 1.5A15.5 15.5 0 0 1 5 5.1 1.5 1.5 0 0 1 6.5 3.5Z"/>',
   globe:'<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.4 3.5 5.4 3.5 8.5s-1.2 6.1-3.5 8.5c-2.3-2.4-3.5-5.4-3.5-8.5s1.2-6.1 3.5-8.5Z"/>',
+  // Íconos iguales a los de iOS (para el instructivo de instalar en iPhone).
+  iosShare:'<path d="M12 15V4"/><path d="m8.5 7.5 3.5-3.5 3.5 3.5"/><path d="M8 9.5H6.5A1.5 1.5 0 0 0 5 11v7.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V11a1.5 1.5 0 0 0-1.5-1.5H16"/>',
+  iosAdd:'<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M12 8.5v7M8.5 12h7"/>',
 };
 // Devuelve un <svg> inline del ícono pedido (hereda color y se alinea al texto).
 function ic(name, size = 18) {
@@ -2121,13 +2124,60 @@ function actualizarMiAutoVivo() {
   // Distingue null (pago sin dato) de 0 (gratis): mostrar "Gratis" en un pago cuyo
   // precio no conocemos sería deshonesto (y luego terminarAuto sí pide cuánto pagó).
   set('#ma-costo', a.precioHora == null ? '—' : !a.precioHora ? 'Gratis' : costo === 0 ? 'Gratis ahora' : CLP(costo));
-  setHtml('#ma-alarma', `${ic('clock', 14)} ${alarmaTxt}`);
+  const alarmaActiva = a.alarmaTs && (a.alarmaTs - Date.now() > 0);
+  setHtml('#ma-alarma', `${ic('clock', 14)} ${alarmaTxt} <button class="ma-alarma-btn" type="button" onclick="ponerAlarmaAuto()">${alarmaActiva ? 'Cambiar' : 'Poner alarma'}</button>`);
   $('#ma-alarma')?.classList.toggle('urgente', alarmaVencida);   // resalta cuando ya venció
   // ETA de vuelta solo si sabemos dónde estás (geolocalización real); si no, no inventamos distancia.
   setHtml('#ma-eta', userReal
     ? `${ic('walk', 14)} A ${walkMin(distVuelta)} min caminando (${Math.round(distVuelta)} m)`
     : `${ic('walk', 14)} Activa tu ubicación para ver la distancia de vuelta`);
 }
+// Poner / cambiar / quitar la alarma anti-multa DESPUÉS de estacionar (antes solo
+// se podía al guardar el auto). Usa la notificación en background (programarAlarmaBg).
+// Reutiliza _alarmaSel (declarado arriba, en el flujo de "Estacioné aquí").
+window.ponerAlarmaAuto = () => {
+  const a = LS.getAuto();
+  if (!a) return;
+  const tiene = !!a.alarmaTs && (a.alarmaTs - Date.now() > 0);
+  $('#modal').innerHTML = `
+    <h3>${ic('clock', 18)} Alarma anti-multa</h3>
+    <p>Te avisamos para que vuelvas al auto a tiempo — suena aunque cierres la app (según tu teléfono).</p>
+    <div class="opts" id="alarma-opts">
+      <button type="button" data-min="30">En 30 min</button>
+      <button type="button" data-min="60" class="on">En 1 hora</button>
+      <button type="button" data-min="90">En 1 h 30</button>
+      <button type="button" data-min="120">En 2 horas</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="confirmarAlarmaAuto()">${tiene ? 'Cambiar alarma' : 'Poner alarma'}</button>
+      ${tiene ? '<button class="btn btn-second" onclick="quitarAlarmaAuto()">Quitar alarma</button>' : ''}
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
+  _alarmaSel = 60;
+  abrirModal();
+  $('#alarma-opts').querySelectorAll('button').forEach((b) =>
+    b.addEventListener('click', () => {
+      $('#alarma-opts').querySelectorAll('button').forEach((x) => x.classList.remove('on'));
+      b.classList.add('on'); _alarmaSel = Number(b.dataset.min);
+    }));
+};
+window.confirmarAlarmaAuto = () => {
+  const a = LS.getAuto();
+  if (!a) return;
+  const min = _alarmaSel || 60;
+  a.alarmaTs = Date.now() + min * 60000; a.alarmaSonó = false; LS.setAuto(a);
+  cancelarAlarmaBg();                          // limpia una anterior si la había
+  programarAlarmaBg(a.alarmaTs, a.nombre);     // agenda para que suene con la app cerrada
+  avisarAlarmaPuesta(min);                     // pide permiso de notificación + toast
+  cerrarModal(); actualizarMiAutoVivo();
+};
+window.quitarAlarmaAuto = () => {
+  const a = LS.getAuto();
+  if (!a) return;
+  a.alarmaTs = null; a.alarmaSonó = false; LS.setAuto(a);
+  cancelarAlarmaBg(); cerrarModal(); actualizarMiAutoVivo();
+  toast('Alarma quitada');
+};
 window.terminarAuto = () => {
   const a = LS.getAuto();
   if (!a) return;
@@ -3356,8 +3406,8 @@ window.instruccionesIOS = () => {
     <h3>${ic('parking', 18)} Instalar en tu iPhone</h3>
     <p>Queda como una app: con su ícono, a pantalla completa y sin la barra del navegador.</p>
     <ol class="ios-steps">
-      <li><span class="ios-n">1</span><span>Toca <b>Compartir</b> ${ic('share', 15)} en la barra de abajo de Safari.</span></li>
-      <li><span class="ios-n">2</span><span>Baja y elige <b>“Agregar a inicio”</b> ${ic('pinPlus', 15)}.</span></li>
+      <li><span class="ios-n">1</span><span>Toca <b>Compartir</b> ${ic('iosShare', 16)} en la barra de abajo de Safari.</span></li>
+      <li><span class="ios-n">2</span><span>Baja y elige <b>“Agregar a inicio”</b> ${ic('iosAdd', 16)}.</span></li>
       <li><span class="ios-n">3</span><span>Toca <b>“Agregar”</b> arriba a la derecha. ¡Listo!</span></li>
     </ol>
     <p class="ap-ctx">${ic('bulb', 13)} Tiene que ser desde <b>Safari</b> (no Chrome ni otro navegador).</p>
