@@ -3260,9 +3260,9 @@ function mostrarBienvenida() {
   o.innerHTML = `<div class="onboard-card" role="dialog" aria-modal="true" aria-labelledby="onboard-tit">
     <div class="onboard-ic" aria-hidden="true">${ic('parking', 44)}</div>
     <h3 id="onboard-tit">¡Te damos la bienvenida a Estaciona!</h3>
-    <p>Versión <b>piloto</b> para <b>todo Chile</b>. Te mostramos dónde estacionar, cuánto cobran y si es gratis. Elige tu ciudad arriba o usa tu ubicación.</p>
+    <p>Versión <b>piloto</b> para <b>todo Chile</b>. Te mostramos dónde estacionar, cuánto cobran y si es gratis. <b>Se abre donde estás</b> (o elige tu ciudad arriba).</p>
     <ul class="onboard-list">
-      <li>${ic('locate', 16)} <span>Toca el botón de ubicación para ver lo más cercano a ti.</span></li>
+      <li>${ic('users', 16)} <span>La gente reporta si hay cupo en el momento — mira “Cupo confirmado” y suma el tuyo.</span></li>
       <li>${ic('filters', 16)} <span>Usa los filtros para acotar por precio, tipo o servicios.</span></li>
       <li>${ic('wallet', 16)} <span>Los precios son <b>referenciales</b>: confírmalos siempre en el lugar.</span></li>
       <li>${ic('starOutline', 16)} <span>Funciona <b>sin cuenta</b>: favoritos y tu auto se guardan solo en este teléfono.</span></li>
