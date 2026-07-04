@@ -490,12 +490,16 @@ main, .view { flex: 1; min-height: 0; }
 .det-body { padding: 18px; }
 /* Hero del detalle: panel surface, nombre gigante Inter, sin degradado */
 .det-hero {
-  position: relative; min-height: 132px; border-radius: var(--r-lg);
-  display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 8px;
-  margin-bottom: 18px; overflow: hidden; background: var(--surface-2); color: var(--text); padding: 18px;
-  background-image: var(--grain); border: 1px solid var(--line);
+  position: relative; min-height: 104px; border-radius: var(--r-lg);
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 7px;
+  margin-bottom: 18px; overflow: hidden; color: var(--text); padding: 18px 18px 20px;
+  background-color: var(--surface-2);
+  /* Glow sutil de acento arriba-derecha: el encabezado se ve diseñado (no una
+     "foto que falta") aunque el lugar no tenga imagen. */
+  background-image: radial-gradient(135% 130% at 100% -25%, rgba(45,212,191,.16), transparent 55%), var(--grain);
+  border: 1px solid var(--line);
 }
-.det-hero .hero-ic { font-size: 28px; opacity: .85; }
+.det-hero .hero-ic { font-size: 26px; color: var(--accent); opacity: .95; }
 .det-hero .hero-nm { font-size: 26px; line-height: 1.04; font-weight: 800; text-align: left; letter-spacing: -0.03em; }
 .det-status { font-size: 17px; font-weight: 800; margin-bottom: 10px; letter-spacing: -0.02em; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 9px; }
 .det-status small { font-weight: 500; color: var(--muted); font-size: 12px; }
