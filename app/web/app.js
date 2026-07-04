@@ -723,7 +723,10 @@ function iconHtml(p) {
   // Los favoritos llevan una estrellita dorada en la esquina (igual que en la lista).
   const precio = esSel ? `<span class="pin-precio">${precioCorto(p)}</span>` : '';
   const fav = LS.isFav(p.id) ? `<span class="pin-fav">${ic('starFull', 9)}</span>` : '';
-  return `<div class="pin-p ${nivel}${esSel ? ' sel' : ''}${dest}">${precio}P${fav}</div>`;
+  // Check verde en el pin si la gente (o un operador en vivo) confirmó cupo: la
+  // señal fresca se ve en el mapa, no solo en la lista.
+  const cupo = cupoConfirmado(p) ? `<span class="pin-cupo">${ic('check', 9)}</span>` : '';
+  return `<div class="pin-p ${nivel}${esSel ? ' sel' : ''}${dest}">${precio}P${fav}${cupo}</div>`;
 }
 
 // Seleccionar = centrar el mapa en el lugar y resaltar su pin.
@@ -772,7 +775,7 @@ function updateMarkers(lista) {
     const nivel = p.disponibilidad.nivel, sel = p.id === selectedId;
     // Firma de lo que afecta el aspecto del pin: si no cambió, no re-seteamos el
     // icono (cada setIcon fuerza refresco del clúster → caro cada 6 s).
-    const sig = `${nivel}|${sel ? 's' : ''}|${simpl && !sel && !adDe(p) ? 'd' : 'p'}|${adDe(p) ? 'D' : ''}|${LS.isFav(p.id) ? 'f' : ''}`;
+    const sig = `${nivel}|${sel ? 's' : ''}|${simpl && !sel && !adDe(p) ? 'd' : 'p'}|${adDe(p) ? 'D' : ''}|${LS.isFav(p.id) ? 'f' : ''}|${cupoConfirmado(p) ? 'c' : ''}`;
     let mk = markers[p.id];
     if (mk) {
       if (mk._sig !== sig) { mk.setIcon(L.divIcon({ className: '', html: iconHtml(p), iconSize: [0, 0] })); mk._sig = sig; }

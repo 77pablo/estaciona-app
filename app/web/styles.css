@@ -236,6 +236,9 @@ main, .view { flex: 1; min-height: 0; }
 /* Estrellita de favorito en la esquina del pin de un estacionamiento. */
 .pin-fav { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; background: var(--star); border: 1.5px solid var(--bg); display: flex; align-items: center; justify-content: center; }
 .pin-fav .ic-svg { color: #0E0F12; }
+/* Check verde en el pin: cupo confirmado por la gente / operador en vivo. */
+.pin-cupo { position: absolute; bottom: -5px; right: -5px; width: 15px; height: 15px; border-radius: 50%; background: var(--green); border: 1.5px solid var(--bg); display: flex; align-items: center; justify-content: center; }
+.pin-cupo .ic-svg { color: #0E0F12; }
 /* Indicador "sin conexión" (píldora ámbar, sobre la barra inferior). */
 #offline-bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(72px + env(safe-area-inset-bottom, 0px)); z-index: 65; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: var(--amber); color: #0E0F12; font-size: 12.5px; font-weight: 700; box-shadow: 0 4px 14px rgba(0,0,0,.5); white-space: nowrap; }
 #offline-bar .ic-svg { color: #0E0F12; }
