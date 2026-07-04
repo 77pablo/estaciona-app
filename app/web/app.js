@@ -1038,14 +1038,16 @@ function abrirMapCard(id) {
   el.innerHTML = `
     <button class="mapcard-x" onclick="cerrarMapCard()" aria-label="Cerrar">${ic('x', 16)}</button>
     ${adDe(p) ? `<div class="dest-tag${p.destacadoPremium ? ' premium' : ''}">${ic('starFull', 11)} ${esc(p.destacadoEtiqueta || 'Destacado')}</div>` : ''}
-    <div class="mapcard-nm"><span class="estado-dot ${nivel}" aria-hidden="true"></span><span class="nm-txt">${esc(p.nombre)}</span></div>
-    <div class="mapcard-addr">${esc(p.direccion || p.ciudad || '')}</div>
-    <div class="mapcard-body">
-      <div class="mapcard-precio">${precioGrande(p)}</div>
-      <div class="mapcard-disp">
-        <div class="mapcard-disp-top"><span>Disponibilidad</span>${badgeDisp(p)}</div>
-        ${dispSeg(nivel)}
-        <div class="mapcard-meta">${votos}${dist} m · ${tipoTxt}</div>
+    <div class="mapcard-tap" role="button" tabindex="0" onclick="openDetalle('${p.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openDetalle('${p.id}')}" aria-label="Ver detalle de ${esc(p.nombre)}">
+      <div class="mapcard-nm"><span class="estado-dot ${nivel}" aria-hidden="true"></span><span class="nm-txt">${esc(p.nombre)}</span><span class="mapcard-chev">${ic('arrowRight', 16)}</span></div>
+      <div class="mapcard-addr">${esc(p.direccion || p.ciudad || '')}</div>
+      <div class="mapcard-body">
+        <div class="mapcard-precio">${precioGrande(p)}</div>
+        <div class="mapcard-disp">
+          <div class="mapcard-disp-top"><span>Disponibilidad</span>${badgeDisp(p)}</div>
+          ${dispSeg(nivel)}
+          <div class="mapcard-meta">${votos}${dist} m · ${tipoTxt} · <span class="mapcard-ver">ver detalle</span></div>
+        </div>
       </div>
     </div>
     <div class="mapcard-actions">

@@ -441,6 +441,11 @@ main, .view { flex: 1; min-height: 0; }
   display: flex; align-items: center; justify-content: center; transition: color .15s, border-color .15s;
 }
 .mapcard-x:hover { color: var(--text); border-color: var(--line-2); }
+/* Zona tappable del mapcard: abre el detalle completo (fotos, reseñas, calculadora). */
+.mapcard-tap { cursor: pointer; border-radius: var(--r); margin: -4px -4px 0; padding: 4px; }
+.mapcard-tap:hover, .mapcard-tap:focus-visible { background: rgba(255,255,255,.03); outline: none; }
+.mapcard-chev { margin-left: auto; color: var(--muted); display: inline-flex; }
+.mapcard-ver { color: var(--accent); font-weight: 700; }
 .mapcard-nm { font-weight: 800; font-size: 17px; color: var(--text); display: flex; align-items: center; gap: 8px; padding-right: 34px; }
 .mapcard-addr { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
 .mapcard-body { display: flex; gap: 16px; align-items: flex-start; margin: 14px 0; }
