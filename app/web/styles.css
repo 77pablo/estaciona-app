@@ -246,7 +246,7 @@ body.is-offline #lista { padding-bottom: 44px; }
 /* Aviso "Instalar app" (PWA): barra descartable sobre la barra inferior. */
 .install-bar {
   position: absolute; left: 50%; bottom: calc(66px + env(safe-area-inset-bottom, 0px));
-  width: min(440px, calc(100% - 24px)); z-index: 70; display: flex; align-items: center; gap: 10px;
+  width: min(440px, calc(100% - 24px)); z-index: 59; display: flex; align-items: center; gap: 10px;  /* bajo modales (60) y detalle: un overlay abierto la cubre */
   background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 14px;
   padding: 10px 12px; box-shadow: 0 10px 34px rgba(0,0,0,.55);
   transform: translateX(-50%) translateY(24px); opacity: 0; transition: transform .25s ease, opacity .25s ease;
@@ -627,7 +627,7 @@ body.is-offline #lista { padding-bottom: 44px; }
 .f-hint { font-size: 11.5px; color: var(--muted); margin: 8px 0 0; line-height: 1.4; }
 .modal input[type="range"] { cursor: pointer; }
 .f-range-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 5px; }
-.f-acciones { display: flex; gap: 8px; margin-top: 20px; }
+.f-acciones { display: flex; gap: 8px; position: sticky; bottom: 0; margin: 20px -22px -22px; padding: 14px 22px calc(18px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to top, var(--surface-2) 72%, rgba(22,25,34,0)); }
 
 /* Mi auto / favoritos */
 .simple { padding: 18px; overflow-y: auto; flex: 1; min-height: 0; }

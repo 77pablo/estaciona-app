@@ -3387,6 +3387,7 @@ const esIOSSafari = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !/Cri
 function puedeMostrarInstall() {
   if (esStandalone() || $('#install-bar')) return false;              // ya instalada / ya visible
   if ($('#onboard')?.classList.contains('show')) return false;        // primero la bienvenida
+  if ($('#modal-bg')?.classList.contains('open') || $('#detalle')?.classList.contains('open')) return false;  // no tapar un overlay abierto (filtros/detalle)
   try {
     if (localStorage.getItem('estaciona_installed')) return false;
     if (Date.now() - (+localStorage.getItem('estaciona_install_dismiss') || 0) < 14 * 24 * 3600 * 1000) return false;
