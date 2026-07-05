@@ -1113,7 +1113,7 @@ window.abrirComparar = () => {
     ['Techado', items.map((p) => p.atributos?.techado ? 'Sí' : '—')],
     ['Accesible', items.map((p) => p.atributos?.accesible ? 'Sí' : '—')],
   ];
-  const gridCols = `92px repeat(${cols}, minmax(96px, 1fr))`;
+  const gridCols = `92px repeat(${cols}, minmax(116px, 1fr))`;
   $('#detalle').innerHTML = `
     <div class="det-top">
       <button onclick="cerrarDetalle()" title="Volver" aria-label="Volver">${ic('arrowLeft', 20)}</button>
@@ -1121,12 +1121,14 @@ window.abrirComparar = () => {
       <span style="width:40px"></span>
     </div>
     <div class="det-body">
+      <div class="cmp-scroll">
       <div class="cmp-grid" style="grid-template-columns:${gridCols}">
         <div class="cmp-corner"></div>
         ${items.map((p) => `<div class="cmp-head">${esc(p.nombre)}</div>`).join('')}
         ${filas.map(([lbl, celdas]) => `<div class="cmp-label">${lbl}</div>${celdas.map((c) => `<div class="cmp-cell">${c}</div>`).join('')}`).join('')}
         <div class="cmp-label"></div>
         ${items.map((p) => `<div class="cmp-cell"><button class="btn btn-primary cmp-go" onclick="llevame('${p.id}')" aria-label="Cómo llegar a ${esc(p.nombre)}">${ic('compass', 14)} Ir</button></div>`).join('')}
+      </div>
       </div>
       <p class="disclaimer">${ic('bulb', 15)} Los precios son estimados salvo los confirmados. El cupo es una estimación por hora, salvo reportes recientes de la gente. Confírmalo en el lugar.</p>
     </div>`;
