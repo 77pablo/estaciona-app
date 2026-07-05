@@ -32,6 +32,15 @@ function debounce(fn, ms) {
   };
 }
 
+// fetch con límite de tiempo: si el server cuelga (lento/stuck, no caído), lo
+// abortamos para no dejar la app congelada esperando. El abort rechaza la
+// promesa → cada llamada decide en su catch qué mostrar (reintentar / OSM).
+function fetchConTimeout(url, ms = 12000, opts = {}) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
+
 // Estaciona Pro (plan premium del conductor). El flag se guarda en el teléfono
 // (lo escribe la página /pro al activar un código). esPro = ¿tiene Pro activo?
 function esPro() { try { return !!localStorage.getItem('estaciona_pro'); } catch { return false; } }
@@ -3284,7 +3293,7 @@ async function cargar() {
   try {
     // `init=1` solo la 1ª vez (para traer las zonas/regiones del selector). En los
     // cambios de ciudad y el refresco cada 6 s no se re-piden (ahorra ~29 KB/llamada).
-    const r = await fetch(`${API}?ciudad=${encodeURIComponent(ciudadActual)}${ZONAS.length ? '' : '&init=1'}`);
+    const r = await fetchConTimeout(`${API}?ciudad=${encodeURIComponent(ciudadActual)}${ZONAS.length ? '' : '&init=1'}`);
     if (!r.ok) throw new Error('http ' + r.status);
     const j = await r.json();
     if (seq !== cargaSeq) return;     // llegó una carga más reciente: ignora esta respuesta vieja
@@ -3372,7 +3381,7 @@ function skeletonHtml() {
 // sigue igual con tiles de OSM (no bloquea el arranque).
 async function cargarConfig() {
   try {
-    const r = await fetch('/api/config');
+    const r = await fetchConTimeout('/api/config', 8000);   // no bloquear initMap si /api/config cuelga
     if (r.ok) { const c = await r.json(); MAPTILER_KEY = c.maptilerKey || ''; TOMTOM_KEY = c.tomtomKey || ''; }
   } catch { /* sin config: usamos OSM */ }
 }
