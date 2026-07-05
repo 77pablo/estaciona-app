@@ -1611,9 +1611,13 @@ async function cargarFotos(id) {
     const { fotos } = await r.json();
     if (detalleAbiertoId !== id) return;
     // Las imágenes rotas se ocultan solas (onerror) para no dejar huecos feos.
-    el.innerHTML = fotos?.length
-      ? fotos.map((u, i) => `<a class="foto-thumb" href="${esc(u)}" target="_blank" rel="noopener" aria-label="Ver foto ${i + 1} de ${fotos.length}"><img src="${esc(u)}" loading="lazy" decoding="async" alt="Foto del estacionamiento aportada por la comunidad" onerror="this.closest('.foto-thumb').remove()" /></a>`).join('')
-      : `<div class="fotos-vacio">${ic('camera', 16)}<span>Aún no hay fotos. ¡Sube la primera!</span></div>`;
+    if (fotos?.length) {
+      el.innerHTML = fotos.map((u, i) => `<button type="button" class="foto-thumb" aria-label="Ver foto ${i + 1} de ${fotos.length}"><img src="${esc(u)}" loading="lazy" decoding="async" alt="Foto del estacionamiento aportada por la comunidad" onerror="this.closest('.foto-thumb').remove()" /></button>`).join('');
+      // Abre la foto en el visor in-app (mismo que la foto del auto), no en una pestaña nueva.
+      el.onclick = (e) => { const img = e.target.closest('.foto-thumb')?.querySelector('img'); if (img) verFoto(img.src, 'Foto del estacionamiento aportada por la comunidad'); };
+    } else {
+      el.innerHTML = `<div class="fotos-vacio">${ic('camera', 16)}<span>Aún no hay fotos. ¡Sube la primera!</span></div>`;
+    }
   } catch {
     if (el && detalleAbiertoId === id) el.innerHTML = '<div class="fotos-vacio">Sin conexión: no pudimos cargar las fotos.</div>';
   }
@@ -1909,18 +1913,22 @@ function mostrarPrevEstFoto() {
     : `<button type="button" class="btn btn-second est-foto-btn" onclick="document.getElementById('est-foto-input').click()">${ic('camera', 16)} Foto del lugar (opcional)</button>`;
 }
 window.quitarEstFoto = () => { _estFoto = null; const i = $('#est-foto-input'); if (i) i.value = ''; mostrarPrevEstFoto(); };
-// Visor de la foto del auto a pantalla completa (toca en cualquier parte para cerrar).
-window.verFotoAuto = () => {
-  const a = LS.getAuto();
-  if (!a || !a.foto) return;
+// Visor de foto a pantalla completa (toca en cualquier parte o Esc para cerrar).
+// Único visor para la foto del auto y las fotos de la comunidad (coherente).
+window.verFoto = (url, alt = 'Foto') => {
+  if (!url) return;
   const ov = document.createElement('div');
   ov.className = 'foto-lightbox';
   ov.setAttribute('role', 'dialog');
-  ov.setAttribute('aria-label', 'Foto de dónde dejaste el auto');
-  ov.innerHTML = `<img src="${a.foto}" alt="Foto de dónde dejaste el auto" /><button class="foto-lightbox-x" aria-label="Cerrar">${ic('x', 22)}</button>`;
-  ov.addEventListener('click', () => ov.remove());
+  ov.setAttribute('aria-label', alt);
+  ov.innerHTML = `<img src="${esc(url)}" alt="${esc(alt)}" /><button class="foto-lightbox-x" aria-label="Cerrar">${ic('x', 22)}</button>`;
+  const cerrar = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') cerrar(); };
+  ov.addEventListener('click', cerrar);
+  document.addEventListener('keydown', onKey);
   document.body.appendChild(ov);
 };
+window.verFotoAuto = () => { const a = LS.getAuto(); if (a && a.foto) verFoto(a.foto, 'Foto de dónde dejaste el auto'); };
 window.guardarEstacione = () => {
   const p = _estacionePend, min = _alarmaSel || 0;
   const nota = (($('#est-nota')?.value || '').trim().slice(0, 60)) || null;   // se lee antes de cerrar el modal

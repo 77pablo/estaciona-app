@@ -905,7 +905,7 @@ body.is-offline #lista { padding-bottom: 44px; }
 .fotos-sec h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
 .fotos-galeria { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 10px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
 .fotos-galeria:empty { display: none; }
-.foto-thumb { flex: 0 0 auto; border-radius: var(--r); overflow: hidden; line-height: 0; transition: transform .14s ease, box-shadow .14s ease; }
+.foto-thumb { flex: 0 0 auto; border-radius: var(--r); overflow: hidden; line-height: 0; padding: 0; border: 0; background: none; cursor: pointer; transition: transform .14s ease, box-shadow .14s ease; }
 .foto-thumb:hover, .foto-thumb:focus-visible { transform: translateY(-2px); box-shadow: var(--shadow-soft); outline: none; }
 .foto-thumb img { width: 124px; height: 92px; object-fit: cover; border-radius: var(--r); border: 1px solid var(--line-2); display: block; background: var(--surface-2); transition: filter .14s ease; }
 .foto-thumb:hover img { filter: brightness(1.06); }
