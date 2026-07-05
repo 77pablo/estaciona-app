@@ -3571,10 +3571,11 @@ async function init() {
   // iOS no dispara el evento: muestra las instrucciones tras un rato (una vez, con cooldown).
   if (esIOSSafari()) setTimeout(mostrarInstall, 16000);
 }
-// Muestra/quita una píldora "Sin conexión — datos guardados" según navigator.onLine.
+// Muestra/quita una franja "Sin conexión — datos guardados" según navigator.onLine.
 function actualizarOffline() {
   const off = !navigator.onLine;
   let bar = $('#offline-bar');
+  document.body.classList.toggle('is-offline', off);
   if (off && !bar) {
     bar = document.createElement('div');
     bar.id = 'offline-bar';
