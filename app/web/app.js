@@ -63,6 +63,7 @@ let cargado = false;
 let cargaSeq = 0;                  // contador de cargas: descarta respuestas viejas (carrera)
 let sinConexionAvisado = false;    // evita spamear el toast "Sin conexión" cada 6s
 let _focoPrevio = null;            // foco previo del detalle, para restaurarlo al cerrarlo
+let _listaHtml = '';               // último HTML de la lista, para no reconstruir el DOM si no cambió
 let _focoModal = null;             // foco previo del modal (separado: un modal puede abrirse SOBRE el detalle)
 let _onCerrarModal = null;         // callback opcional al cerrar el modal (p.ej. revertir filtros no aplicados)
 let detalleAbiertoId = null;
@@ -884,6 +885,7 @@ function renderLista() {
   const sc = sheet ? sheet.scrollTop : 0;   // preservar scroll (no "saltar")
 
   if (lista.length === 0) {
+    _listaHtml = '';   // invalida el caché: el próximo render con datos SÍ reconstruye
     const hayFiltros = contarFiltros() > 0;
     const hayQuery = !!query.trim();
     // Tres casos honestos: (1) búsqueda activa sin match → ofrecer buscarla como
@@ -925,7 +927,7 @@ function renderLista() {
   // Tráfico estimado de la hora (uno solo para toda la lista): colorea el tiempo en auto.
   const traf = trafico();
   const trafColor = traf.nivel === 'fluido' ? 'var(--green)' : traf.nivel === 'medio' ? 'var(--amber)' : 'var(--red)';
-  $('#lista').innerHTML = lista.map((p) => {
+  const html = lista.map((p) => {
     const d = p.disponibilidad || {}, nivel = d.nivel || 'cerrado';   // defensivo: nunca tumbar la lista
     // Disponibilidad: la MEJOR fuente (operador en vivo > reporte fresco de la
     // gente > estimación semáforo). badgeDisp(p) resuelve el texto y el estilo.
@@ -969,6 +971,13 @@ function renderLista() {
         </div>
       </div>`;
   }).join('');
+
+  // Si el contenido es idéntico al último render, NO tocar el DOM: el refresco de
+  // 6 s no recrea las ~40 tarjetas ni re-adjunta listeners cuando no hay novedades
+  // (evita trabajo y jank; el estado del DOM, hover y foco quedan intactos).
+  if (html === _listaHtml && $('#lista').firstElementChild) { if (sheet) sheet.scrollTop = sc; return; }
+  _listaHtml = html;
+  $('#lista').innerHTML = html;
 
   $('#lista').querySelectorAll('.card').forEach((c) => {
     const sel = () => seleccionarCard(c.dataset.id, c);
@@ -3006,9 +3015,9 @@ function enfocables(c) {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (_reportando) { cancelarReporte(); return; }
-    if ($('#onboard').classList.contains('show')) window.cerrarBienvenida();
-    else if ($('#modal-bg').classList.contains('open')) window.cerrarModal();
-    else if ($('#detalle').classList.contains('open')) window.cerrarDetalle();
+    if ($('#onboard')?.classList.contains('show')) window.cerrarBienvenida();
+    else if ($('#modal-bg')?.classList.contains('open')) window.cerrarModal();
+    else if ($('#detalle')?.classList.contains('open')) window.cerrarDetalle();
     return;
   }
   if (e.key !== 'Tab') return;
