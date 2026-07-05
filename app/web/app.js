@@ -2601,7 +2601,7 @@ function renderSugerencias(resultados) {
     <button class="sug-item sug-ciudad" role="option" data-i="${i}" onmousedown="event.preventDefault()" onclick="elegirSugerencia(${i})">
       <span class="sug-ic">${ic('pin', 17)}</span>
       <span class="sug-main">
-        <span class="sug-nom">${esc(r.nombre)}</span>
+        <span class="sug-nom"><span class="sug-nom-txt">${esc(r.nombre)}</span></span>
         <span class="sug-sub">${esc(r.region || '')} · ${r.cantidad} estacionamiento${r.cantidad === 1 ? '' : 's'}</span>
       </span>
       <span class="sug-precio">Ver zona</span>
@@ -2609,7 +2609,7 @@ function renderSugerencias(resultados) {
     <button class="sug-item" role="option" data-i="${i}" onmousedown="event.preventDefault()" onclick="elegirSugerencia(${i})">
       <span class="sug-ic">${ic(r.tipo === 'calle' ? 'road' : 'parking', 17)}</span>
       <span class="sug-main">
-        <span class="sug-nom">${esc(r.nombre)}${r.verificado ? ' <span class="sug-ok" title="Precio confirmado">' + ic('check', 12) + '</span>' : ''}</span>
+        <span class="sug-nom"><span class="sug-nom-txt">${esc(r.nombre)}</span>${r.verificado ? '<span class="sug-ok" title="Precio confirmado">' + ic('check', 12) + '</span>' : ''}</span>
         <span class="sug-sub">${esc(r.ciudad)}${r.region ? ' · ' + esc(r.region) : ''}</span>
       </span>
       <span class="sug-precio">${precioSug(r)}</span>

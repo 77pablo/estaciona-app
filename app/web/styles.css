@@ -181,7 +181,8 @@ main, .view { flex: 1; min-height: 0; }
 .sug-item:hover, .sug-item.on { background: var(--surface-2); }
 .sug-ic { flex-shrink: 0; color: var(--muted); display: inline-flex; }
 .sug-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.sug-nom { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+.sug-nom { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 5px; min-width: 0; }
+.sug-nom-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .sug-ok { color: var(--accent); display: inline-flex; }
 .sug-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sug-precio { flex-shrink: 0; font-family: var(--font-mono); font-size: 12.5px; color: var(--text); font-weight: 600; }
