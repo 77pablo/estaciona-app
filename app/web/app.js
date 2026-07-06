@@ -443,6 +443,9 @@ const LS = {
   // impacto y celebra hitos, para cerrar el círculo del crowdsourcing.
   getAportes: () => { try { return +localStorage.getItem('estaciona_aportes') || 0; } catch { return 0; } },
   incAportes: () => { const n = LS.getAportes() + 1; lsSet('estaciona_aportes', String(n)); return n; },
+  // Meta de gasto mensual (Pro): 0 = sin meta.
+  getMetaGasto: () => { try { return +localStorage.getItem('estaciona_meta_gasto') || 0; } catch { return 0; } },
+  setMetaGasto: (n) => lsSet('estaciona_meta_gasto', String(Math.max(0, Math.round(n) || 0))),
   // Estacionamientos vistos recientemente (para acceso rápido desde el buscador).
   getVistos: () => { try { return JSON.parse(localStorage.getItem('estaciona_vistos') || '[]'); } catch { return []; } },
   setVistos: (v) => lsSet('estaciona_vistos', JSON.stringify(v)),
@@ -2077,8 +2080,60 @@ function gastoHTML() {
       <div class="gasto-card"><div class="g-num">${totalMes ? CLP(totalMes) : '$0'}</div><div class="g-lbl">este mes · ${esteMes.length} ${esteMes.length === 1 ? 'vez' : 'veces'}</div></div>
       <div class="gasto-card"><div class="g-num">${prom ? CLP(prom) : '$0'}</div><div class="g-lbl">promedio por vez</div></div>
     </div>
+    ${metaGastoHTML(totalMes)}
     <div class="gasto-nota">${ic('bulb', 12)} ${tendTxt}</div>
   </div>`;
+}
+// Meta de gasto mensual (Pro): barra de avance + estado (ok / cerca 80% / pasado).
+function metaGastoHTML(totalMes) {
+  const meta = LS.getMetaGasto();
+  if (!meta) {
+    return `<button class="gasto-meta-set" onclick="ponerMetaGasto()">${ic('wallet', 14)} Ponerme una meta mensual</button>`;
+  }
+  const pctReal = Math.round(totalMes / meta * 100);
+  const pct = Math.min(100, pctReal);
+  const estado = pctReal > 100 ? 'over' : pctReal >= 80 ? 'warn' : 'ok';
+  const nota = estado === 'over' ? `Pasaste tu meta por ${CLP(totalMes - meta)}`
+    : estado === 'warn' ? `Te quedan ${CLP(Math.max(0, meta - totalMes))} para tu meta`
+    : `Vas al ${pctReal}% de tu meta`;
+  return `<div class="gasto-meta ${estado}">
+    <div class="gm-top"><span>Meta: <b>${CLP(meta)}/mes</b></span>
+      <button class="gm-edit" onclick="ponerMetaGasto()" aria-label="Cambiar la meta">${ic('edit', 13)} Cambiar</button></div>
+    <div class="gm-bar" role="progressbar" aria-valuenow="${pctReal}" aria-valuemin="0" aria-valuemax="100" aria-label="Avance de tu meta de gasto"><span class="gm-fill" style="width:${pct}%"></span></div>
+    <div class="gm-nota">${nota}</div>
+  </div>`;
+}
+window.ponerMetaGasto = () => {
+  const actual = LS.getMetaGasto();
+  $('#modal').innerHTML = `
+    <h3>${ic('wallet', 18)} Meta de gasto mensual</h3>
+    <p>Ponte un tope para el mes. Te mostramos cuánto llevas y te avisamos al acercarte. Es solo para ti — no aparta nada.</p>
+    <div class="precio-field"><span class="precio-pesos">$</span>
+      <input id="meta-input" type="number" inputmode="numeric" min="0" max="2000000" step="1000" placeholder="30000" value="${actual || ''}" aria-label="Meta de gasto mensual en pesos" />
+      <span class="precio-hora">/ mes</span></div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="confirmarMetaGasto()">Guardar meta</button>
+      ${actual ? '<button class="btn btn-second" onclick="quitarMetaGasto()">Quitar meta</button>' : ''}
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
+  abrirModal();
+  setTimeout(() => { const i = $('#meta-input'); if (i) { i.focus(); i.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmarMetaGasto(); }); } }, 60);
+};
+window.confirmarMetaGasto = () => {
+  const v = Math.round(Number($('#meta-input')?.value));
+  if (!Number.isFinite(v) || v <= 0) { toast('Escribe un monto válido'); return; }
+  if (v > 2000000) { toast('Esa meta es muy alta'); return; }
+  LS.setMetaGasto(v);
+  cerrarModal(); renderMiAuto(); toast(`Meta puesta: ${CLP(v)}/mes ✓`);
+};
+window.quitarMetaGasto = () => { LS.setMetaGasto(0); cerrarModal(); renderMiAuto(); toast('Meta quitada'); };
+// Gasto acumulado del mes en curso (mismo criterio que gastoHTML).
+function gastoEsteMes() {
+  const ahora = new Date();
+  const mesAct = ahora.getFullYear() * 12 + ahora.getMonth();
+  return LS.getHist()
+    .filter((e) => e.precioHora != null && typeof e.costo === 'number' && (() => { const d = new Date(e.fin); return d.getFullYear() * 12 + d.getMonth() === mesAct; })())
+    .reduce((s, e) => s + (e.costo || 0), 0);
 }
 function historialHTML() {
   const h = LS.getHist();
@@ -2311,7 +2366,15 @@ function finalizarAuto(a, pagado) {
   LS.setHist(h.slice(0, esPro() ? 500 : 30));   // tope 30 (Pro: 500)
   LS.clearAuto(); cancelarAlarmaBg(); renderMiAuto();
   actualizarAutoMarker();   // quita el pin del auto del mapa
-  toast(pagado != null ? '¡Gracias! Sumaste un precio real 🙌' : '¡Listo, buen viaje! 🚗');
+  let msg = pagado != null ? '¡Gracias! Sumaste un precio real 🙌' : '¡Listo, buen viaje! 🚗';
+  // Aviso de meta (Pro): si este gasto te cruzó el 80% o el 100% del mes, dilo.
+  const meta = esPro() ? LS.getMetaGasto() : 0;
+  if (meta > 0) {
+    const total = gastoEsteMes(), prev = total - (pagado != null ? pagado : costoTranscurrido(a));
+    if (prev < meta && total >= meta) msg = `Ojo: pasaste tu meta de ${CLP(meta)} este mes`;
+    else if (prev < meta * 0.8 && total >= meta * 0.8) msg = `Vas al ${Math.round(total / meta * 100)}% de tu meta del mes`;
+  }
+  toast(msg);
 }
 
 // --- Favoritos --------------------------------------------------------------
