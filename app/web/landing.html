@@ -71,6 +71,8 @@
   /* Reveal al entrar en viewport (sutil: sube + aparece). */
   .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s cubic-bezier(.22,.61,.36,1), transform .7s cubic-bezier(.22,.61,.36,1); will-change: opacity, transform; }
   .reveal.in { opacity: 1; transform: none; }
+  /* Sin JS (o si falla): el contenido se ve igual, nunca queda en blanco. */
+  html:not(.js) .reveal { opacity: 1 !important; transform: none !important; }
   /* Escalonado opcional para hijos (bento / chips). */
   .reveal[data-delay="1"] { transition-delay: .08s; }
   .reveal[data-delay="2"] { transition-delay: .16s; }
@@ -97,6 +99,8 @@
   @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
   ::selection { background: #2dd4bf; color: #062925; }
 </style>
+  <!-- Marca que hay JS ANTES de pintar: evita flash y deja el contenido visible si el JS no corre. -->
+  <script>document.documentElement.classList.add('js');</script>
 </head>
 
 <body class="grain bg-ink text-bone font-sans antialiased selection:bg-signal">
@@ -271,6 +275,33 @@
       <a href="/app" class="cta-glow rounded-lg bg-signal px-7 py-4 font-bold text-ink transition hover:brightness-95">
         Abrir Estaciona →
       </a>
+    </div>
+  </section>
+
+  <!-- Estacionamientos por ciudad (links internos → páginas SEO) -->
+  <section class="reveal mx-auto max-w-6xl px-5 pb-10 sm:px-8">
+    <p class="font-mono text-xs uppercase tracking-widest text-mute">Estacionamientos por ciudad</p>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <a href="/estacionamientos/santiago" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Santiago</a>
+      <a href="/estacionamientos/providencia" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Providencia</a>
+      <a href="/estacionamientos/las-condes" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Las Condes</a>
+      <a href="/estacionamientos/valparaiso" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Valparaíso</a>
+      <a href="/estacionamientos/vina-del-mar" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Viña del Mar</a>
+      <a href="/estacionamientos/concepcion" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Concepción</a>
+      <a href="/estacionamientos/temuco" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Temuco</a>
+      <a href="/estacionamientos/antofagasta" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Antofagasta</a>
+      <a href="/estacionamientos/la-serena" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">La Serena</a>
+      <a href="/estacionamientos/coquimbo" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Coquimbo</a>
+      <a href="/estacionamientos/rancagua" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Rancagua</a>
+      <a href="/estacionamientos/talca" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Talca</a>
+      <a href="/estacionamientos/chillan" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Chillán</a>
+      <a href="/estacionamientos/valdivia" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Valdivia</a>
+      <a href="/estacionamientos/puerto-montt" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Puerto Montt</a>
+      <a href="/estacionamientos/iquique" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Iquique</a>
+      <a href="/estacionamientos/arica" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Arica</a>
+      <a href="/estacionamientos/calama" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Calama</a>
+      <a href="/estacionamientos/osorno" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Osorno</a>
+      <a href="/estacionamientos/punta-arenas" class="rounded-full border border-bone/12 px-3.5 py-1.5 text-sm text-bone/80 hover:border-signal hover:text-signal">Punta Arenas</a>
     </div>
   </section>
 
