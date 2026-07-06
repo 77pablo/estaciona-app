@@ -246,6 +246,12 @@ main, .view { flex: 1; min-height: 0; }
 #offline-bar { position: absolute; left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); z-index: 65; display: flex; justify-content: center; align-items: center; gap: 6px; padding: 8px 14px; background: var(--amber); color: #0E0F12; font-size: 12.5px; font-weight: 700; box-shadow: 0 -3px 14px rgba(0,0,0,.45); white-space: nowrap; }
 #offline-bar .ic-svg { color: #0E0F12; }
 body.is-offline #lista { padding-bottom: 44px; }
+/* Aviso "versión nueva disponible" (barra accent, sobre la barra inferior). */
+#update-bar { position: absolute; left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); z-index: 66; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 9px 14px; background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 700; box-shadow: 0 -3px 14px rgba(0,0,0,.45); }
+#update-bar .ub-txt { display: inline-flex; align-items: center; gap: 6px; }
+#update-bar .ic-svg { color: var(--on-accent); }
+#update-bar .ub-go { background: var(--on-accent); color: var(--accent); border: none; border-radius: 8px; padding: 5px 12px; font-weight: 800; font-size: 12.5px; cursor: pointer; }
+#update-bar .ub-x { background: none; border: none; color: var(--on-accent); display: inline-flex; cursor: pointer; padding: 4px; opacity: .85; }
 /* Aviso "Instalar app" (PWA): barra descartable sobre la barra inferior. */
 .install-bar {
   position: absolute; left: 50%; bottom: calc(66px + env(safe-area-inset-bottom, 0px));

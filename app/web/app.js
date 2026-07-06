@@ -3886,10 +3886,28 @@ function actualizarOffline() {
     bar.remove();
   }
 }
+// Aviso "hay versión nueva" (cuando un SW nuevo toma control tras un deploy). Un
+// toque recarga para servir los archivos frescos; nunca forzamos la recarga.
+function mostrarActualizar() {
+  if ($('#update-bar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'update-bar';
+  bar.setAttribute('role', 'status');
+  bar.innerHTML = `<span class="ub-txt">${ic('refresh', 14)} Hay una versión nueva</span>`
+    + `<button class="ub-go" onclick="location.reload()">Actualizar</button>`
+    + `<button class="ub-x" aria-label="Ahora no" onclick="this.parentElement.remove()">${ic('x', 14)}</button>`;
+  (document.querySelector('.phone') || document.body).appendChild(bar);
+}
 init();
 
 // PWA: registra el service worker (app instalable + funciona sin señal). Es
 // progresivo — si el navegador no lo soporta o falla, la app anda igual.
 if ('serviceWorker' in navigator) {
+  // ¿Había un SW controlando la página al cargar? Si lo había y luego cambia el
+  // controlador, es una ACTUALIZACIÓN (no la 1ª instalación): avisamos para
+  // recargar y ver la versión nueva. Sin esto, el usuario se quedaba con la
+  // versión vieja cacheada sin enterarse.
+  const yaControlado = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (yaControlado) mostrarActualizar(); });
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
