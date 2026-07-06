@@ -626,6 +626,7 @@ body.is-offline #lista { padding-bottom: 44px; }
 .opts button:hover { border-color: var(--accent); }
 .opts button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
 .opts button.on .ic-svg { color: var(--on-accent); }
+.aviso-gratis { flex-basis: 100%; justify-content: center; }   /* opción "cuando sea gratis": fila propia, destacada */
 /* Aviso honesto en el modal de alarma cuando el navegador bloquea notificaciones */
 .alarma-aviso { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; color: var(--muted); line-height: 1.4; margin: -6px 0 16px; }
 .alarma-aviso .ic-svg { flex: none; color: var(--accent); margin-top: 1px; }

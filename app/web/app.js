@@ -300,6 +300,23 @@ function pagaEnHora(precioHora, gratisInfo, horario, hora, dia) {
   if (gratisEnHora(gratisInfo, hora, dia)) return false;
   return dentroVentanaPago(horario, hora);
 }
+// Minutos hasta que este lugar (pago ahora) se vuelva GRATIS por su regla de
+// horario (ej. "gratis después de las 20h", "domingo gratis"). Devuelve
+// { min, hhmm } o null si ya es gratis, no tiene regla, o no ocurre en 24 h.
+function proximoGratis(p) {
+  if (!p.precioHora) return null;                                  // ya es gratis / sin tarifa
+  const info = p.gratisInfo || '';
+  if (!rangoTexto(info) && !/domingo|siempre/i.test(info)) return null;   // sin regla de gratis
+  const ahora = new Date();
+  const { h: h0, dia: d0 } = horaDiaChile(ahora);
+  if (gratisEnHora(info, h0, d0)) return null;                     // ya es gratis a esta hora
+  const minAhora = minutosChile() % 60;                            // minuto-de-hora en Chile
+  for (let dh = 1; dh <= 24; dh++) {
+    const { h, dia } = horaDiaChile(new Date(ahora.getTime() + dh * 3600000));
+    if (gratisEnHora(info, h, dia)) return { min: dh * 60 - minAhora, hhmm: String(h).padStart(2, '0') + ':00' };
+  }
+  return null;
+}
 // Costo de pago en la ventana [inicioMs, inicioMs+minutos), contando SOLO los
 // minutos que se pagan (fuera de tramos gratis o cerrados). Avanza por tramos de
 // hora para respetar los cambios de tarifa/horario. Base común del costo ya
@@ -3137,19 +3154,21 @@ function chequearAlarma() {
 }
 
 // --- "Avísame": recordatorio local para revisar un lugar (sin reserva ni pago) ---
-let _avisoSel = 60;
+let _avisoSel = 60, _avisoMotivo = null;
 window.avisarme = (id) => {
   const p = DATA.find((x) => x.id === id);
   if (!p) return;
   const bloqueada = 'Notification' in window && Notification.permission === 'denied';
   const honesto = p.disponibilidad?.nivel === 'verde' ? 'a esa hora suele haber cupo (estimado)'
     : 'la disponibilidad es una estimación, no un lugar apartado';
+  const pg = proximoGratis(p);   // si es pago ahora pero se vuelve gratis por su horario
   $('#modal').innerHTML = `
     <h3>${ic('clock', 18)} Avísame</h3>
     <p>Te recordamos revisar <b>${esc(p.nombre)}</b>. No aparta un lugar — es un aviso para que vayas a ver; ${honesto}.</p>
     <div class="opts" id="aviso-opts">
+      ${pg ? `<button class="aviso-gratis on" data-min="${pg.min}" data-motivo="gratis">${ic('tag', 14)} Cuando sea gratis · ${pg.hhmm}</button>` : ''}
       <button data-min="30">En 30 min</button>
-      <button data-min="60" class="on">En 1 hora</button>
+      <button data-min="60"${pg ? '' : ' class="on"'}>En 1 hora</button>
       <button data-min="120">En 2 horas</button>
       <button data-min="180">En 3 horas</button>
     </div>
@@ -3158,23 +3177,24 @@ window.avisarme = (id) => {
       <button class="btn btn-primary" onclick="confirmarAviso('${id}')">Activar aviso</button>
       <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
     </div>`;
-  _avisoSel = 60;
+  if (pg) { _avisoSel = pg.min; _avisoMotivo = 'gratis'; } else { _avisoSel = 60; _avisoMotivo = null; }
   abrirModal();
   $('#aviso-opts').querySelectorAll('button').forEach((b) =>
     b.addEventListener('click', () => {
       $('#aviso-opts').querySelectorAll('button').forEach((x) => x.classList.remove('on'));
-      b.classList.add('on'); _avisoSel = Number(b.dataset.min);
+      b.classList.add('on'); _avisoSel = Number(b.dataset.min); _avisoMotivo = b.dataset.motivo || null;
     }));
 };
 window.confirmarAviso = (id) => {
   const p = DATA.find((x) => x.id === id);
   if (!p) return;
   const min = _avisoSel || 60;
+  const motivo = _avisoMotivo;
   const recs = LS.getRecs();
-  recs.push({ id, nombre: p.nombre, ts: Date.now() + min * 60000, sono: false });
+  recs.push({ id, nombre: p.nombre, ts: Date.now() + min * 60000, sono: false, motivo });
   LS.setRecs(recs);
   cerrarModal();
-  const ok = `Te aviso en ${fmtMin(min)} ✓`;
+  const ok = motivo === 'gratis' ? 'Te aviso cuando sea gratis ✓' : `Te aviso en ${fmtMin(min)} ✓`;
   const enApp = 'Aviso activado; te avisaré dentro de la app';
   // Permiso de notificación: se pide solo ahora (gesto del usuario).
   if ('Notification' in window && Notification.permission === 'default') {
@@ -3195,11 +3215,13 @@ function chequearRecordatorios() {
     for (const r of recs) {
       if (!r.sono && ahora >= r.ts) {
         r.sono = true; cambió = true;
+        const esGratis = r.motivo === 'gratis';
         const b = $('#banner');
-        b.innerHTML = `<span>${ic('clock', 16)} Revisa ${esc(r.nombre)} — ¿hay cupo ahora?</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
+        const txt = esGratis ? `${esc(r.nombre)} — ahora suele ser gratis 🎉` : `Revisa ${esc(r.nombre)} — ¿hay cupo ahora?`;
+        b.innerHTML = `<span>${ic(esGratis ? 'tag' : 'clock', 16)} ${txt}</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
         b.classList.remove('urgent'); b.classList.add('show');   // recordatorio amigable (borde teal)
         if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('Estaciona 🅿️', { body: `Revisa ${r.nombre} — ¿encontraste cupo?` });
+          new Notification('Estaciona 🅿️', { body: esGratis ? `${r.nombre} — ahora suele ser gratis 🎉` : `Revisa ${r.nombre} — ¿encontraste cupo?` });
         }
         break;
       }
