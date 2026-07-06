@@ -989,6 +989,8 @@ body.is-offline #lista { padding-bottom: 44px; }
 .mapa-leyenda span { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
 .mapa-leyenda i.dot { width: 8px; height: 8px; border-radius: 50%; margin: 0; }
 .mapa-leyenda .leyenda-tit { font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; cursor: pointer; }
+.mapa-leyenda .leyenda-sub { font-size: 9.5px; color: var(--muted); margin-top: -1px; }
+.mapa-leyenda .leyenda-real { font-size: 9.5px; color: var(--muted); border-top: 1px solid var(--line-2); padding-top: 3px; margin-top: 2px; white-space: normal; max-width: 150px; line-height: 1.3; }
 /* Plegada: queda solo el título como "chip" para no tapar el mapa en móvil. */
 .mapa-leyenda.plegada span { display: none; }
 .leaflet-control-attribution { background: rgba(22,24,29,.85) !important; color: var(--muted) !important; }

@@ -662,7 +662,7 @@ function initMap() {
       d.setAttribute('tabindex', '0');
       d.setAttribute('aria-label', 'Leyenda de disponibilidad — plegar o desplegar');
       d.setAttribute('aria-expanded', 'true');
-      d.innerHTML = '<b class="leyenda-tit">Disponibilidad</b><span><i class="dot verde"></i>Suele haber</span><span><i class="dot amarillo"></i>Puede tardar</span><span><i class="dot rojo"></i>Difícil</span>';
+      d.innerHTML = '<b class="leyenda-tit">Disponibilidad</b><span class="leyenda-sub">≈ estimado por horario</span><span><i class="dot verde"></i>Suele haber</span><span><i class="dot amarillo"></i>Puede tardar</span><span><i class="dot rojo"></i>Difícil</span><span class="leyenda-real"><span class="live-dot"></span>“en vivo” y “reportado” = dato real</span>';
       // Plegable en pantallas chicas para no tapar el mapa: toca/Enter para abrir/cerrar.
       const toggle = () => { const pleg = d.classList.toggle('plegada'); d.setAttribute('aria-expanded', pleg ? 'false' : 'true'); };
       d.addEventListener('click', toggle);
@@ -911,13 +911,21 @@ function haceTxt(min) {
 // backend: operador en vivo > reporte fresco de la gente > estimación (semáforo).
 function badgeDisp(p) {
   const d = p.disponibilidad || {}, nivel = d.nivel || 'cerrado';
-  if (d.fuente === 'live') return `<span class="badge-disp ${nivel} live" title="Cupos en vivo del operador">${esc(d.label || '')} · en vivo</span>`;
+  if (d.fuente === 'live') {
+    // Dato del operador (≤30 min). Si es muy reciente decimos "en vivo"; si ya tiene
+    // unos minutos, mostramos la frescura real (más honesto que un "en vivo" perpetuo).
+    const suf = (d.minAgo ?? 0) < 10 ? 'en vivo' : haceTxt(d.minAgo);
+    return `<span class="badge-disp ${nivel} live" title="Cupos del operador · ${haceTxt(d.minAgo)}">${esc(d.label || '')} · ${suf}</span>`;
+  }
   if (d.fuente === 'gente') {
     const t = nivel === 'verde' ? 'Cupo confirmado' : 'Reportan sin cupo';
     return `<span class="badge-disp ${nivel} gente" title="Reportado por la gente ${haceTxt(d.minAgo)}">${t} · ${haceTxt(d.minAgo)}</span>`;
   }
+  // Estimación por horario/día: la marcamos con "≈" para que NO se confunda con un
+  // dato real (en vivo o reportado). Un cerrado no lleva marca (es un hecho del horario).
   const txt = nivel === 'cerrado' ? horaAbre(p) : nivel === 'verde' ? 'Suele haber' : nivel === 'amarillo' ? 'Puede tardar' : 'Difícil';
-  return `<span class="badge-disp ${nivel}">${txt}</span>`;
+  const pre = nivel === 'cerrado' ? '' : '≈ ';
+  return `<span class="badge-disp ${nivel}" title="Estimación por horario y día (no es dato en vivo)">${pre}${txt}</span>`;
 }
 function renderLista() {
   const lista = listaFiltrada();
