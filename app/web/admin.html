@@ -363,8 +363,20 @@
   window.generarCodigoOp = async (id, nombre) => {
     const r = await fetch('/api/mod/operador', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-mod-clave': CLAVE }, body: JSON.stringify({ id, nombre }) });
     const j = await r.json().catch(() => ({}));
-    if (j.ok) { alert('Código para «' + nombre + '»:\n\n    ' + j.codigo + '\n\nDáselo al operador. Entra en /operador con ese código.'); cargarOperadores(); }
+    if (j.ok) { compartirOp(j.codigo, nombre); cargarOperadores(); }
     else alert('No se pudo generar (¿id válido?).');
+  };
+  // Arma el mensaje con el LINK de auto-login (el operador solo lo toca, no escribe el
+  // código) y lo copia al portapapeles listo para pegar en WhatsApp.
+  window.compartirOp = (codigo, nombre) => {
+    const link = location.origin + '/operador?c=' + encodeURIComponent(codigo);
+    const msg = '📍 Estaciona — Panel de «' + (nombre || 'tu estacionamiento') + '»\n\n'
+      + 'Entra aquí (queda listo, no tienes que escribir nada):\n' + link + '\n\n'
+      + 'Ahí marcas cuántos cupos tienes libres y tu tarifa. Aparece en el mapa al instante.\n'
+      + '(Tu código, por si lo necesitas: ' + codigo + ')';
+    const ok = () => alert('✓ Link copiado — pégalo en WhatsApp al operador.\n\n' + link);
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(msg).then(ok).catch(() => prompt('Copia y envía esto:', msg));
+    else prompt('Copia y envía esto:', msg);
   };
   async function cargarOperadores() {
     try {
@@ -374,7 +386,7 @@
       $('#opActivos').innerHTML = ops.length ? ops.map((o) => {
         const cupo = o.libres != null ? `${o.libres} cupos · hace ${Math.max(0, Math.round((Date.now() - o.cupoTs) / 60000))} min` : 'sin cupo aún';
         return `<div class="item"><div><div class="txt">${esc(o.nombre || o.id)} · <b style="font-family:monospace;letter-spacing:.05em">${esc(o.codigo)}</b></div><div class="meta">${esc(o.id)} · ${cupo}</div></div>
-        <button class="del" onclick="borrar(this,'operador','${esc(o.codigo)}')">Borrar</button></div>`;
+        <div style="display:flex;gap:6px"><button class="copy" onclick='compartirOp(${JSON.stringify(o.codigo)}, ${JSON.stringify(o.nombre || o.id)})'>Compartir link</button><button class="del" onclick="borrar(this,'operador','${esc(o.codigo)}')">Borrar</button></div></div>`;
       }).join('') : '<div class="vacio">Sin operadores todavía.</div>';
     } catch {}
   }

@@ -44,6 +44,9 @@
   .precio-in .por{font-size:14px}
   .precio-in input{flex:1;background:transparent;border:none;color:var(--text);font-size:26px;font-weight:800;text-align:right;font-variant-numeric:tabular-nums;outline:none;min-width:0;font-family:inherit}
   #wrap-precio.off{opacity:.4;pointer-events:none}
+  .tip{position:relative;background:rgba(45,212,191,.10);border:1px solid rgba(45,212,191,.35);border-radius:12px;padding:14px 38px 14px 14px;font-size:13.5px;line-height:1.5;margin-bottom:16px;color:var(--text)}
+  .tip b{color:var(--accent)}
+  .tip #tip-x{position:absolute;top:8px;right:8px;background:transparent;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:4px;line-height:1}
   footer{margin-top:26px;border-top:1px solid var(--line);padding-top:14px;font-size:12px;color:var(--muted)}
 </style>
 </head>
@@ -62,6 +65,10 @@
   </div>
 
   <div id="panel" hidden>
+    <div id="tip" class="tip" hidden>
+      <button id="tip-x" aria-label="Cerrar">✕</button>
+      <b>👋 ¡Listo, ya entraste!</b> Marca cuántos <b>cupos libres</b> tienes y tu <b>tarifa</b>. Aparecen en el mapa de Estaciona al instante, marcados como <b>oficiales</b>. Actualiza el cupo cuando cambie.
+    </div>
     <div class="card">
       <div class="lugar" id="p-nombre">—</div>
       <div class="lugar-sub" id="p-sub">Cupos libres ahora</div>
@@ -110,6 +117,13 @@
   var $ = function (s) { return document.querySelector(s); };
   var codigo = null, libres = 0;
   try { codigo = localStorage.getItem('estaciona_op_codigo'); } catch (e) {}
+  // Deep-link: /operador?c=CODIGO (o ?codigo=) entra directo — es el link que el
+  // admin le manda por WhatsApp; el operador solo lo toca, no escribe nada.
+  try {
+    var _p = new URLSearchParams(location.search);
+    var _cu = (_p.get('c') || _p.get('codigo') || '').trim().toUpperCase();
+    if (_cu) { codigo = _cu; history.replaceState(null, '', location.pathname); }   // limpia el código de la URL
+  } catch (e) {}
 
   function nivel(n) { return n <= 0 ? { c: 'var(--red)', t: 'Sin cupos ahora' } : n < 5 ? { c: 'var(--amber)', t: n + ' cupos · quedan pocos' } : { c: 'var(--green)', t: n + ' cupos libres' }; }
   function render() {
@@ -130,6 +144,7 @@
         $('#p-nombre').textContent = j.nombre || 'Tu estacionamiento';
         $('#login').hidden = true; $('#panel').hidden = false;
         setLibres(0);
+        try { if (!localStorage.getItem('estaciona_op_tip')) $('#tip').hidden = false; } catch (e) { $('#tip').hidden = false; }
         return true;
       }
       $('#msg-login').className = 'msg err'; $('#msg-login').textContent = 'Código inválido. Revísalo o pídenos uno.';
@@ -157,6 +172,7 @@
     } catch (e) { $('#msg-panel').className = 'msg err'; $('#msg-panel').textContent = 'Sin conexión.'; }
   });
   $('#salir').addEventListener('click', function () { try { localStorage.removeItem('estaciona_op_codigo'); } catch (e) {} location.reload(); });
+  $('#tip-x').addEventListener('click', function () { $('#tip').hidden = true; try { localStorage.setItem('estaciona_op_tip', '1'); } catch (e) {} });
 
   // ---- Tarifa ----
   function precioVal() { return parseInt(($('#precio').value || '').replace(/\D/g, ''), 10) || 0; }
