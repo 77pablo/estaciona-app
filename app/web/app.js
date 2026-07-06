@@ -439,6 +439,10 @@ const LS = {
   // alimentar la señal de la gente cuando vuelvas a la app.
   getCupoAsk: () => { try { return JSON.parse(localStorage.getItem('estaciona_cupoask') || '[]'); } catch { return []; } },
   setCupoAsk: (a) => lsSet('estaciona_cupoask', JSON.stringify(a)),
+  // Contador personal de aportes a la comunidad (reportes de cupo): reconoce el
+  // impacto y celebra hitos, para cerrar el círculo del crowdsourcing.
+  getAportes: () => { try { return +localStorage.getItem('estaciona_aportes') || 0; } catch { return 0; } },
+  incAportes: () => { const n = LS.getAportes() + 1; lsSet('estaciona_aportes', String(n)); return n; },
   // Estacionamientos vistos recientemente (para acceso rápido desde el buscador).
   getVistos: () => { try { return JSON.parse(localStorage.getItem('estaciona_vistos') || '[]'); } catch { return []; } },
   setVistos: (v) => lsSet('estaciona_vistos', JSON.stringify(v)),
@@ -1775,7 +1779,11 @@ window.toggleFavDetalle = (id) => {
 };
 window.confirmarCupo = (id, ok) => {
   track('voto', ciudadActual);
-  toast(ok ? '¡Gracias! Confirmado 👍' : 'Gracias, lo anotamos 👎');
+  const n = LS.incAportes();                         // tu contador personal de reportes
+  const hito = n >= 5 && n % 5 === 0;                 // celebra cada 5 (desde el 5º)
+  const base = ok ? '¡Gracias! Otro conductor va a saber que aquí suele haber 🙌'
+                  : 'Gracias — avisar que estaba lleno también ayuda 🙌';
+  toast(hito ? `¡Van ${n} reportes tuyos! Estás ayudando a mucha gente 🌟` : base);
   fetch('/api/voto', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, ok }),
