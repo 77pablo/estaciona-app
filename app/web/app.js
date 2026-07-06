@@ -3849,8 +3849,31 @@ window.instruccionesIOS = () => {
 async function init() {
   $('#lista').innerHTML = skeletonHtml();   // esqueleto con shimmer mientras carga
   mostrarBienvenida();                       // tarjeta de bienvenida (1ª vez)
-  await cargarConfig();                      // key de mapas (antes de crear el mapa)
+
+  // Ciudad inicial (deep link ?ciudad= > última guardada > default) — se decide
+  // ANTES de pedir datos, para pedir la ciudad correcta de una.
+  const params = new URLSearchParams(location.search);
+  const lugarInicial = params.get('lugar');
+  const ciudadInicial = params.get('ciudad');
+  if (lugarInicial && ciudadInicial) ciudadActual = ciudadInicial;
+  else { try { const guardada = localStorage.getItem('estaciona_ciudad'); if (guardada) ciudadActual = guardada; } catch { /* sin acceso a localStorage */ } }
+
+  // Arranca AMBOS round-trips EN PARALELO: los datos de la ciudad y la config del
+  // mapa. Antes iban en serie (config → mapa → datos) y en redes lejanas (Chile →
+  // servidor en EEUU) eso sumaba dos esperas; ahora se solapan → arranque más rápido.
+  const pData = cargar().then(() => {
+    // Si se restauró una ciudad distinta a Temuco, centra el mapa ahí.
+    const z = (ciudadActual !== CENTRO_DEFAULT.nombre && ZONAS.length) ? ZONAS.find((x) => x.nombre === ciudadActual) : null;
+    if (z) {
+      USER = { lat: z.lat, lng: z.lng };
+      if (map) { map.setView([z.lat, z.lng], 15); meMarker?.setLatLng([z.lat, z.lng]); }
+      renderLista();
+    }
+    if (lugarInicial && DATA.some((p) => p.id === lugarInicial)) openDetalle(lugarInicial);
+  });
+  await cargarConfig();                      // key de mapas
   initMap();
+  pData.then(() => renderLista());           // redibuja los pines si los datos llegaron antes que el mapa
   // Chips rápidos.
   $('#chips').querySelectorAll('.chip').forEach((c) =>
     c.addEventListener('click', () => { const f = c.dataset.f; filtros[f] = !filtros[f]; c.classList.toggle('on', filtros[f]); c.setAttribute('aria-pressed', filtros[f] ? 'true' : 'false'); actualizarBadgeFiltros(); renderLista(); }));
@@ -3918,26 +3941,7 @@ async function init() {
   setTimeout(() => map && map.invalidateSize(), 350);
   window.addEventListener('resize', () => map && map.invalidateSize());
 
-  // Ciudad inicial (prioridad): deep link ?ciudad= > última ciudad guardada > default.
-  // Deep link: ?lugar=<id>&ciudad=<ciudad> (link compartido) abre además ese detalle.
-  const params = new URLSearchParams(location.search);
-  const lugarInicial = params.get('lugar');
-  const ciudadInicial = params.get('ciudad');
-  if (lugarInicial && ciudadInicial) ciudadActual = ciudadInicial;
-  else { try { const guardada = localStorage.getItem('estaciona_ciudad'); if (guardada) ciudadActual = guardada; } catch { /* sin acceso a localStorage */ } }
-
-  cargar().then(() => {
-    // Si se restauró una ciudad distinta a la de por defecto (Temuco), centra el
-    // mapa ahí (el mapa arrancó en el centro por defecto).
-    const z = (ciudadActual !== CENTRO_DEFAULT.nombre && ZONAS.length) ? ZONAS.find((x) => x.nombre === ciudadActual) : null;
-    if (z) {
-      USER = { lat: z.lat, lng: z.lng };
-      if (map) { map.setView([z.lat, z.lng], 15); meMarker?.setLatLng([z.lat, z.lng]); }
-      renderLista();   // recalcula distancias desde la ciudad restaurada (no desde Temuco)
-    }
-    if (lugarInicial && DATA.some((p) => p.id === lugarInicial)) openDetalle(lugarInicial);
-  });
-  track('pageview', ciudadActual);   // estadística de uso anónima
+  track('pageview', ciudadActual);   // estadística de uso anónima (ciudad ya decidida arriba)
   // Si llegó desde la landing con ?q=… (buscador de la portada), busca eso al abrir.
   const qInicial = params.get('q');
   if (!lugarInicial && qInicial) {
