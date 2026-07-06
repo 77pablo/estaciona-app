@@ -26,6 +26,7 @@ import { registrarResena, resumenResenas, resenasDe, resenasRecientes, eliminarR
 import { guardarFoto, fotosDe, servirFoto, fotosRecientes, eliminarFoto, validarFoto } from './fotos.js';
 import { r2Enabled } from './r2.js';
 import { registrarLugar, lugaresDe, lugaresRecientes, eliminarLugar, contarLugares, lugarExiste } from './lugares.js';
+import { registrarInteres } from './interes.js';
 import { registrarEvento, resumenAnalytics, vistasLugar } from './analytics.js';
 import { agregarDestacado, quitarDestacado, mapaDestacados, listarDestacados } from './destacados.js';
 import { revisarFoto } from './modera-foto.js';
@@ -538,6 +539,19 @@ const server = http.createServer(async (req, res) => {
       try {
         const r = await registrarLugar(JSON.parse(body || '{}'));
         sendJSON(res, r.ok ? 200 : 400, r);
+      } catch { sendJSON(res, 400, { ok: false, error: 'json inválido' }); }
+      return;
+    }
+    if (url.pathname === '/api/interes-ciudad' && req.method === 'POST') {
+      // Lista de espera: la gente deja interés en una ciudad aún sin datos.
+      const okRate = rateLimit(req, 8, 600000);   // máx 8 / 10 min por IP
+      const { tooBig, body } = await readBody(req, 2000);
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false, error: 'cuerpo demasiado grande' });
+      try {
+        const { ciudad, email } = JSON.parse(body || '{}');
+        const ok = await registrarInteres(ciudad, email);
+        sendJSON(res, ok ? 200 : 400, { ok });
       } catch { sendJSON(res, 400, { ok: false, error: 'json inválido' }); }
       return;
     }

@@ -962,6 +962,7 @@ function renderLista() {
         <div class="empty-tit">Aún no tenemos datos de ${esc(ciudadActual)}</div>
         <p>Todavía no cargamos estacionamientos en esta ciudad. Vamos sumando zonas de a poco — prueba con otra ciudad desde el selector de arriba, o agrega uno que conozcas.</p>
         <button class="btn btn-primary" style="margin-top:14px" onclick="reportarLugar()">${ic('pinPlus', 16)} Agregar un estacionamiento</button>
+        <button class="btn btn-second" style="margin-top:10px" onclick="avisarmeCiudad()">${ic('clock', 16)} Avísame cuando llegue a ${esc(ciudadActual)}</button>
       </div>`;
     }
     return;
@@ -2765,6 +2766,38 @@ window.aplicarPreset = (i) => {
   const sel = $('#sheet-order'); if (sel) sel.value = orden;
   renderLista();
   toast(p.label);
+};
+// Lista de espera de ciudad: para ciudades aún sin datos, la gente deja su
+// interés (y, opcional, su email) para que la avisemos al lanzar y para
+// priorizar dónde expandir. La ciudad se guarda en variable (no en el onclick)
+// para no lidiar con comillas en nombres.
+let _interesCiudad = null;
+window.avisarmeCiudad = () => {
+  _interesCiudad = ciudadActual;
+  $('#modal').innerHTML = `
+    <h3>${ic('clock', 18)} Avísame cuando llegue</h3>
+    <p>Estamos sumando ciudades de a poco. Cuéntanos que quieres <b>${esc(ciudadActual)}</b> — nos ayuda a priorizar dónde entrar.</p>
+    <label class="rep-lbl" for="interes-email">Tu email <span class="rep-opt">(opcional, solo para avisarte)</span></label>
+    <input id="interes-email" type="email" inputmode="email" maxlength="120" placeholder="tucorreo@ejemplo.cl" autocomplete="email" aria-label="Tu email (opcional)" />
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="enviarInteresCiudad()">Avisarme</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
+  abrirModal();
+  setTimeout(() => $('#interes-email')?.focus(), 60);
+};
+window.enviarInteresCiudad = async () => {
+  const ciudad = _interesCiudad;
+  if (!ciudad) { cerrarModal(); return; }
+  const email = ($('#interes-email')?.value || '').trim();
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('Revisa el email — o déjalo vacío'); return; }
+  cerrarModal();
+  try {
+    const r = await fetch('/api/interes-ciudad', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ciudad, email }) });
+    const j = await r.json();
+    if (j.ok) { track('interes_ciudad', ciudad); toast(email ? `¡Listo! Te avisamos cuando lleguemos a ${ciudad} 🙌` : '¡Anotado! Priorizamos según la demanda 🙌'); }
+    else toast('No se pudo registrar. Intenta más tarde');
+  } catch { toast('Sin conexión'); }
 };
 window.usarBusquedaReciente = (i) => {
   const h = getHistBusq();
