@@ -75,6 +75,15 @@
     </div>
     <div id="destBuscar"></div>
 
+    <h2>Operadores <span class="muted">(cupo en vivo B2B)</span> <span id="cuentaOp" class="muted"></span></h2>
+    <p class="sub" style="margin:-4px 0 10px">Genera un código por estacionamiento y dáselo al operador. Con él entra a <code>/operador</code> y marca sus cupos libres (aparece "en vivo · oficial", el nivel más confiable).</p>
+    <div id="opActivos"></div>
+    <div class="row">
+      <input id="opCiudad" type="text" placeholder="Ciudad para buscar lugares y generar código…" autocomplete="off" />
+      <button onclick="cargarLugaresOperador()">Buscar</button>
+    </div>
+    <div id="opBuscar"></div>
+
     <div class="row">
       <input id="buscar" type="search" placeholder="Buscar por palabra o por lugar…" autocomplete="off" />
     </div>
@@ -116,6 +125,7 @@
     $('#panel').style.display = 'block';
     DATOS = await r.json();
     render();
+    cargarOperadores();
   }
 
   function render() {
@@ -301,6 +311,39 @@
     const j = await r.json().catch(() => ({}));
     if (j.ok) { DATOS.destacados = (DATOS.destacados || []).filter((d) => d.id !== id); render(); } else alert('No se pudo quitar.');
   };
+
+  // --- Operadores (cupo en vivo B2B) ---
+  window.cargarLugaresOperador = async () => {
+    const ciudad = $('#opCiudad').value.trim();
+    if (!ciudad) return;
+    $('#opBuscar').innerHTML = '<div class="vacio">Cargando…</div>';
+    try {
+      const r = await fetch('/api/estacionamientos?ciudad=' + encodeURIComponent(ciudad));
+      const list = (await r.json()).estacionamientos || [];
+      $('#opBuscar').innerHTML = list.length ? list.map((p) => `
+        <div class="item"><div><div class="txt">${esc(p.nombre)}</div><div class="meta">${esc(p.id)}</div></div>
+        <button class="copy" onclick="generarCodigoOp('${esc(p.id)}', ${JSON.stringify(p.nombre)})">Generar código</button></div>`).join('')
+        : '<div class="vacio">Sin lugares en esa ciudad (revisa el nombre exacto).</div>';
+    } catch { $('#opBuscar').innerHTML = '<div class="err">Error al cargar.</div>'; }
+  };
+  window.generarCodigoOp = async (id, nombre) => {
+    const r = await fetch('/api/mod/operador', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-mod-clave': CLAVE }, body: JSON.stringify({ id, nombre }) });
+    const j = await r.json().catch(() => ({}));
+    if (j.ok) { alert('Código para «' + nombre + '»:\n\n    ' + j.codigo + '\n\nDáselo al operador. Entra en /operador con ese código.'); cargarOperadores(); }
+    else alert('No se pudo generar (¿id válido?).');
+  };
+  async function cargarOperadores() {
+    try {
+      const r = await fetch('/api/mod/operadores', { headers: { 'x-mod-clave': CLAVE } });
+      const ops = (await r.json()).operadores || [];
+      $('#cuentaOp').textContent = ops.length ? '(' + ops.length + ')' : '';
+      $('#opActivos').innerHTML = ops.length ? ops.map((o) => {
+        const cupo = o.libres != null ? `${o.libres} cupos · hace ${Math.max(0, Math.round((Date.now() - o.cupoTs) / 60000))} min` : 'sin cupo aún';
+        return `<div class="item"><div><div class="txt">${esc(o.nombre || o.id)} · <b style="font-family:monospace;letter-spacing:.05em">${esc(o.codigo)}</b></div><div class="meta">${esc(o.id)} · ${cupo}</div></div>
+        <button class="del" onclick="borrar(this,'operador','${esc(o.codigo)}')">Borrar</button></div>`;
+      }).join('') : '<div class="vacio">Sin operadores todavía.</div>';
+    } catch {}
+  }
 </script>
 </body>
 </html>

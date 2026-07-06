@@ -113,6 +113,10 @@ if (DATABASE_URL) {
 
       CREATE TABLE IF NOT EXISTS interes_ciudad (seq BIGSERIAL, ciudad TEXT, email TEXT, ts BIGINT);
       CREATE INDEX IF NOT EXISTS ix_interes_ciudad ON interes_ciudad(ciudad);
+
+      CREATE TABLE IF NOT EXISTS operadores (codigo TEXT PRIMARY KEY, id TEXT, nombre TEXT, ts BIGINT);
+      CREATE INDEX IF NOT EXISTS ix_operadores_id ON operadores(id);
+      CREATE TABLE IF NOT EXISTS cupo_operador (id TEXT PRIMARY KEY, libres INTEGER, umbral INTEGER, ts BIGINT);
     `);
     _run = async (sql, params = []) => { const r = await pool.query(toPg(sql), params); return { changes: r.rowCount, lastInsertRowid: 0 }; };
     _all = async (sql, params = []) => (await pool.query(toPg(sql), params)).rows;
@@ -163,6 +167,10 @@ if (!ready) {
 
       CREATE TABLE IF NOT EXISTS interes_ciudad (ciudad TEXT, email TEXT, ts INTEGER);
       CREATE INDEX IF NOT EXISTS ix_interes_ciudad ON interes_ciudad(ciudad);
+
+      CREATE TABLE IF NOT EXISTS operadores (codigo TEXT PRIMARY KEY, id TEXT, nombre TEXT, ts INTEGER);
+      CREATE INDEX IF NOT EXISTS ix_operadores_id ON operadores(id);
+      CREATE TABLE IF NOT EXISTS cupo_operador (id TEXT PRIMARY KEY, libres INTEGER, umbral INTEGER, ts INTEGER);
     `);
     // node:sqlite es síncrono; lo envolvemos en promesas. `run` devuelve el
     // { changes, lastInsertRowid } nativo (sin un 2º query con carrera).

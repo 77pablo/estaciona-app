@@ -19,6 +19,11 @@
 // lo necesario (y cachear/batchear por operador) cuando existan feeds reales.
 // ============================================================================
 
-export async function liveOcupacionMapa(/* ids = [] */) {
-  return {};
+import { getCupoLive } from './operadores.js';
+
+// Cupo EN VIVO que reportan los operadores desde su panel (/operador). Solo
+// devuelve datos FRESCOS (≤30 min). Si no hay operadores activos, devuelve {}
+// y la disponibilidad la resuelven la gente o la estimación (sin inventar nada).
+export async function liveOcupacionMapa(ids = []) {
+  try { return await getCupoLive(ids); } catch { return {}; }
 }

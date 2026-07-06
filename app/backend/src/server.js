@@ -21,6 +21,7 @@ import { geocodificar, geocodificarInverso, geocoderInfo } from './geocoder.js';
 import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } from './reportes.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { paginaCiudad, ciudadDeSlug, sitemapXML, robotsTxt } from './seo.js';
+import { crearCodigoOperador, operadorPorCodigo, setCupoOperador, listarOperadores, eliminarOperador } from './operadores.js';
 import { registrarVoto, tallyReciente, senalReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
 import { registrarResena, resumenResenas, resenasDe, resenasRecientes, eliminarResena } from './resenas.js';
@@ -213,7 +214,7 @@ async function agregados() {
 }
 
 // Rutas "bonitas": la landing es la portada (/), la app vive en /app.
-const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html', '/terminos': '/terminos.html', '/privacidad': '/privacidad.html', '/operadores': '/operadores.html', '/pro': '/pro.html' };
+const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.html', '/admin': '/admin.html', '/terminos': '/terminos.html', '/privacidad': '/privacidad.html', '/operadores': '/operadores.html', '/operador': '/operador.html', '/pro': '/pro.html' };
 
 // Content-Security-Policy: whitelist de los orígenes que la app REALMENTE usa
 // (mapas MapTiler, tiles OSM, tráfico TomTom, fuentes Google, nsfwjs/tfjs en
@@ -502,6 +503,7 @@ const server = http.createServer(async (req, res) => {
         else if (tipo === 'lugar') ok = await eliminarLugar(id);
         else if (tipo === 'reporte') ok = (await eliminarReporte(id)) > 0;   // borra TODOS los reportes de la ficha (feed agrupado por ficha)
         else if (tipo === 'resena') ok = (await eliminarResena(id, ts)) > 0;
+        else if (tipo === 'operador') ok = await eliminarOperador(id);   // aquí `id` es el CÓDIGO del operador
         if (ok && tipo === 'foto') _fotoCache.delete(id);   // refleja el borrado al instante
         sendJSON(res, ok ? 200 : 400, { ok });
       } catch { sendJSON(res, 400, { ok: false }); }
@@ -518,6 +520,51 @@ const server = http.createServer(async (req, res) => {
         if (accion === 'remove') r = { ok: await quitarDestacado(id) };
         else r = await agregarDestacado(id, etiqueta, dias, premium, tagline);
         sendJSON(res, r.ok ? 200 : 400, r);
+      } catch { sendJSON(res, 400, { ok: false }); }
+      return;
+    }
+    // Admin: generar el código de operador de un estacionamiento del dataset.
+    if (url.pathname === '/api/mod/operador' && req.method === 'POST') {
+      if (adminBloqueado(req)) return sendJSON(res, 429, { error: 'demasiados intentos' });
+      if (!esAdmin(req)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
+      const { tooBig, body } = await readBody(req, 4000);
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { id, nombre } = JSON.parse(body || '{}');
+        const codigo = await crearCodigoOperador(id, nombre);
+        sendJSON(res, codigo ? 200 : 400, codigo ? { ok: true, codigo } : { ok: false, error: 'id no existe' });
+      } catch { sendJSON(res, 400, { ok: false }); }
+      return;
+    }
+    // Admin: listar operadores (código + cupo actual).
+    if (url.pathname === '/api/mod/operadores' && req.method === 'GET') {
+      if (adminBloqueado(req)) return sendJSON(res, 429, { error: 'demasiados intentos' });
+      if (!esAdmin(req)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
+      return sendJSON(res, 200, { operadores: await listarOperadores() });
+    }
+    // Operador: valida su código (login del panel).
+    if (url.pathname === '/api/operador/login' && req.method === 'POST') {
+      const okRate = rateLimit(req, 20, 600000);   // anti fuerza-bruta del código
+      const { tooBig, body } = await readBody(req, 1000);
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { codigo } = JSON.parse(body || '{}');
+        const op = await operadorPorCodigo((codigo || '').toString().trim().toUpperCase());
+        sendJSON(res, op ? 200 : 401, op ? { ok: true, id: op.id, nombre: op.nombre } : { ok: false, error: 'código inválido' });
+      } catch { sendJSON(res, 400, { ok: false }); }
+      return;
+    }
+    // Operador: reporta sus cupos libres en vivo.
+    if (url.pathname === '/api/operador/cupo' && req.method === 'POST') {
+      const okRate = rateLimit(req, 120, 600000);   // puede actualizar seguido
+      const { tooBig, body } = await readBody(req, 1000);
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { codigo, libres, umbral } = JSON.parse(body || '{}');
+        const id = await setCupoOperador((codigo || '').toString().trim().toUpperCase(), libres, umbral);
+        sendJSON(res, id ? 200 : 400, id ? { ok: true } : { ok: false, error: 'datos inválidos' });
       } catch { sendJSON(res, 400, { ok: false }); }
       return;
     }
