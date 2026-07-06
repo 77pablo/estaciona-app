@@ -264,7 +264,7 @@ body.is-offline #lista { padding-bottom: 44px; }
 .ib-ic { flex-shrink: 0; display: inline-flex; color: var(--accent); }
 .ib-txt { flex: 1; font-size: 13px; line-height: 1.3; color: var(--text); }
 .ib-go { flex-shrink: 0; background: var(--accent); color: var(--on-accent); border: none; border-radius: 10px; padding: 9px 15px; font-weight: 700; font-family: var(--font-ui); cursor: pointer; }
-.ib-x { flex-shrink: 0; display: inline-flex; background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 4px; }
+.ib-x { flex-shrink: 0; display: inline-flex; background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 8px; border-radius: 8px; }
 .ib-x:hover { color: var(--text); }
 /* Pasos para instalar en iPhone (modal). */
 .ios-steps { list-style: none; display: flex; flex-direction: column; gap: 12px; margin: 14px 0 6px; }
@@ -705,7 +705,7 @@ body.is-offline #lista { padding-bottom: 44px; }
 .ma-line.urgente { color: var(--red); font-weight: 700; }
 .ma-line.urgente .ic-svg { color: var(--red); }
 /* Botón para poner/cambiar la alarma desde "Mi auto". */
-.ma-alarma-btn { margin-left: auto; background: var(--surface-2); border: 1px solid var(--line-2); color: var(--accent); font-weight: 700; font-size: 12px; padding: 5px 11px; border-radius: 999px; cursor: pointer; font-family: var(--font-ui); }
+.ma-alarma-btn { margin-left: auto; background: var(--surface-2); border: 1px solid var(--line-2); color: var(--accent); font-weight: 700; font-size: 12px; padding: 8px 13px; border-radius: 999px; cursor: pointer; font-family: var(--font-ui); }
 .ma-alarma-btn:hover, .ma-alarma-btn:focus-visible { border-color: var(--accent); }
 .ma-nota { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; color: var(--muted); line-height: 1.45; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .ma-nota .ic-svg { color: var(--amber); margin-top: 1px; flex-shrink: 0; }
@@ -1299,7 +1299,7 @@ body.is-offline #lista { padding-bottom: 44px; }
   color:var(--muted);font-size:12px;cursor:pointer;padding:9px 4px;margin-top:2px}
 .reporte-link:hover{color:var(--text)}
 /* Vigilar cupo (Pro): avísame cuando este lugar tenga cupo. */
-.vigilar-btn{width:100%;margin-top:8px;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:10px;padding:11px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;transition:border-color .12s,background .12s}
+.vigilar-btn{width:100%;margin-top:8px;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:10px;padding:13px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;transition:border-color .12s,background .12s}
 .vigilar-btn:hover{border-color:var(--accent)}
 .vigilar-btn.on{border-color:var(--accent);color:var(--accent);background:var(--green-bg)}
 .vigilar-btn:active{transform:scale(.98)}
