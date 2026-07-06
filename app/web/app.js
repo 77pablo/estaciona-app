@@ -449,6 +449,9 @@ const LS = {
   // Comparaciones guardadas (Pro): [{ nombre, ciudad, ids:[], ts }].
   getComparaciones: () => { try { return JSON.parse(localStorage.getItem('estaciona_comparaciones') || '[]'); } catch { return []; } },
   setComparaciones: (a) => lsSet('estaciona_comparaciones', JSON.stringify(a)),
+  // Lugares vigilados (Pro): avísame cuando tengan cupo. [{ id, nombre }].
+  getVigilados: () => { try { return JSON.parse(localStorage.getItem('estaciona_vigilados') || '[]'); } catch { return []; } },
+  setVigilados: (a) => lsSet('estaciona_vigilados', JSON.stringify(a)),
   // Estacionamientos vistos recientemente (para acceso rápido desde el buscador).
   getVistos: () => { try { return JSON.parse(localStorage.getItem('estaciona_vistos') || '[]'); } catch { return []; } },
   setVistos: (v) => lsSet('estaciona_vistos', JSON.stringify(v)),
@@ -1365,6 +1368,7 @@ function openDetalle(id) {
           <button class="vote-no" onclick="confirmarCupo('${p.id}',false)" aria-label="No hay cupo">${ic('x', 16)} No</button>
         </span></div>
       ${p.votos ? `<div class="votos-info">${ic('users', 14)} Últimas 3 h: <b>${p.votos.up}</b> dijeron que había cupo · <b>${p.votos.down}</b> que no</div>` : ''}
+      <div id="det-vigilar">${vigilarCupoBtnHTML(p)}</div>
       <p class="disclaimer">${ic('bulb', 15)} ${p.verificado ? 'Precio <b>confirmado con fuente oficial</b>. Las tarifas se reajustan — confírmalo en el lugar.' : p.reportado ? '<b>Lugar aportado por la comunidad, sin verificar.</b> Confirma la tarifa y los datos en el lugar.' : '<b>Precio estimado, sin verificar.</b> Es una referencia generada automáticamente — confirma la tarifa real en el lugar.'}</p>
       <button class="reporte-link" onclick="reportarProblema('${p.id}')">${ic('flag', 13)} ¿Algo está mal? Reportar</button>
 
@@ -1855,6 +1859,58 @@ window.confirmarCupo = (id, ok) => {
     body: JSON.stringify({ id, ok }),
   }).then(() => cargar()).catch(() => {});   // recarga para reflejar el conteo nuevo
 };
+
+// --- Vigilar cupo (Pro): "avísame cuando ESTE lugar tenga cupo" -------------
+// Mientras usas la app: el refresco de la ciudad (cada 6 s) revisa los lugares
+// vigilados y avisa cuando pasan a tener cupo (confirmado por la gente o verde).
+// No hay push en background: si cierras la app, retoma al reabrirla en esa ciudad.
+const tieneCupo = (p) => cupoConfirmado(p) || p.disponibilidad?.nivel === 'verde';
+function vigilarCupoBtnHTML(p) {
+  if (!esPro() || p.reportado) return '';
+  const vigilando = LS.getVigilados().some((v) => v.id === p.id);
+  if (!vigilando && tieneCupo(p)) return '';   // ya tiene cupo: no hay nada que esperar
+  return vigilando
+    ? `<button class="vigilar-btn on" onclick="toggleVigilarCupo('${p.id}')">${ic('check', 15)} Vigilando el cupo · dejar de vigilar</button>`
+    : `<button class="vigilar-btn" onclick="toggleVigilarCupo('${p.id}')">${ic('clock', 15)} Avísame cuando haya cupo <span class="pro-tag">PRO</span></button>`;
+}
+window.toggleVigilarCupo = (id) => {
+  if (!esPro()) { location.href = '/pro'; return; }
+  const p = DATA.find((x) => x.id === id);
+  const vig = LS.getVigilados();
+  const i = vig.findIndex((v) => v.id === id);
+  if (i >= 0) { vig.splice(i, 1); LS.setVigilados(vig); toast('Dejé de vigilar el cupo'); }
+  else {
+    vig.push({ id, nombre: p?.nombre || 'este lugar' }); LS.setVigilados(vig.slice(-20));
+    if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+    toast('Te aviso cuando haya cupo aquí — con la app abierta 👀');
+  }
+  if (detalleAbiertoId === id) { const el = $('#det-vigilar'); if (el) el.outerHTML = `<div id="det-vigilar">${vigilarCupoBtnHTML(p)}</div>`; }
+};
+function notificarCupo(p) {
+  const b = $('#banner');
+  if (b && !bannerVisible()) {
+    b.innerHTML = `<span>${ic('check', 16)} ¡Hay cupo en ${esc(p.nombre)}! 🅿️</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
+    b.classList.remove('urgent'); b.classList.add('show');
+  }
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try { new Notification('Estaciona 🅿️', { body: `¡Hay cupo en ${p.nombre}!` }); } catch { /* algunos navegadores exigen SW */ }
+  }
+}
+// Revisa los lugares vigilados contra la ciudad cargada; avisa y deja de vigilar
+// (one-shot) cuando aparece cupo. Uno por tick para no encimar avisos.
+function chequearVigilados() {
+  const vig = LS.getVigilados();
+  if (!vig.length) return;
+  for (const v of vig) {
+    const p = DATA.find((x) => x.id === v.id);   // solo la ciudad cargada; si no está, se revisa al volver
+    if (p && tieneCupo(p)) {
+      notificarCupo(p);
+      LS.setVigilados(LS.getVigilados().filter((x) => x.id !== v.id));
+      if (detalleAbiertoId === p.id) refrescarDetalle();
+      break;
+    }
+  }
+}
 
 // Actualiza solo la línea de disponibilidad si el detalle está abierto.
 function refrescarDetalle() {
@@ -3539,6 +3595,7 @@ async function cargar() {
     sinConexionAvisado = false;       // volvió la conexión: permite avisar de nuevo si se corta
     renderLista();
     refrescarDetalle();
+    chequearVigilados();              // Pro: ¿algún lugar vigilado ya tiene cupo?
   } catch {
     if (seq !== cargaSeq) return;     // carga vieja que falló: no toques nada ya reemplazado
     if (!cargado) {
