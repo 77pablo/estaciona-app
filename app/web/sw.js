@@ -8,7 +8,7 @@
 // en estacionamientos subterráneos, donde no hay internet).
 // ============================================================================
 
-const CACHE = 'estaciona-v15';
+const CACHE = 'estaciona-v16';
 
 // App shell que se precachea al instalar (para que abra offline desde el vamos).
 // Incluye Leaflet (servido local): así el mapa carga aunque no haya red — los
@@ -66,6 +66,25 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;                 // POST (votos/reseñas/fotos…): siempre red, sin tocar
   if (!cacheable(req, url)) return;                 // deja pasar normal (maptiler/tomtom/config…)
 
+  // SHELL ESTÁTICO (html/js/css/vendor/íconos) → STALE-WHILE-REVALIDATE: responde del
+  // caché AL INSTANTE (render inmediato, sin esperar el round-trip a EEUU) y refresca
+  // en segundo plano. La versión del caché sube en cada deploy (CACHE = vN) y el
+  // aviso "nueva versión · actualizar" avisa al usuario, así nunca queda pegado viejo.
+  if (!url.pathname.startsWith('/api/')) {
+    e.respondWith((async () => {
+      const cache = await caches.open(CACHE);
+      const hit = await cache.match(req);
+      const red = fetch(req).then((res) => {
+        if (res && res.ok) cache.put(req, res.clone()).catch(() => {});
+        return res;
+      }).catch(() => null);
+      return hit || (await red) || (req.mode === 'navigate' ? (await cache.match('/app')) : Response.error());
+    })());
+    return;
+  }
+
+  // DATOS (/api/estacionamientos) → NETWORK-FIRST: siempre lo más fresco online; si no
+  // hay señal, cae a la última ciudad vista (útil en subterráneos sin internet).
   e.respondWith(
     fetch(req)
       .then((res) => {
@@ -76,7 +95,6 @@ self.addEventListener('fetch', (e) => {
         return res;
       })
       .catch(async () => {
-        // Sin conexión: usa lo guardado. Para navegaciones, cae a la app cacheada.
         const cache = await caches.open(CACHE);
         const hit = await cache.match(cacheKey(req, url));
         if (hit) return hit;
