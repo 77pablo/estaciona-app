@@ -1326,7 +1326,7 @@ function openDetalle(id) {
       : p.verificado
         ? (p.precioMin
             ? `${CLP(p.precioMin)} / min · equivale a ~${CLP(p.precioHora)}/hr${p.fuente ? ` <span class="precio-fuente">fuente: ${esc(p.fuente)}</span>` : ''}`
-            : `${CLP(p.precioHora)} / hr`)
+            : `${CLP(p.precioHora)} / hr${p.fuente ? ` <span class="precio-fuente">fuente: ${esc(p.fuente)}</span>` : ''}`)
         : `~${CLP(p.precioHora)} / hr <span class="precio-est">estimado · sin verificar</span>`;
   const fav = LS.isFav(p.id);
 

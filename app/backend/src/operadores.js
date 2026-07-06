@@ -50,6 +50,32 @@ export async function setCupoOperador(codigo, libres, umbral) {
   return op.id;
 }
 
+// Operador: fija su TARIFA real (precio por hora, o gratis). Se muestra como
+// verificada (sin "~estimado"), con fuente "Operador". Semi-permanente (no como
+// el cupo, que caduca). precioHora null/undefined con gratis=true = gratis.
+export async function setPrecioOperador(codigo, precioHora, gratis) {
+  const op = await operadorPorCodigo(codigo);
+  if (!op) return null;
+  await run('DELETE FROM precio_operador WHERE id = ?', [op.id]);
+  if (gratis) {
+    await run('INSERT INTO precio_operador (id, precio_hora, precio_min, horario, gratis, ts) VALUES (?, ?, ?, ?, ?, ?)', [op.id, 0, null, null, 'Gratis', Date.now()]);
+    return op.id;
+  }
+  const n = Number(precioHora);
+  if (!Number.isFinite(n) || n < 0 || n > 100000) return null;
+  await run('INSERT INTO precio_operador (id, precio_hora, precio_min, horario, gratis, ts) VALUES (?, ?, ?, ?, ?, ?)', [op.id, Math.round(n), null, null, null, Date.now()]);
+  return op.id;
+}
+// Precios fijados por operadores para los ids pedidos.
+export async function getPreciosOperador(ids) {
+  if (!ids || !ids.length) return {};
+  const set = new Set(ids);
+  const rows = await all('SELECT id, precio_hora, precio_min, horario, gratis FROM precio_operador');
+  const out = {};
+  for (const r of rows) if (set.has(r.id)) out[r.id] = { precioHora: r.precio_hora, precioMin: r.precio_min, horario: r.horario, gratis: r.gratis };
+  return out;
+}
+
 // Cupo en vivo FRESCO para los ids pedidos → { [id]: { libres, minAgo, umbralBajo } }.
 export async function getCupoLive(ids) {
   if (!ids || !ids.length) return {};

@@ -117,6 +117,7 @@ if (DATABASE_URL) {
       CREATE TABLE IF NOT EXISTS operadores (codigo TEXT PRIMARY KEY, id TEXT, nombre TEXT, ts BIGINT);
       CREATE INDEX IF NOT EXISTS ix_operadores_id ON operadores(id);
       CREATE TABLE IF NOT EXISTS cupo_operador (id TEXT PRIMARY KEY, libres INTEGER, umbral INTEGER, ts BIGINT);
+      CREATE TABLE IF NOT EXISTS precio_operador (id TEXT PRIMARY KEY, precio_hora INTEGER, precio_min INTEGER, horario TEXT, gratis TEXT, ts BIGINT);
 
       CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, sub TEXT, ts BIGINT);
       CREATE TABLE IF NOT EXISTS push_jobs (seq BIGSERIAL, tipo TEXT, endpoint TEXT, id TEXT, nombre TEXT, cuando BIGINT, sono INTEGER, ts BIGINT);
@@ -177,6 +178,7 @@ if (!ready) {
       CREATE TABLE IF NOT EXISTS operadores (codigo TEXT PRIMARY KEY, id TEXT, nombre TEXT, ts INTEGER);
       CREATE INDEX IF NOT EXISTS ix_operadores_id ON operadores(id);
       CREATE TABLE IF NOT EXISTS cupo_operador (id TEXT PRIMARY KEY, libres INTEGER, umbral INTEGER, ts INTEGER);
+      CREATE TABLE IF NOT EXISTS precio_operador (id TEXT PRIMARY KEY, precio_hora INTEGER, precio_min INTEGER, horario TEXT, gratis TEXT, ts INTEGER);
 
       CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, sub TEXT, ts INTEGER);
       CREATE TABLE IF NOT EXISTS push_jobs (seq INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT, endpoint TEXT, id TEXT, nombre TEXT, cuando INTEGER, sono INTEGER, ts INTEGER);

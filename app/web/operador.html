@@ -37,6 +37,13 @@
   .preview{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px;margin:6px 0 14px;color:var(--muted)}
   .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
   .nota{color:var(--muted);font-size:12px;margin-top:14px}
+  .chk{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--text);font-weight:600;cursor:pointer;margin-bottom:4px}
+  .chk input{width:20px;height:20px;accent-color:var(--accent);cursor:pointer}
+  .precio-in{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line2);border-radius:11px;padding:12px 14px;margin-top:2px}
+  .precio-in span{color:var(--muted);font-size:18px;font-weight:700}
+  .precio-in .por{font-size:14px}
+  .precio-in input{flex:1;background:transparent;border:none;color:var(--text);font-size:26px;font-weight:800;text-align:right;font-variant-numeric:tabular-nums;outline:none;min-width:0;font-family:inherit}
+  #wrap-precio.off{opacity:.4;pointer-events:none}
   footer{margin-top:26px;border-top:1px solid var(--line);padding-top:14px;font-size:12px;color:var(--muted)}
 </style>
 </head>
@@ -75,6 +82,25 @@
       <div class="msg" id="msg-panel"></div>
       <p class="nota">El dato se muestra por 30 min; pasado ese rato deja de aparecer “en vivo” (así nunca queda un número viejo). Actualízalo cuando cambie.</p>
     </div>
+
+    <div class="card">
+      <div class="lugar">Tu tarifa</div>
+      <div class="lugar-sub">El precio real que cobras. Aparece <b>verificado</b> (sin “~estimado”).</div>
+      <label class="chk" id="chk-gratis"><input type="checkbox" id="gratis" /> Es gratis / sin costo</label>
+      <div id="wrap-precio">
+        <label for="precio" style="margin-top:14px">Precio por hora (CLP)</label>
+        <div class="precio-in">
+          <span>$</span>
+          <input id="precio" type="text" inputmode="numeric" placeholder="1500" autocomplete="off" aria-label="Precio por hora" />
+          <span class="por">/ hora</span>
+        </div>
+      </div>
+      <div class="preview" id="preview-precio">—</div>
+      <button class="btn" id="guardar-precio">Guardar tarifa</button>
+      <div class="msg" id="msg-precio"></div>
+      <p class="nota">La tarifa queda fija hasta que la cambies (no caduca como el cupo). Ponla tal cual la cobras; si varía por horario, usa el precio más común.</p>
+    </div>
+
     <button class="btn ghost" id="salir">Salir / cambiar código</button>
   </div>
 
@@ -131,6 +157,34 @@
     } catch (e) { $('#msg-panel').className = 'msg err'; $('#msg-panel').textContent = 'Sin conexión.'; }
   });
   $('#salir').addEventListener('click', function () { try { localStorage.removeItem('estaciona_op_codigo'); } catch (e) {} location.reload(); });
+
+  // ---- Tarifa ----
+  function precioVal() { return parseInt(($('#precio').value || '').replace(/\D/g, ''), 10) || 0; }
+  function renderPrecio() {
+    var gratis = $('#gratis').checked;
+    $('#wrap-precio').className = gratis ? 'off' : '';
+    var pv = document.getElementById('preview-precio');
+    if (gratis) { pv.innerHTML = 'En el mapa: <b style="color:var(--green)">Gratis</b> · <b style="color:var(--accent)">verificado</b>'; return; }
+    var n = precioVal();
+    if (!n) { pv.innerHTML = 'Escribe cuánto cobras por hora.'; return; }
+    pv.innerHTML = 'En el mapa: <b style="color:var(--text)">$' + n.toLocaleString('es-CL') + '/hora</b> · <b style="color:var(--accent)">verificado</b>';
+  }
+  $('#gratis').addEventListener('change', renderPrecio);
+  $('#precio').addEventListener('input', function () {
+    var n = precioVal(); $('#precio').value = n ? n.toLocaleString('es-CL') : ''; renderPrecio();
+  });
+  $('#guardar-precio').addEventListener('click', async function () {
+    var gratis = $('#gratis').checked, n = precioVal();
+    if (!gratis && !n) { $('#msg-precio').className = 'msg err'; $('#msg-precio').textContent = 'Escribe el precio o marca “gratis”.'; return; }
+    $('#msg-precio').className = 'msg'; $('#msg-precio').textContent = 'Guardando…';
+    try {
+      var r = await fetch('/api/operador/precio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo: codigo, precioHora: n, gratis: gratis }) });
+      var j = await r.json();
+      if (j.ok) { $('#msg-precio').className = 'msg ok'; $('#msg-precio').textContent = '✓ Tarifa publicada · verificada'; }
+      else { $('#msg-precio').className = 'msg err'; $('#msg-precio').textContent = 'No se pudo guardar.'; }
+    } catch (e) { $('#msg-precio').className = 'msg err'; $('#msg-precio').textContent = 'Sin conexión.'; }
+  });
+  renderPrecio();
 
   render();
   if (codigo) login(codigo);   // sesión recordada

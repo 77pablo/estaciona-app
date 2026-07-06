@@ -21,7 +21,7 @@ import { geocodificar, geocodificarInverso, geocoderInfo } from './geocoder.js';
 import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } from './reportes.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { paginaCiudad, ciudadDeSlug, sitemapXML, robotsTxt } from './seo.js';
-import { crearCodigoOperador, operadorPorCodigo, setCupoOperador, listarOperadores, eliminarOperador } from './operadores.js';
+import { crearCodigoOperador, operadorPorCodigo, setCupoOperador, listarOperadores, eliminarOperador, setPrecioOperador, getPreciosOperador } from './operadores.js';
 import { pushActivo, vapidPublic, guardarSub, agendar, cancelarAgendados, vigilar, noVigilar, tickPush, enviarTest } from './push.js';
 import { registrarVoto, tallyReciente, senalReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
@@ -343,12 +343,20 @@ const server = http.createServer(async (req, res) => {
       const reportados = shapeFichas(await lugaresDe(ciudad));   // lugares aportados por la gente
       const lista = [...base, ...reportados];
       const { tally, senal, com, dest, res: resenasAgg } = await agregados();  // votos + señal fresca + precios/comentarios + destacados + reseñas (cacheados)
-      const live = await liveOcupacionMapa(lista.map((e) => e.id));   // {} hoy — enchufe de operadores (B2B)
+      const live = await liveOcupacionMapa(lista.map((e) => e.id));   // cupo en vivo del operador (B2B)
+      const preciosOp = await getPreciosOperador(lista.map((e) => e.id));   // tarifas fijadas por operadores
       for (const e of lista) {
         if (tally[e.id]) e.votos = tally[e.id];   // contexto 3 h (se sigue mostrando)
         if (com[e.id]) e.comunidad = com[e.id];
         if (resenasAgg[e.id]) e.resena = resenasAgg[e.id];   // { promedio, n } de reseñas con estrellas
         if (dest[e.id]) { e.destacado = true; e.destacadoEtiqueta = dest[e.id].etiqueta; e.destacadoPremium = dest[e.id].premium; e.destacadoTagline = dest[e.id].tagline; }
+        // Tarifa REAL fijada por el operador: pisa la estimación, marcada como verificada.
+        const po = preciosOp[e.id];
+        if (po) {
+          if (po.gratis) { e.precioHora = 0; e.precioMin = null; e.gratisInfo = 'Gratis'; e.gratisAhora = true; }
+          else { e.precioHora = po.precioHora; e.precioMin = po.precioMin || null; if (po.horario) e.horario = po.horario; }
+          e.verificado = true; e.fuente = 'El operador';
+        }
         // Disponibilidad final: la mejor fuente (live > gente fresca > estimación).
         e.disponibilidad = resolverDisponibilidad(e.disponibilidad, senal[e.id], live[e.id]);
       }
@@ -565,6 +573,19 @@ const server = http.createServer(async (req, res) => {
       try {
         const { codigo, libres, umbral } = JSON.parse(body || '{}');
         const id = await setCupoOperador((codigo || '').toString().trim().toUpperCase(), libres, umbral);
+        sendJSON(res, id ? 200 : 400, id ? { ok: true } : { ok: false, error: 'datos inválidos' });
+      } catch { sendJSON(res, 400, { ok: false }); }
+      return;
+    }
+    // Operador: fija su tarifa real (o gratis).
+    if (url.pathname === '/api/operador/precio' && req.method === 'POST') {
+      const okRate = rateLimit(req, 60, 600000);
+      const { tooBig, body } = await readBody(req, 1000);
+      if (!okRate) return sendJSON(res, 429, { ok: false });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { codigo, precioHora, gratis } = JSON.parse(body || '{}');
+        const id = await setPrecioOperador((codigo || '').toString().trim().toUpperCase(), precioHora, !!gratis);
         sendJSON(res, id ? 200 : 400, id ? { ok: true } : { ok: false, error: 'datos inválidos' });
       } catch { sendJSON(res, 400, { ok: false }); }
       return;
