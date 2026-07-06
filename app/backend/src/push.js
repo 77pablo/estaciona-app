@@ -65,6 +65,13 @@ export async function noVigilar(endpoint, id) {
   if (endpoint && id) await run('DELETE FROM push_watch WHERE endpoint = ? AND id = ?', [endpoint, id]);
 }
 
+// Envía un push de prueba AL INSTANTE (para verificar que todo el circuito anda).
+export async function enviarTest(sub) {
+  if (!pushActivo || !(await guardarSub(sub))) return false;
+  await enviar(sub.endpoint, { title: 'Estaciona 🅿️', body: '¡Funciona! Este es un push de prueba 🎉', tag: 'estaciona-test', url: '/app' });
+  return true;
+}
+
 // Tick del agendador (cada ~1 min). `hayCupo(id)=>Promise<bool>` lo provee el
 // server (usa señal de la gente + cupo en vivo del operador).
 export async function tickPush(hayCupo) {

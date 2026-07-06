@@ -22,7 +22,7 @@ import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } 
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { paginaCiudad, ciudadDeSlug, sitemapXML, robotsTxt } from './seo.js';
 import { crearCodigoOperador, operadorPorCodigo, setCupoOperador, listarOperadores, eliminarOperador } from './operadores.js';
-import { pushActivo, vapidPublic, guardarSub, agendar, cancelarAgendados, vigilar, noVigilar, tickPush } from './push.js';
+import { pushActivo, vapidPublic, guardarSub, agendar, cancelarAgendados, vigilar, noVigilar, tickPush, enviarTest } from './push.js';
 import { registrarVoto, tallyReciente, senalReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
 import { registrarResena, resumenResenas, resenasDe, resenasRecientes, eliminarResena } from './resenas.js';
@@ -582,6 +582,16 @@ const server = http.createServer(async (req, res) => {
         const ok = await agendar(t, sub, id, nombre, Number(cuando));
         sendJSON(res, ok ? 200 : 400, { ok });
       } catch { sendJSON(res, 400, { ok: false }); }
+      return;
+    }
+    // Push: envío de prueba inmediato (verificación).
+    if (url.pathname === '/api/push/test' && req.method === 'POST') {
+      const okRate = rateLimit(req, 20, 600000);
+      const { tooBig, body } = await readBody(req, 4000);
+      if (!okRate) return sendJSON(res, 429, { ok: false });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try { const { sub } = JSON.parse(body || '{}'); const ok = await enviarTest(sub); sendJSON(res, ok ? 200 : 400, { ok }); }
+      catch { sendJSON(res, 400, { ok: false }); }
       return;
     }
     // Push: vigilar (o dejar de vigilar) el cupo de un lugar.

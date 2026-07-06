@@ -3765,6 +3765,31 @@ async function vigilarPush(id, nombre, activar) {
   if (!sub) return;
   try { await fetch('/api/push/vigilar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sub, id, nombre, activar }) }); } catch { /* nada */ }
 }
+// Prueba de push inmediata (solo con ?push=test en la URL). Suscribe y pide al
+// servidor un push al instante, para verificar todo el circuito.
+window.probarPush = async () => {
+  if (!VAPID_PUB) { toast('El push no está activo en el servidor'); return; }
+  if ('Notification' in window && Notification.permission === 'default') { await Notification.requestPermission().catch(() => {}); }
+  if ('Notification' in window && Notification.permission === 'denied') { toast('Bloqueaste las notificaciones — actívalas en el navegador'); return; }
+  toast('Suscribiendo…');
+  const sub = await suscribirPush();
+  if (!sub) { toast('No pude suscribir (¿instalada? ¿permiso?)'); return; }
+  toast('Enviando push de prueba…');
+  try {
+    const r = await fetch('/api/push/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sub }) });
+    const j = await r.json();
+    toast(j.ok ? '✓ Enviado — debería llegar la notificación 🔔' : 'No se pudo enviar (revisa VAPID en el server)');
+  } catch { toast('Sin conexión'); }
+};
+function montarBotonPruebaPush() {
+  if (!/[?&]push=test/.test(location.search) || $('#btn-probar-push')) return;
+  const b = document.createElement('button');
+  b.id = 'btn-probar-push';
+  b.textContent = '🔔 Probar push ahora';
+  b.setAttribute('style', 'position:fixed;left:50%;bottom:88px;transform:translateX(-50%);z-index:200;background:var(--accent);color:var(--on-accent);border:none;border-radius:999px;padding:13px 20px;font-weight:800;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.5);cursor:pointer');
+  b.onclick = () => window.probarPush();
+  (document.querySelector('.phone') || document.body).appendChild(b);
+}
 
 // --- Instalar como app (PWA) ------------------------------------------------
 // Aviso sutil y descartable para agregar Estaciona a la pantalla de inicio:
@@ -3991,6 +4016,7 @@ function mostrarActualizar() {
   (document.querySelector('.phone') || document.body).appendChild(bar);
 }
 init();
+montarBotonPruebaPush();   // botón "probar push" solo con ?push=test
 
 // PWA: registra el service worker (app instalable + funciona sin señal). Es
 // progresivo — si el navegador no lo soporta o falla, la app anda igual.
