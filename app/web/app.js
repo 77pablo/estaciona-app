@@ -446,6 +446,9 @@ const LS = {
   // Meta de gasto mensual (Pro): 0 = sin meta.
   getMetaGasto: () => { try { return +localStorage.getItem('estaciona_meta_gasto') || 0; } catch { return 0; } },
   setMetaGasto: (n) => lsSet('estaciona_meta_gasto', String(Math.max(0, Math.round(n) || 0))),
+  // Comparaciones guardadas (Pro): [{ nombre, ciudad, ids:[], ts }].
+  getComparaciones: () => { try { return JSON.parse(localStorage.getItem('estaciona_comparaciones') || '[]'); } catch { return []; } },
+  setComparaciones: (a) => lsSet('estaciona_comparaciones', JSON.stringify(a)),
   // Estacionamientos vistos recientemente (para acceso rápido desde el buscador).
   getVistos: () => { try { return JSON.parse(localStorage.getItem('estaciona_vistos') || '[]'); } catch { return []; } },
   setVistos: (v) => lsSet('estaciona_vistos', JSON.stringify(v)),
@@ -1177,6 +1180,7 @@ window.abrirComparar = () => {
       </div>
       </div>
       <p class="disclaimer">${ic('bulb', 15)} Los precios son estimados salvo los confirmados. El cupo es una estimación por hora, salvo reportes recientes de la gente. Confírmalo en el lugar.</p>
+      ${esPro() ? `<button class="btn btn-second cmp-guardar" onclick="guardarComparacion()">${ic('starOutline', 16)} Guardar esta comparación</button>` : ''}
     </div>`;
   detalleAbiertoId = null;                          // no es un detalle individual
   cerrarMapCard();
@@ -1184,6 +1188,40 @@ window.abrirComparar = () => {
   det.classList.add('open'); det.inert = false;   // vuelve a entrar al árbol de foco/AX
   _focoPrevio = document.activeElement;
   det.setAttribute('tabindex', '-1'); det.focus();
+};
+// --- Guardar comparaciones (Pro) --------------------------------------------
+// Guarda el set actual de comparación para volver a él. Nombre automático a
+// partir de los lugares. Tope 12; evita duplicar el mismo set (mismos ids).
+window.guardarComparacion = () => {
+  if (!esPro()) { location.href = '/pro'; return; }
+  const ids = comparar.slice();
+  if (ids.length < 2) { toast('Elige al menos 2 lugares'); return; }
+  const nombres = ids.map((id) => DATA.find((p) => p.id === id)?.nombre).filter(Boolean);
+  const corto = (s) => s.length > 18 ? s.slice(0, 17) + '…' : s;   // nombres largos no rompen la tarjeta
+  const nombre = nombres.slice(0, 2).map(corto).join(' vs ') + (nombres.length > 2 ? ` +${nombres.length - 2}` : '');
+  const comps = LS.getComparaciones();
+  const clave = [...ids].sort().join(',');
+  if (comps.some((c) => [...(c.ids || [])].sort().join(',') === clave && c.ciudad === ciudadActual)) {
+    toast('Ya la tenías guardada'); return;
+  }
+  comps.unshift({ nombre, ciudad: ciudadActual, ids, ts: Date.now() });
+  LS.setComparaciones(comps.slice(0, 12));
+  toast('Comparación guardada ✓ — la ves en Favoritos');
+};
+// Abre una comparación guardada: si es de otra ciudad, la carga primero.
+window.abrirCompGuardada = (i) => {
+  const c = LS.getComparaciones()[i];
+  if (!c) return;
+  const abrir = () => { comparar = c.ids.slice(); actualizarBarraComparar(); abrirComparar(); };
+  if (c.ciudad && c.ciudad !== ciudadActual) {
+    toast('Yendo a ' + c.ciudad + '…');
+    cambiarCiudad(c.ciudad, true).then(() => setTimeout(abrir, 60));
+  } else abrir();
+};
+window.borrarCompGuardada = (i) => {
+  const comps = LS.getComparaciones();
+  comps.splice(i, 1); LS.setComparaciones(comps);
+  renderFavoritos(); toast('Comparación borrada');
 };
 
 // --- Horario: "cierra pronto" / "abre a las X" (honesto, según la hora de Chile) --
@@ -2378,6 +2416,20 @@ function finalizarAuto(a, pagado) {
 }
 
 // --- Favoritos --------------------------------------------------------------
+// Sección "Comparaciones guardadas" (Pro): sets guardados desde la vista comparar.
+function compsGuardadasHTML() {
+  if (!esPro()) return '';
+  const comps = LS.getComparaciones();
+  if (!comps.length) return '';
+  return `<h2 style="font-size:14px;color:var(--muted);margin:18px 0 8px">${ic('compare', 15)} Comparaciones guardadas</h2>
+    ${comps.map((c, i) => `
+      <div class="fav-item" role="button" tabindex="0" onclick="abrirCompGuardada(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirCompGuardada(${i})}" aria-label="Abrir comparación ${esc(c.nombre)}">
+        <span class="ic">${ic('compare', 21)}</span>
+        <div style="flex:1;min-width:0"><div class="nm">${esc(c.nombre)}</div>
+        <div class="sub">${c.ids.length} lugares${c.ciudad ? ' · ' + esc(c.ciudad) : ''}</div></div>
+        <button class="comp-del" onclick="event.stopPropagation();borrarCompGuardada(${i})" aria-label="Borrar comparación">${ic('x', 16)}</button>
+      </div>`).join('')}`;
+}
 function renderFavoritos() {
   // Usa el objeto guardado; si es formato viejo (id string), lo busca en la ciudad actual.
   const favs = LS.getFavs().map((f) => (typeof f === 'string' ? DATA.find((p) => p.id === f) : f)).filter(Boolean);
@@ -2396,6 +2448,7 @@ function renderFavoritos() {
       <div class="empty-tit">Aún no guardas lugares</div>
       <p>Toca la ${ic('starOutline', 14)} de un estacionamiento para guardarlo aquí y volver rápido.</p>
     </div>`}
+    ${compsGuardadasHTML()}
     <button class="btn btn-second btn-invitar" onclick="compartirApp()">${ic('share', 16)} Invitar a un amigo</button>
     ${proCardHTML()}
     <div class="app-legal">

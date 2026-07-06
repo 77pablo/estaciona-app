@@ -713,6 +713,10 @@ body.is-offline #lista { padding-bottom: 44px; }
 /* Flecha "tocá para abrir" en los lugares guardados. */
 .fav-go { color: var(--muted); flex-shrink: 0; display: flex; transition: transform .14s, color .14s; }
 .fav-item:hover .fav-go { color: var(--accent); transform: translateX(2px); }
+/* Borrar una comparación guardada (Pro). */
+.comp-del { flex-shrink: 0; background: none; border: none; color: var(--muted); cursor: pointer; display: inline-flex; padding: 6px; border-radius: 8px; transition: color .12s, background .12s; }
+.comp-del:hover { color: var(--red); background: rgba(244,86,91,.12); }
+.cmp-guardar { width: 100%; margin-top: 14px; }
 
 /* Banner + toast */
 #banner {
