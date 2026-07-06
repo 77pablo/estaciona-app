@@ -573,6 +573,7 @@ function initMap() {
 
   meMarker = L.marker([USER.lat, USER.lng], {
     icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [16, 16] }),
+    title: 'Tu ubicación', alt: 'Tu ubicación',
   }).addTo(map);
 
   // Botón flotante "mi ubicación" sobre el mapa (como Google/Waze).
@@ -711,6 +712,7 @@ function actualizarAutoMarker() {
     } else {
       autoMarker = L.marker([a.lat, a.lng], {
         icon: L.divIcon({ className: '', html: `<div class="auto-pin" title="Tu auto">${ic('car', 18)}</div>`, iconSize: [0, 0] }),
+        title: 'Tu auto', alt: 'Tu auto',
         zIndexOffset: 1200,   // por encima de los pines de estacionamientos
       }).addTo(map);
       autoMarker.on('click', () => irA('miauto'));
@@ -791,7 +793,8 @@ function updateMarkers(lista) {
       if (mk._sig !== sig) { mk.setIcon(L.divIcon({ className: '', html: iconHtml(p), iconSize: [0, 0] })); mk._sig = sig; }
       mk.nivelEstaciona = nivel;                 // para colorear el clúster
     } else {
-      mk = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: '', html: iconHtml(p), iconSize: [0, 0] }) });
+      // title/alt: nombre accesible del pin (Leaflet lo hace focusable con teclado; sin esto el lector de pantalla no anuncia nada).
+      mk = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: '', html: iconHtml(p), iconSize: [0, 0] }), title: p.nombre, alt: p.nombre });
       mk._sig = sig;
       mk.nivelEstaciona = nivel;
       mk.on('click', () => abrirMapCard(p.id));
