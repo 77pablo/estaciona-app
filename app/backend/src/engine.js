@@ -211,6 +211,37 @@ function nowChile() {
 
 // Da forma al snapshot que consume el frontend para un conjunto de fichas
 // (el dataset base o lugares reportados por la gente — mismo shape).
+// Pista GRUESA por franja (gratis): una sola frase cualitativa, sin horas ni
+// curva (eso es Pro). Compara mañana / mediodía / tarde con el MISMO modelo de
+// demanda y devuelve algo accionable: qué franja evitar, o cuál es más fácil.
+// null si está holgado a toda hora, cerrado, o es un lugar aportado (sin modelo).
+const _FRANJAS = [
+  { hs: [7, 8, 9, 10, 11], nom: 'en la mañana' },
+  { hs: [12, 13, 14, 15], nom: 'al mediodía' },
+  { hs: [16, 17, 18, 19, 20], nom: 'en la tarde' },
+];
+export function franjaHint(e, dia) {
+  if (e.reportado) return null;
+  // Umbral algo más sensible que el semáforo en vivo (verde ≥0.35): "suele
+  // llenarse" es una TENDENCIA, más suave que "difícil ahora". Así la pista
+  // aparece en calles contestadas (base ~0.72), no solo en zonas muy demandadas.
+  const AJUSTADA = 0.42;   // disponibilidad promedio de la franja bajo esto = "se llena"
+  const evals = [];
+  for (const f of _FRANJAS) {
+    const abiertas = f.hs.filter((h) => abiertoAhora(e, h));
+    if (!abiertas.length) continue;
+    const avgFactor = abiertas.reduce((s, h) => s + factorHora(h, dia), 0) / abiertas.length;
+    const disp = 1 - clamp(demandaBaseDe(e) * avgFactor, 0, 1);
+    evals.push({ nom: f.nom, ajustada: disp < AJUSTADA });
+  }
+  if (!evals.length) return null;
+  const ajustadas = evals.filter((x) => x.ajustada);
+  if (!ajustadas.length) return null;                                   // holgado a toda hora
+  if (ajustadas.length === evals.length) return 'Suele estar ajustado gran parte del día';
+  if (ajustadas.length === 1) return `Suele llenarse ${ajustadas[0].nom}`;
+  return `Más fácil ${evals.find((x) => !x.ajustada).nom}`;             // 2 ajustadas → nombra la tranquila
+}
+
 export function shapeFichas(fichas) {
   const { hora, dia } = nowChile();
 
@@ -236,6 +267,7 @@ export function shapeFichas(fichas) {
       return {
         ...base,
         disponibilidad: { fuente: 'estimacion', nivel, label },
+        franja: franjaHint(e, dia),   // pista gruesa por franja (gratis; null si holgado/cerrado/reportado)
       };
     }
   });

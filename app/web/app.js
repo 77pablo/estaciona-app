@@ -1338,6 +1338,7 @@ function openDetalle(id) {
       <div class="det-hero"><span class="hero-ic">${ic(p.tipo === 'calle' ? 'road' : 'parking', 30)}</span><span class="hero-nm">${esc(p.nombre)}</span></div>
       ${p.resena && p.resena.n > 0 ? `<button class="det-rating" onclick="document.querySelector('.comunidad')?.scrollIntoView({behavior:'smooth',block:'start'})" aria-label="${p.resena.promedio} de 5 estrellas, ${p.resena.n} reseñas — ver reseñas">${estrellasFijas(p.resena.promedio, 15)} <b>${p.resena.promedio.toFixed(1)}</b> <span>· ${p.resena.n} reseña${p.resena.n > 1 ? 's' : ''}</span></button>` : ''}
       <div class="det-status" id="det-status-line">${lineaDisponibilidad(p)}</div>
+      ${p.franja ? `<div class="det-franja">${ic('clock', 13)} ${esc(p.franja)} <small>· patrón estimado del día</small></div>` : ''}
       ${adDe(p) ? `<div class="aviso-dest">${ic('starFull', 15)} <b>${esc(p.destacadoEtiqueta || 'Destacado')}</b>${p.destacadoTagline ? ' · ' + esc(p.destacadoTagline) : ''} · espacio destacado (publicidad)</div>` : ''}
       ${p.reportado ? `<div class="aviso-com">${ic('users', 16)} Estacionamiento <b>aportado por la comunidad</b> — gracias por sumar. Si algo está mal, coméntalo abajo.</div>` : ''}
       ${p.categoria ? `<div class="aviso-cli">${catBadge(p)} Es un estacionamiento de <b>${esc(p.categoria.toLowerCase())}</b> — puede ser de uso restringido, no público general.</div>` : ''}
