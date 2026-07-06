@@ -20,6 +20,7 @@ import { liveOcupacionMapa } from './ocupacion-live.js';
 import { geocodificar, geocodificarInverso, geocoderInfo } from './geocoder.js';
 import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } from './reportes.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
+import { paginaCiudad, ciudadDeSlug, sitemapXML, robotsTxt } from './seo.js';
 import { registrarVoto, tallyReciente, senalReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
 import { registrarResena, resumenResenas, resenasDe, resenasRecientes, eliminarResena } from './resenas.js';
@@ -603,6 +604,24 @@ const server = http.createServer(async (req, res) => {
       // `db:false` => SQLite no cargó: la app responde pero NADA persiste (las
       // escrituras se descartan). Sirve para monitorear que la persistencia esté viva.
       return sendJSON(res, 200, { ok: true, db: dbReady });
+    }
+    // --- SEO: robots, sitemap y páginas por ciudad (server-render, sin JS) ---
+    if (req.method === 'GET' && (url.pathname === '/robots.txt' || url.pathname === '/sitemap.xml' || url.pathname.startsWith('/estacionamientos/'))) {
+      const origin = ((req.headers['x-forwarded-proto'] || 'https').split(',')[0]) + '://' + (req.headers.host || 'estaciona-app-production.up.railway.app');
+      const enviar = (status, body, type, cache) => {
+        const buf = Buffer.from(body, 'utf8');
+        const base = { 'Content-Type': type, 'Cache-Control': cache, 'Vary': 'Accept-Encoding' };
+        if (res._acceptGzip) { const gz = gzipSync(buf); res.writeHead(status, { ...base, 'Content-Encoding': 'gzip', 'Content-Length': gz.length }); res.end(gz); }
+        else { res.writeHead(status, { ...base, 'Content-Length': buf.length }); res.end(buf); }
+      };
+      if (url.pathname === '/robots.txt') return enviar(200, robotsTxt(origin), 'text/plain; charset=utf-8', 'public, max-age=86400');
+      if (url.pathname === '/sitemap.xml') return enviar(200, sitemapXML(origin), 'application/xml; charset=utf-8', 'public, max-age=86400');
+      const slug = decodeURIComponent(url.pathname.slice('/estacionamientos/'.length)).replace(/\/+$/, '');
+      const ciudad = ciudadDeSlug(slug);
+      const html = ciudad ? paginaCiudad(ciudad, origin) : null;
+      if (html) return enviar(200, html, 'text/html; charset=utf-8', 'public, max-age=1800');
+      // Ciudad desconocida: manda a la app (evita 404 duro y da algo útil).
+      res.writeHead(302, { 'Location': '/app' }); res.end(); return;
     }
     if (req.method === 'GET') return await serveStatic(req, res, url.pathname);
     res.writeHead(405, { 'Allow': 'GET, POST, HEAD' }); res.end('Método no permitido');
