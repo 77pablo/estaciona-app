@@ -47,6 +47,21 @@
   .uso-row{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 2px;font-size:14px}
   .uso-row b{font-family:ui-monospace,monospace}
   @media(max-width:560px){.uso-cols{grid-template-columns:1fr}}
+  /* Gráfico de 7 días */
+  .chart{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 14px 10px;margin:6px 0 18px}
+  .chart h3{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 14px}
+  .bars{display:flex;align-items:flex-end;gap:6px;height:120px}
+  .bars .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+  .bars .bar{width:100%;max-width:34px;background:linear-gradient(180deg,var(--accent),#1c9c8e);border-radius:5px 5px 2px 2px;min-height:3px;position:relative;transition:height .3s}
+  .bars .bar.hoy{background:linear-gradient(180deg,#f59e0b,#d97706)}
+  .bars .val{font-size:11px;font-family:ui-monospace,monospace;font-weight:700}
+  .bars .dl{font-size:10px;color:var(--muted);text-transform:uppercase}
+  /* Barras proporcionales por acción */
+  .uso-bar{position:relative;padding:7px 8px;font-size:14px;border-radius:6px;margin-bottom:3px;overflow:hidden;background:var(--surface)}
+  .uso-bar .fill{position:absolute;inset:0;background:var(--accent);opacity:.16;border-radius:6px}
+  .uso-bar .lbl,.uso-bar b{position:relative;z-index:1}
+  .uso-bar{display:flex;justify-content:space-between}
+  .uso-bar b{font-family:ui-monospace,monospace}
 </style>
 </head>
 <body>
@@ -148,18 +163,37 @@
       ['Votos', DATOS.nVotos || 0],
     ].map(([lbl, n]) => `<div class="stat"><b>${n}</b><span>${lbl}</span></div>`).join('');
 
-    // Uso de la app (analítica anónima): hoy / 7 días / total + por evento + top ciudades.
+    // Uso de la app (analítica anónima): hoy / 7 días / total + gráfico + por acción + top ciudades.
     const a = DATOS.analytics || {};
-    const filas = (obj) => Object.entries(obj || {}).sort((x, y) => y[1] - x[1]).map(([k, n]) => `<div class="uso-row"><span>${esc(k)}</span><b>${n}</b></div>`).join('') || '<div class="vacio">Sin datos aún</div>';
+    const EV_LBL = { pageview: 'Visitas', search: 'Búsquedas', ciudad: 'Cambió ciudad', detalle: 'Vio ficha', comollegar: 'Cómo llegar', reporte_lugar: 'Aportó lugar', reporte_precio: 'Reportó precio', comentario: 'Comentó', foto: 'Subió foto', voto: 'Votó cupo', resena: 'Reseñó' };
+    // Gráfico de barras: últimos 7 días (rellena días faltantes con 0).
+    const u7 = a.ultimos7 || [];
+    const hoyKey = a.hoy ? a.hoy.dia : '';
+    const maxDia = Math.max(1, ...u7.map((d) => d.total));
+    const nombreDia = (iso) => { try { return new Intl.DateTimeFormat('es-CL', { weekday: 'short', timeZone: 'America/Santiago' }).format(new Date(iso + 'T12:00:00')); } catch { return iso.slice(5); } };
+    const chart = u7.length
+      ? `<div class="bars">${u7.map((d) => `<div class="col"><div class="val">${d.total}</div><div class="bar${d.dia === hoyKey ? ' hoy' : ''}" style="height:${Math.round((d.total / maxDia) * 100)}%" title="${d.dia}: ${d.total}"></div><div class="dl">${esc(nombreDia(d.dia))}</div></div>`).join('')}</div>`
+      : '<div class="vacio">Sin datos aún — se llena a medida que la usan.</div>';
+    // Barras proporcionales por acción.
+    const evs = Object.entries(a.porEvento || {}).sort((x, y) => y[1] - x[1]);
+    const maxEv = Math.max(1, ...evs.map(([, n]) => n));
+    const barsAccion = evs.length
+      ? evs.map(([k, n]) => `<div class="uso-bar"><span class="fill" style="width:${Math.round((n / maxEv) * 100)}%"></span><span class="lbl">${esc(EV_LBL[k] || k)}</span><b>${n}</b></div>`).join('')
+      : '<div class="vacio">Sin datos aún</div>';
+    const maxCiu = Math.max(1, ...(a.topCiudades || []).map(([, n]) => n));
+    const barsCiudad = (a.topCiudades || []).length
+      ? (a.topCiudades || []).map(([c, n]) => `<div class="uso-bar"><span class="fill" style="width:${Math.round((n / maxCiu) * 100)}%"></span><span class="lbl">${esc(c)}</span><b>${n}</b></div>`).join('')
+      : '<div class="vacio">Sin datos aún</div>';
     $('#uso').innerHTML = `
       <div class="stats">
         <div class="stat"><b>${a.hoy ? a.hoy.total : 0}</b><span>Hoy</span></div>
         <div class="stat"><b>${a.semana || 0}</b><span>Últimos 7 días</span></div>
         <div class="stat"><b>${a.total || 0}</b><span>Total histórico</span></div>
       </div>
+      <div class="chart"><h3>Actividad · últimos 7 días</h3>${chart}</div>
       <div class="uso-cols">
-        <div><h3>Por acción</h3>${filas(a.porEvento)}</div>
-        <div><h3>Top ciudades</h3>${(a.topCiudades || []).map(([c, n]) => `<div class="uso-row"><span>${esc(c)}</span><b>${n}</b></div>`).join('') || '<div class="vacio">Sin datos aún</div>'}</div>
+        <div><h3>Por acción</h3>${barsAccion}</div>
+        <div><h3>Top ciudades</h3>${barsCiudad}</div>
       </div>`;
 
     // Destacados activos (publicidad). Lista con opción de quitar + métricas reales
