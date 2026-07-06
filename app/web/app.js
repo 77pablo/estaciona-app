@@ -1117,10 +1117,12 @@ function abrirMapCard(id) {
     </div>`;
   el.hidden = false;
   requestAnimationFrame(() => el.classList.add('show'));
+  $('#view-buscar')?.classList.add('sin-lista');   // oculta la lista mientras la tarjeta está arriba (sin solaparse)
 }
 window.cerrarMapCard = function () {
   const el = $('#mapcard');
   if (el) { el.classList.remove('show'); el.hidden = true; }
+  if (!_reportando) $('#view-buscar')?.classList.remove('sin-lista');   // vuelve a mostrar la lista (salvo si sigo en modo apuntar)
 };
 
 // --- Comparar 2-3 estacionamientos lado a lado ------------------------------
@@ -3059,6 +3061,7 @@ window.reportarLugar = () => {
   $('#crosshair')?.removeAttribute('hidden');
   $('#reportar-bar')?.classList.add('show');
   $('#btn-zona')?.classList.remove('show');
+  $('#view-buscar')?.classList.add('sin-lista');   // esconde la lista para apuntar con el mapa completo
   toast('Mueve el mapa para apuntar el lugar exacto');
   setTimeout(() => map && map.invalidateSize(), 60);
 };
@@ -3066,6 +3069,7 @@ function salirModoReporte() {
   _reportando = false;
   $('#crosshair')?.setAttribute('hidden', '');
   $('#reportar-bar')?.classList.remove('show');
+  $('#view-buscar')?.classList.remove('sin-lista');   // vuelve la lista
   onMapMove();   // recalcula "Buscar cerca de aquí" (#btn-zona), que se ocultó al entrar a reportar
 }
 window.cancelarReporte = () => salirModoReporte();
@@ -3572,6 +3576,10 @@ function initSheetDrag() {
   }
   head.addEventListener('pointerup', endDrag);
   head.addEventListener('pointercancel', endDrag);
+  // Snap programático (móvil): 0 = mini, 1 = medio, 2 = completo. Lo usa la
+  // tarjeta del pin para bajar la lista al abrirse (y subirla al cerrarse), y
+  // que no queden una encima de la otra.
+  window.snapSheet = (i) => { if (esMovil() && ESTADOS[i] != null) { sheet.style.transition = ''; setFrac(ESTADOS[i]); } };
 }
 
 // --- Ciclo de datos (con estados de carga / error) --------------------------

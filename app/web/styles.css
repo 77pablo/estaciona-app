@@ -1038,8 +1038,7 @@ body.is-offline #lista { padding-bottom: 44px; }
   .bottomnav { padding-bottom: env(safe-area-inset-bottom, 0px); }
   /* En celular el appbar lleva 2 filas (logo/ciudad + buscador a lo ancho, ~110px),
      así que los flotantes anclados arriba bajan para no tapar el buscador. */
-  #banner,
-  .reportar-bar { top: calc(112px + env(safe-area-inset-top, 0px)); }
+  #banner { top: calc(112px + env(safe-area-inset-top, 0px)); }
 
   /* Más aire arriba: el appbar respira entre sus filas y los chips NO van pegados
      al buscador (separación clara entre el borde del appbar y la fila de chips). */
@@ -1056,7 +1055,12 @@ body.is-offline #lista { padding-bottom: 44px; }
     position: absolute; left: 0; right: 0; bottom: 0; z-index: 20;
     max-height: 90%; margin-top: 0; border-top-left-radius: var(--r-lg); border-top-right-radius: var(--r-lg);
     box-shadow: 0 -14px 40px -18px rgba(0,0,0,.8);
+    transition: height .25s ease, transform .28s cubic-bezier(.2, .7, .2, 1);
   }
+  /* Con la tarjeta del pin abierta O apuntando un lugar nuevo, la lista se
+     desliza fuera (no quedan una encima de la otra ni tapa el mapa); vuelve
+     al cerrar. */
+  #view-buscar.sin-lista .sheet { transform: translateY(110%); pointer-events: none; }
   #lista { padding-bottom: 22px; }   /* el último resultado no queda pegado al borde */
 
   /* "Buscar cerca de aquí": claramente sobre el MAPA, bien debajo de los chips. */
@@ -1128,6 +1132,11 @@ body.is-offline #lista { padding-bottom: 44px; }
 }
 .reportar-bar.show { display: flex; }
 .rep-bar-txt { font-size: 13px; color: var(--text); font-weight: 600; line-height: 1.35; }
+/* Móvil: la barra de "apuntar el lugar" va ABAJO (como confirmar), no tapa el
+   zoom ni las capas de arriba. (Va después de la base para ganar por orden.) */
+@media (max-width: 859px) {
+  .reportar-bar { top: auto; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+}
 .rep-bar-btns { display: flex; gap: 8px; }
 .rep-bar-btns .btn { flex: 1; padding: 11px; font-size: 14px; }
 
