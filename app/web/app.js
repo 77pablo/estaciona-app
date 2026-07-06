@@ -79,7 +79,7 @@ let detalleAbiertoId = null;
 const filtrosVacios = () => ({
   gratis: false, barato: false, techado: false, abierto: false,
   ev: false, accesible: false, camaras: false, verificado: false,
-  soloPublicos: false, cupo: false, tipo: 'todos', distMax: 0,
+  soloPublicos: false, cupo: false, disponible: false, tipo: 'todos', distMax: 0,
 });
 // "Con cupo": lugares con cupo REPORTADO recién por la gente (o en vivo por un
 // operador) — la señal fresca, no la mera estimación. Base del filtro/orden.
@@ -845,6 +845,7 @@ function listaFiltrada() {
       if (filtros.abierto && !p.abierto) return false;
       if (filtros.soloPublicos && p.categoria) return false;   // oculta hospitales/colegios/etc.
       if (filtros.cupo && !cupoConfirmado(p)) return false;     // solo con cupo reportado fresco
+      if (filtros.disponible && !(cupoConfirmado(p) || p.disponibilidad?.nivel === 'verde')) return false;  // suave: confirmado O "suele haber" (estimación verde)
       if (filtros.tipo !== 'todos' && p.tipo !== filtros.tipo) return false;
       if (filtros.distMax > 0 && p.dist > filtros.distMax) return false;
       return true;
@@ -872,7 +873,7 @@ function listaFiltrada() {
 // Cuenta filtros activos para el badge del botón ⚙️.
 function contarFiltros() {
   let n = 0;
-  for (const k of ['gratis', 'barato', 'techado', 'abierto', 'ev', 'accesible', 'camaras', 'verificado', 'soloPublicos', 'cupo']) if (filtros[k]) n++;
+  for (const k of ['gratis', 'barato', 'techado', 'abierto', 'ev', 'accesible', 'camaras', 'verificado', 'soloPublicos', 'cupo', 'disponible']) if (filtros[k]) n++;
   if (filtros.tipo !== 'todos') n++;
   if (filtros.distMax > 0) n++;
   return n;
@@ -935,6 +936,14 @@ function renderLista() {
         <div class="empty-tit">Nadie reportó cupo por acá todavía</div>
         <p>Los reportes de cupo los pone la gente, en el momento. Sé el primero: al estacionar, entra a un lugar y toca “¿Hay cupo? Sí”.</p>
         <button class="btn btn-primary" style="margin-top:14px" onclick="limpiarFiltros()">${ic('filters', 16)} Quitar el filtro</button>
+      </div>`;
+    } else if (filtros.disponible) {
+      // "Cerca con cupo": ninguno con cupo confirmado ni estimación verde a esta hora.
+      $('#lista').innerHTML = `<div class="empty-big">
+        <span class="em">${ic('traffic', 44)}</span>
+        <div class="empty-tit">A esta hora ninguno suele tener cupo</div>
+        <p>Por acá los estacionamientos suelen estar ajustados ahora. Mira todos igual — puede haber, o vuelve a probar más tarde.</p>
+        <button class="btn btn-primary" style="margin-top:14px" onclick="limpiarFiltros()">${ic('filters', 16)} Ver todos</button>
       </div>`;
     } else if (hayFiltros) {
       $('#lista').innerHTML = `<div class="empty-big">
@@ -2730,6 +2739,7 @@ function addHistBusq(texto) {
 // Accesos rápidos = filtros + orden aplicados de una. Reemplazan el estado (parten
 // de filtros vacíos) para dar exactamente lo que dice la etiqueta.
 const PRESETS = [
+  { label: 'Cerca con cupo', icono: 'check', aplica: () => { filtros = filtrosVacios(); filtros.disponible = true; orden = 'cercania'; } },
   { label: 'Barato y cerca', icono: 'wallet', aplica: () => { filtros = filtrosVacios(); filtros.barato = true; orden = 'recomendado'; } },
   { label: 'Gratis y abierto', icono: 'tag', aplica: () => { filtros = filtrosVacios(); filtros.gratis = true; filtros.abierto = true; } },
   { label: 'Con techo', icono: 'home', aplica: () => { filtros = filtrosVacios(); filtros.techado = true; } },
