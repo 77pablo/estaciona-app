@@ -1661,8 +1661,32 @@ async function renderCurva(p) {
       <div class="curva-head">${ic('clock', 15)} <b>Mejor hora para venir</b> <small>· estimación de hoy</small></div>
       <div class="curva-bars">${barras}</div>
       <div class="curva-axis"><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span></div>
-      <div class="curva-sug">${sug}</div>`;
+      <div class="curva-sug">${sug}</div>
+      ${curvaSemanaHTML(c.semana)}`;
   } catch { el.innerHTML = ''; }
+}
+// Vista semanal (Pro): qué día suele estar más holgado + la ventana ideal.
+const _DIAS_C = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'];
+const _DIAS_L = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+function curvaSemanaHTML(sem) {
+  if (!sem || !sem.dias) return '';
+  const col = (pct) => pct >= 60 ? 'var(--green)' : pct >= 30 ? 'var(--amber)' : 'var(--red)';
+  const barras = sem.dias.map((d) => {
+    const esHoy = d.dia === sem.actual, esMejor = sem.mejorDia && d.dia === sem.mejorDia.dia;
+    const ttl = `${_DIAS_L[d.dia]} · ${d.pct}% del día diurno suele haber cupo`;
+    return `<div class="sem-col${esHoy ? ' hoy' : ''}${esMejor ? ' mejor' : ''}" title="${ttl}">
+      <span class="sem-bar"><i style="height:${Math.max(8, d.pct)}%;background:${col(d.pct)}"></i></span>
+      <span class="sem-lbl">${_DIAS_C[d.dia]}</span></div>`;
+  }).join('');
+  const m = sem.mejorDia;
+  const reco = m && m.desde != null
+    ? `Mejor día: <b>${_DIAS_L[m.dia]}</b> — suele haber de <b>${m.desde} a ${m.hasta} h</b>.`
+    : 'Ningún día se ve holgado — conviene confirmar en el momento.';
+  return `<div class="curva-sem">
+    <div class="curva-head" style="margin-top:16px">${ic('clock', 15)} <b>Por día de la semana</b></div>
+    <div class="sem-bars">${barras}</div>
+    <div class="curva-sug">${reco}</div>
+  </div>`;
 }
 async function enviarAporte(id, body) {
   // Bloquea los botones del modal mientras envía (evita doble envío en redes lentas).

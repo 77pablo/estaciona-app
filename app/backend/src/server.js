@@ -15,7 +15,7 @@ import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
-import { snapshotCiudad, shapeFichas, curvaDisponibilidad, idExiste, buscarFichas, resolverDisponibilidad, FRESCA_MIN, conteoPorCiudad } from './engine.js';
+import { snapshotCiudad, shapeFichas, curvaDisponibilidad, curvaSemana, idExiste, buscarFichas, resolverDisponibilidad, FRESCA_MIN, conteoPorCiudad } from './engine.js';
 import { liveOcupacionMapa } from './ocupacion-live.js';
 import { geocodificar, geocodificarInverso, geocoderInfo } from './geocoder.js';
 import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } from './reportes.js';
@@ -414,7 +414,9 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/curva' && req.method === 'GET') {
       // Curva de disponibilidad estimada por hora (beneficio Pro "mejor hora para ir").
       // Mismo modelo que el semáforo; null si el id no está en el dataset.
-      const c = curvaDisponibilidad(url.searchParams.get('id') || '');
+      const cid = url.searchParams.get('id') || '';
+      const c = curvaDisponibilidad(cid);
+      if (c) c.semana = curvaSemana(cid);   // resumen por día (mejor día / ventana ideal)
       return sendJSON(res, c ? 200 : 404, c || { error: 'sin curva' });
     }
     if (url.pathname === '/api/reporte' && req.method === 'POST') {

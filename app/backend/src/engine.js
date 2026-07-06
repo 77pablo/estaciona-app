@@ -308,6 +308,30 @@ export function curvaDisponibilidad(id, diaOverride) {
   return { dia, horaActual: nowChile().hora, horas };
 }
 
+// Resumen semanal (beneficio Pro "mejor día / ventana ideal"): para cada día de
+// la semana, qué tan disponible suele estar en la franja diurna útil (7–21).
+// Mismo modelo que la curva por hora — solo lo agrega por día. Devuelve el % de
+// horas diurnas "verdes", la ventana verde (desde–hasta) y el mejor día.
+export function curvaSemana(id) {
+  const e = FICHAS.find((f) => f.id === id);
+  if (!e) return null;
+  const H0 = 7, H1 = 21;
+  const dias = [];
+  for (let dia = 0; dia < 7; dia++) {
+    let abiertas = 0; const verdes = [];
+    for (let h = H0; h <= H1; h++) {
+      if (!abiertoAhora(e, h)) continue;
+      abiertas++;
+      const demanda = clamp(demandaBaseDe(e) * factorHora(h, dia), 0, 1);
+      if (nivelPorRatio(1 - demanda) === 'verde') verdes.push(h);
+    }
+    const pct = abiertas ? Math.round(verdes.length / abiertas * 100) : 0;
+    dias.push({ dia, pct, desde: verdes.length ? verdes[0] : null, hasta: verdes.length ? verdes[verdes.length - 1] : null });
+  }
+  const mejorDia = dias.reduce((a, b) => (b.pct > a.pct ? b : a), dias[0]);
+  return { dias, mejorDia: mejorDia.pct > 0 ? mejorDia : null, actual: nowChile().dia };
+}
+
 // Snapshot del dataset completo (compat; el servidor usa snapshotCiudad).
 export function getEstacionamientos() {
   return shapeFichas(FICHAS);
