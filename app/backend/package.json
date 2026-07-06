@@ -8,6 +8,7 @@
   "author": "Abel Espinoza (77pablo)",
   "license": "UNLICENSED",
   "dependencies": {
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "web-push": "^3.6.7"
   }
 }

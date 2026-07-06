@@ -54,6 +54,7 @@ const CENTRO_DEFAULT = { ...CENTRO };   // copia inmutable de Temuco (ciudad cas
 let ZONAS = [];                    // ciudades con datos (del backend)
 let REGIONES = [];                 // 16 regiones de Chile, orden norte→sur (del backend)
 let MAPTILER_KEY = '';             // key de MapTiler (del backend); vacío => tiles OSM
+let VAPID_PUB = '';                // clave pública Web Push (del backend); vacío => push desactivado
 let TOMTOM_KEY = '';               // key de TomTom (del backend); vacío => ETA estimada
 let ciudadActual = 'Temuco';       // ciudad que se está mirando ahora
 let USER = { ...CENTRO };          // "estás aquí" (Temuco por defecto)
@@ -1881,11 +1882,12 @@ window.toggleVigilarCupo = (id) => {
   const p = DATA.find((x) => x.id === id);
   const vig = LS.getVigilados();
   const i = vig.findIndex((v) => v.id === id);
-  if (i >= 0) { vig.splice(i, 1); LS.setVigilados(vig); toast('Dejé de vigilar el cupo'); }
+  if (i >= 0) { vig.splice(i, 1); LS.setVigilados(vig); vigilarPush(id, null, false); toast('Dejé de vigilar el cupo'); }
   else {
     vig.push({ id, nombre: p?.nombre || 'este lugar' }); LS.setVigilados(vig.slice(-20));
     if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
-    toast('Te aviso cuando haya cupo aquí — con la app abierta 👀');
+    vigilarPush(id, p?.nombre, true);   // push server: avisa con la app cerrada
+    toast(VAPID_PUB ? 'Te aviso cuando haya cupo aquí 🔔' : 'Te aviso cuando haya cupo aquí — con la app abierta 👀');
   }
   if (detalleAbiertoId === id) { const el = $('#det-vigilar'); if (el) el.outerHTML = `<div id="det-vigilar">${vigilarCupoBtnHTML(p)}</div>`; }
 };
@@ -3417,6 +3419,7 @@ function notificar(title, body, extra = {}) {
 // Programa la alarma anti-multa para que suene AUNQUE cierres la app (Chrome con
 // Notification Triggers). Sin soporte, igual suena con la app abierta (timer).
 function programarAlarmaBg(ts, nombre) {
+  if (ts > Date.now()) agendarPush('alarma', null, nombre, ts);   // push del servidor: suena con la app cerrada
   if (!(ts > Date.now()) || !('Notification' in window) || Notification.permission !== 'granted') return;
   if (!('serviceWorker' in navigator) || typeof TimestampTrigger === 'undefined') return;
   navigator.serviceWorker.ready.then((reg) => {
@@ -3431,6 +3434,7 @@ function programarAlarmaBg(ts, nombre) {
 }
 // Cancela la alarma programada (al terminar el estacionamiento) para no avisar de más.
 function cancelarAlarmaBg() {
+  agendarPush('alarma', null, null, null);   // cancela el push agendado en el servidor
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.ready
     .then((reg) => reg.getNotifications({ tag: 'estaciona-alarma', includeTriggered: true }).then((ns) => ns.forEach((n) => n.close())).catch(() => {}))
@@ -3485,8 +3489,10 @@ window.confirmarAviso = (id) => {
   const min = _avisoSel || 60;
   const motivo = _avisoMotivo;
   const recs = LS.getRecs();
-  recs.push({ id, nombre: p.nombre, ts: Date.now() + min * 60000, sono: false, motivo });
+  const cuando = Date.now() + min * 60000;
+  recs.push({ id, nombre: p.nombre, ts: cuando, sono: false, motivo });
   LS.setRecs(recs);
+  agendarPush(motivo === 'gratis' ? 'gratis' : 'recordatorio', id, p.nombre, cuando);   // push server: suena con la app cerrada
   cerrarModal();
   const ok = motivo === 'gratis' ? 'Te aviso cuando sea gratis ✓' : `Te aviso en ${fmtMin(min)} ✓`;
   const enApp = 'Aviso activado; te avisaré dentro de la app';
@@ -3720,8 +3726,44 @@ function skeletonHtml() {
 async function cargarConfig() {
   try {
     const r = await fetchConTimeout('/api/config', 8000);   // no bloquear initMap si /api/config cuelga
-    if (r.ok) { const c = await r.json(); MAPTILER_KEY = c.maptilerKey || ''; TOMTOM_KEY = c.tomtomKey || ''; }
+    if (r.ok) { const c = await r.json(); MAPTILER_KEY = c.maptilerKey || ''; TOMTOM_KEY = c.tomtomKey || ''; VAPID_PUB = c.vapidPublic || ''; }
   } catch { /* sin config: usamos OSM */ }
+}
+
+// --- Web Push real (background) --------------------------------------------
+// Suscribe el navegador al push (si hay soporte + clave VAPID + permiso). Cachea
+// la suscripción. Devuelve la suscripción (objeto plano) o null.
+let _pushSub = null;
+function b64ToU8(base64) {
+  const pad = '='.repeat((4 - base64.length % 4) % 4);
+  const b = atob((base64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  const u = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+  return u;
+}
+async function suscribirPush() {
+  if (!VAPID_PUB || !('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  if ('Notification' in window && Notification.permission === 'denied') return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID_PUB) });
+    _pushSub = sub.toJSON();
+    return _pushSub;
+  } catch { return null; }
+}
+// Agenda un aviso por tiempo en el servidor (suena con la app cerrada). tipo:
+// 'alarma' | 'gratis'. cuando = timestamp; cuando=null cancela.
+async function agendarPush(tipo, id, nombre, cuando) {
+  const sub = await suscribirPush();
+  if (!sub && cuando != null) return;   // sin push: se queda el aviso in-app de siempre
+  try { await fetch('/api/push/agendar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sub: sub || _pushSub, tipo, id, nombre, cuando }) }); } catch { /* nada */ }
+}
+// Vigila (o deja de vigilar) el cupo de un lugar por push.
+async function vigilarPush(id, nombre, activar) {
+  const sub = activar ? await suscribirPush() : _pushSub;
+  if (!sub) return;
+  try { await fetch('/api/push/vigilar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sub, id, nombre, activar }) }); } catch { /* nada */ }
 }
 
 // --- Instalar como app (PWA) ------------------------------------------------

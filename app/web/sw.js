@@ -8,7 +8,7 @@
 // en estacionamientos subterráneos, donde no hay internet).
 // ============================================================================
 
-const CACHE = 'estaciona-v10';
+const CACHE = 'estaciona-v11';
 
 // App shell que se precachea al instalar (para que abra offline desde el vamos).
 // Incluye Leaflet (servido local): así el mapa carga aunque no haya red — los
@@ -88,6 +88,19 @@ self.addEventListener('fetch', (e) => {
 
 // Al tocar una notificación (ej. la alarma anti-multa): enfoca la app si ya está
 // abierta, o la abre. Así el aviso lleva de vuelta a "Mi auto".
+// Push real (background): muestra la notificación que manda el servidor. El
+// payload trae { title, body, tag, url }.
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = {}; }
+  const opts = {
+    body: d.body || '', tag: d.tag || 'estaciona', renotify: true,
+    icon: '/icons/icon-192.png', badge: '/icons/icon-192.png',
+    data: { url: d.url || '/app' },
+  };
+  e.waitUntil(self.registration.showNotification(d.title || 'Estaciona 🅿️', opts));
+});
+
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   e.waitUntil((async () => {

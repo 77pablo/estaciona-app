@@ -15,13 +15,14 @@ import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
-import { snapshotCiudad, shapeFichas, curvaDisponibilidad, curvaSemana, idExiste, buscarFichas, resolverDisponibilidad, FRESCA_MIN, conteoPorCiudad } from './engine.js';
+import { snapshotCiudad, shapeFichas, curvaDisponibilidad, curvaSemana, idExiste, buscarFichas, resolverDisponibilidad, FRESCA_MIN, UMBRAL_SENAL, conteoPorCiudad } from './engine.js';
 import { liveOcupacionMapa } from './ocupacion-live.js';
 import { geocodificar, geocodificarInverso, geocoderInfo } from './geocoder.js';
 import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } from './reportes.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { paginaCiudad, ciudadDeSlug, sitemapXML, robotsTxt } from './seo.js';
 import { crearCodigoOperador, operadorPorCodigo, setCupoOperador, listarOperadores, eliminarOperador } from './operadores.js';
+import { pushActivo, vapidPublic, guardarSub, agendar, cancelarAgendados, vigilar, noVigilar, tickPush } from './push.js';
 import { registrarVoto, tallyReciente, senalReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
 import { registrarResena, resumenResenas, resenasDe, resenasRecientes, eliminarResena } from './resenas.js';
@@ -568,6 +569,35 @@ const server = http.createServer(async (req, res) => {
       } catch { sendJSON(res, 400, { ok: false }); }
       return;
     }
+    // Push: agendar un aviso por tiempo (alarma anti-multa / gratis) o cancelarlo.
+    if (url.pathname === '/api/push/agendar' && req.method === 'POST') {
+      const okRate = rateLimit(req, 60, 600000);
+      const { tooBig, body } = await readBody(req, 4000);
+      if (!okRate) return sendJSON(res, 429, { ok: false });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { sub, tipo, id, nombre, cuando } = JSON.parse(body || '{}');
+        const t = tipo === 'gratis' ? 'gratis' : 'alarma';
+        if (cuando == null && sub?.endpoint) { await cancelarAgendados(t, sub.endpoint); return sendJSON(res, 200, { ok: true, cancelado: true }); }
+        const ok = await agendar(t, sub, id, nombre, Number(cuando));
+        sendJSON(res, ok ? 200 : 400, { ok });
+      } catch { sendJSON(res, 400, { ok: false }); }
+      return;
+    }
+    // Push: vigilar (o dejar de vigilar) el cupo de un lugar.
+    if (url.pathname === '/api/push/vigilar' && req.method === 'POST') {
+      const okRate = rateLimit(req, 60, 600000);
+      const { tooBig, body } = await readBody(req, 4000);
+      if (!okRate) return sendJSON(res, 429, { ok: false });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { sub, id, nombre, activar } = JSON.parse(body || '{}');
+        if (activar === false) { if (sub?.endpoint) await noVigilar(sub.endpoint, id); return sendJSON(res, 200, { ok: true }); }
+        const ok = await vigilar(sub, id, nombre);
+        sendJSON(res, ok ? 200 : 400, { ok });
+      } catch { sendJSON(res, 400, { ok: false }); }
+      return;
+    }
     if (url.pathname === '/api/voto' && req.method === 'POST') {
       const okRate = rateLimit(req, 40, 600000);   // máx 40 votos / 10 min por IP (anti-spam)
       const { tooBig, body } = await readBody(req, 10000);
@@ -645,7 +675,7 @@ const server = http.createServer(async (req, res) => {
       // Config pública para el frontend. La API key de MapTiler vive en una
       // variable de entorno (NO en el repo, que es público). Si no está, el
       // frontend cae de vuelta a los tiles gratis de OSM.
-      return sendJSON(res, 200, { maptilerKey: MAPTILER_KEY, tomtomKey: TOMTOM_KEY });
+      return sendJSON(res, 200, { maptilerKey: MAPTILER_KEY, tomtomKey: TOMTOM_KEY, vapidPublic: vapidPublic() });
     }
     if (url.pathname === '/api/health' && req.method === 'GET') {
       // `db:false` => SQLite no cargó: la app responde pero NADA persiste (las
@@ -749,5 +779,22 @@ server.listen(PORT, () => {
   if (r2Enabled) console.log('   · fotos         → Cloudflare R2 (object storage externo)  (persiste, multi-instancia)');
   else console.log(`   · fotos         → ${persist('FOTOS_DIR')}`);
   console.log(`   · geocoder      → ${geocoderInfo}`);
+  console.log(`   · push          → ${pushActivo ? 'Web Push activo (VAPID)' : 'desactivado (sin VAPID_PUBLIC/PRIVATE)'}`);
   console.log('');
 });
+
+// ¿Hay cupo REAL en este lugar? (para "vigilar cupo" por push). Solo señal de
+// la gente fresca y positiva, o cupo en vivo del operador — nunca la estimación
+// (que casi siempre es verde y no es un evento "apareció cupo").
+async function hayCupoReal(id) {
+  try {
+    const { senal } = await agregados();
+    const s = senal[id];
+    if (s && s.ultimoTs && (Date.now() - s.ultimoTs) / 60000 <= FRESCA_MIN && ((s.wUp || 0) - (s.wDown || 0)) >= UMBRAL_SENAL) return true;
+    const live = await liveOcupacionMapa([id]);
+    if (live[id] && Number.isFinite(live[id].libres) && live[id].libres > 0) return true;
+  } catch { /* nada */ }
+  return false;
+}
+// Agendador del push: cada minuto revisa alarmas/gratis vencidos y vigilancias.
+if (pushActivo) setInterval(() => { tickPush(hayCupoReal).catch(() => {}); }, 60000);
