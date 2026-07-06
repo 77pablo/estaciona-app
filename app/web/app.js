@@ -2195,7 +2195,7 @@ function gastoHTML() {
     : tend === 0 ? 'Igual que el mes pasado · estimado.'
     : tend > 0 ? `${tend}% más que el mes pasado · estimado.`
     : `${Math.abs(tend)}% menos que el mes pasado · estimado.`;
-  return `<div class="gasto-sec">
+  return `${resumenMesHTML()}<div class="gasto-sec">
     <div class="gasto-head">${ic('wallet', 18)} <b>Tu gasto este mes</b> <span class="pro-tag">PRO</span></div>
     <div class="gasto-grid">
       <div class="gasto-card"><div class="g-num">${totalMes ? CLP(totalMes) : '$0'}</div><div class="g-lbl">este mes · ${esteMes.length} ${esteMes.length === 1 ? 'vez' : 'veces'}</div></div>
@@ -2205,6 +2205,48 @@ function gastoHTML() {
     <div class="gasto-nota">${ic('bulb', 12)} ${tendTxt}</div>
   </div>`;
 }
+// Episodios del historial de un mes dado (por defecto, el actual).
+function historialDelMes(offset = 0) {
+  const h = LS.getHist();
+  const a = new Date();
+  const objetivo = a.getFullYear() * 12 + a.getMonth() - offset;
+  return h.filter((e) => { const d = new Date(e.fin); return d.getFullYear() * 12 + d.getMonth() === objetivo; });
+}
+// Recap "Tu mes" (Pro): veces, horas totales, cuántas gratis y tu lugar top.
+// Da ganas de volver y es compartible (crecimiento). Solo con ≥2 estadías.
+function resumenMesHTML() {
+  if (!esPro()) return '';
+  const mes = historialDelMes();
+  if (mes.length < 2) return '';
+  const veces = mes.length;
+  const horas = Math.round(mes.reduce((s, e) => s + (e.dur || 0), 0) / 3600000 * 10) / 10;
+  const gratis = mes.filter((e) => e.precioHora === 0 || e.costo === 0 || e.pagado === 0).length;
+  const cuenta = {};
+  for (const e of mes) { const k = e.nombre || '—'; cuenta[k] = (cuenta[k] || 0) + 1; }
+  let topNombre = '', topN = 0;
+  for (const k in cuenta) if (cuenta[k] > topN) { topN = cuenta[k]; topNombre = k; }
+  const nombreMes = new Date().toLocaleDateString('es-CL', { month: 'long' });
+  return `<div class="resumen-mes">
+    <div class="rm-head">${ic('clock', 16)} <b>Tu ${esc(nombreMes)}</b> <span class="pro-tag">PRO</span></div>
+    <div class="rm-grid">
+      <div class="rm-item"><span class="rm-num">${veces}</span><span class="rm-lbl">veces</span></div>
+      <div class="rm-item"><span class="rm-num">${horas} h</span><span class="rm-lbl">estacionado</span></div>
+      <div class="rm-item"><span class="rm-num">${gratis}</span><span class="rm-lbl">${gratis === 1 ? 'vez gratis' : 'veces gratis'}</span></div>
+    </div>
+    ${topN >= 2 ? `<div class="rm-top">${ic('starFull', 13)} Tu lugar del mes: <b>${esc(topNombre)}</b> · ${topN} veces</div>` : ''}
+    <button class="rm-share" onclick="compartirResumen()">${ic('share', 14)} Compartir mi mes</button>
+  </div>`;
+}
+window.compartirResumen = () => {
+  const mes = historialDelMes();
+  if (!mes.length) return;
+  const veces = mes.length;
+  const horas = Math.round(mes.reduce((s, e) => s + (e.dur || 0), 0) / 3600000 * 10) / 10;
+  const gratis = mes.filter((e) => e.precioHora === 0 || e.costo === 0 || e.pagado === 0).length;
+  const nombreMes = new Date().toLocaleDateString('es-CL', { month: 'long' });
+  const url = `${location.origin}/app`;
+  compartirTexto(`Mi ${nombreMes} en Estaciona 🅿️: estacioné ${veces} veces (${horas} h)${gratis ? `, ${gratis} gratis` : ''}. ¿Buscas dónde estacionar?\n${url}`, url);
+};
 // Meta de gasto mensual (Pro): barra de avance + estado (ok / cerca 80% / pasado).
 function metaGastoHTML(totalMes) {
   const meta = LS.getMetaGasto();

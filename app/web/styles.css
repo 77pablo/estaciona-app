@@ -1318,6 +1318,17 @@ body.is-offline #lista { padding-bottom: 44px; }
 .gasto-card .g-lbl{font-size:11px;color:var(--muted);margin-top:2px}
 .gasto-nota{font-size:11px;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:5px}
 /* Meta de gasto mensual (Pro): barra de avance + estado. */
+/* Recap "Tu mes" (Pro): veces, horas, gratis, lugar top. */
+.resumen-mes{margin:16px 0;padding:16px;background:linear-gradient(135deg,rgba(45,212,191,.10),var(--surface-2));border:1px solid var(--line);border-radius:14px}
+.rm-head{display:flex;align-items:center;gap:6px;font-size:14px;margin-bottom:12px}
+.rm-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center}
+.rm-item{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 8px}
+.rm-num{display:block;font-size:22px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums;line-height:1}
+.rm-lbl{display:block;font-size:11px;color:var(--muted);margin-top:5px}
+.rm-top{font-size:12.5px;color:var(--muted);margin-top:12px;display:flex;align-items:center;gap:5px}
+.rm-top b{color:var(--text)}
+.rm-share{width:100%;margin-top:12px;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:none;border:1px solid var(--line-2);border-radius:10px;padding:12px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;transition:border-color .12s,color .12s}
+.rm-share:hover{border-color:var(--accent);color:var(--accent)}
 .gasto-meta-set{width:100%;margin-top:10px;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:none;border:1px dashed var(--line-2);border-radius:10px;padding:9px;color:var(--muted);font-size:12.5px;font-weight:600;cursor:pointer}
 .gasto-meta-set:hover{color:var(--text);border-color:var(--accent)}
 .gasto-meta{margin-top:10px}
