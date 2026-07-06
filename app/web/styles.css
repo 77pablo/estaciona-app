@@ -545,6 +545,14 @@ body.is-offline #lista { padding-bottom: 44px; }
 .resena-avg .ra-num { font-family: var(--font-mono); font-size: 26px; font-weight: 700; line-height: 1; }
 .resena-avg .ra-n { font-size: 13px; color: var(--muted); }
 .resena-vacia { font-size: 13.5px; color: var(--muted); }
+/* Desglose por estrellas (5→1) bajo el promedio. */
+.resena-dist { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; max-width: 280px; }
+.rd-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+.rd-star { display: inline-flex; align-items: center; gap: 2px; width: 24px; flex-shrink: 0; }
+.rd-star .ic-svg { color: var(--star); }
+.rd-bar { flex: 1; height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.rd-fill { display: block; height: 100%; background: var(--star); border-radius: 999px; }
+.rd-n { width: 20px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .btn-resena { width: 100%; }
 .resenas-lista { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
 .resena-item { padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }

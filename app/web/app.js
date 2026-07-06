@@ -1429,9 +1429,15 @@ function estrellasFijas(v, size = 14) {
   return `<span class="stars">${s}</span>`;
 }
 // Cabecera del bloque de reseñas: promedio grande + estrellas + nº, o invitación.
-function resenaAvgHTML(promedio, n) {
+function resenaAvgHTML(promedio, n, dist) {
   if (n > 0) {
-    return `<div class="resena-avg"><span class="ra-num">${promedio.toFixed(1)}</span>${estrellasFijas(promedio, 17)}<span class="ra-n">${n} reseña${n > 1 ? 's' : ''}</span></div>`;
+    // Desglose por estrellas (5→1): ayuda a leer si es parejo o polarizado.
+    // Solo desde 3 reseñas (con 1-2 el desglose no aporta y ensucia).
+    const barras = (dist && n >= 3) ? `<div class="resena-dist">${[5, 4, 3, 2, 1].map((s) => {
+      const c = dist[s] || 0, pct = n ? Math.round(c / n * 100) : 0;
+      return `<div class="rd-row"><span class="rd-star">${s}${ic('starFull', 10)}</span><span class="rd-bar"><span class="rd-fill" style="width:${pct}%"></span></span><span class="rd-n">${c}</span></div>`;
+    }).join('')}</div>` : '';
+    return `<div class="resena-avg"><span class="ra-num">${promedio.toFixed(1)}</span>${estrellasFijas(promedio, 17)}<span class="ra-n">${n} reseña${n > 1 ? 's' : ''}</span></div>${barras}`;
   }
   return `<div class="resena-vacia">Aún no hay reseñas — <b>sé el primero</b> en contar cómo es.</div>`;
 }
@@ -1449,7 +1455,7 @@ async function cargarResenas(id) {
     if (detalleAbiertoId !== id) return;
     // Cabecera con el promedio FRESCO (no depende del cache de agregados de 15 s).
     const cab = $('#resenas-cab');
-    if (cab) cab.innerHTML = resenaAvgHTML(j.promedio || 0, j.n || 0);
+    if (cab) cab.innerHTML = resenaAvgHTML(j.promedio || 0, j.n || 0, j.dist);
     el.innerHTML = (j.resenas || []).map((rs) => `
       <div class="resena-item">
         <div class="resena-top">${estrellasFijas(rs.estrellas, 13)}<span class="com-fecha" title="${esc(fechaAbs(rs.ts))}">${fechaCorta(rs.ts)}</span></div>

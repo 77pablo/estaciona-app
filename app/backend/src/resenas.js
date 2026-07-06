@@ -44,7 +44,11 @@ export async function resenasDe(id) {
   const n = agg ? agg.n : 0;
   const promedio = n ? Math.round((agg.suma / n) * 10) / 10 : null;
   const resenas = await all('SELECT estrellas, texto, ts FROM resenas WHERE id = ? ORDER BY ts DESC LIMIT 100', [id]);
-  return { resenas, promedio, n };
+  // Desglose exacto por nº de estrellas (no depende del LIMIT 100 de arriba).
+  const distRows = await all('SELECT estrellas, COUNT(*) AS c FROM resenas WHERE id = ? GROUP BY estrellas', [id]);
+  const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const row of distRows) if (dist[row.estrellas] != null) dist[row.estrellas] = row.c;
+  return { resenas, promedio, n, dist };
 }
 
 // Reseñas recientes (panel admin de moderación).
