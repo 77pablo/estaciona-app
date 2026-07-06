@@ -634,7 +634,7 @@ body.is-offline #lista { padding-bottom: 44px; }
 
 /* Mi auto / favoritos */
 .simple { padding: 18px; overflow-y: auto; flex: 1; min-height: 0; }
-.simple h2 { font-size: 24px; margin-bottom: 14px; font-weight: 900; letter-spacing: -0.03em; }
+.simple h2 { font-size: 24px; margin-bottom: 14px; font-weight: 800; letter-spacing: -0.03em; }
 .empty-big { text-align: center; color: var(--muted); padding: 50px 20px; }
 .empty-big .em { font-size: 46px; display: block; margin-bottom: 14px; opacity: .8; color: var(--muted); }
 .empty-big .em .ic-svg { vertical-align: middle; }
