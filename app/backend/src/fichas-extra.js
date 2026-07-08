@@ -368,4 +368,31 @@ export const FICHAS_EXTRA = [
     verificado: true, fuente: 'munivina.cl (Cuerpo de Bomberos Viña, 2025)',
     atributos: { techado: false, ev: false, accesible: false, camaras: false },
   },
+
+  // ── Hallazgos de terreno (fotos de Abel, jul-2026) — lotes "$30/min" del centro
+  // ── de Temuco que NO están en OSM. El PRECIO es verificado (letrero visto en
+  // ── persona); la UBICACIÓN es APROXIMADA (no había dirección ni coords, se
+  // ── estimó el sector Vicuña Mackenna/Claro Solar desde el GPS de las capturas).
+  // ── Reemplazar lat/lng por las exactas cuando Abel pase un pin de Google Maps. ──
+  {
+    // Reja verde, estructura techada; letrero azul "$30 por minuto" + aviso SERNAC.
+    id: 'x-temuco-30min-vm1', tipo: 'privado', ciudad: 'Temuco', region: 'La Araucanía',
+    categoria: null, nombre: 'Estacionamiento $30/min (Vicuña Mackenna)',
+    direccion: 'Sector Vicuña Mackenna, Temuco (ubicación aprox.)',
+    lat: -38.73770, lng: -72.59080, precioMin: 30, precioHora: 1800, fraccion: null,
+    gratis: null, horario: 'Lun a Vie 08:30–20:00, Sáb 10:30–20:00, Dom cerrado',
+    verificado: true, fuente: 'foto en terreno (Abel, jul-2026); ubicación aproximada',
+    atributos: { techado: true, ev: false, accesible: false, camaras: false },
+  },
+  {
+    // Lote abierto junto a tiendas de ropa vintage; letrero rojo vertical "$30".
+    // Horario no visible en la foto → sin confirmar.
+    id: 'x-temuco-30min-vm2', tipo: 'privado', ciudad: 'Temuco', region: 'La Araucanía',
+    categoria: null, nombre: 'Estacionamiento $30/min (centro, tiendas)',
+    direccion: 'Centro de Temuco, sector Vicuña Mackenna (ubicación aprox.)',
+    lat: -38.73840, lng: -72.58800, precioMin: 30, precioHora: 1800, fraccion: null,
+    gratis: null, horario: null,
+    verificado: true, fuente: 'foto en terreno (Abel, jul-2026); ubicación y horario aproximados',
+    atributos: { techado: false, ev: false, accesible: false, camaras: false },
+  },
 ];

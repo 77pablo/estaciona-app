@@ -89,7 +89,9 @@ export async function tickPush(hayCupo) {
     await run('UPDATE push_jobs SET sono = 1 WHERE seq = ?', [j.seq]);
   }
   await run('DELETE FROM push_jobs WHERE sono = 1 AND cuando < ?', [ahora - 2 * 3600000]);   // poda
-  // 2) Vigilancias de cupo (evento).
+  // 2) Vigilancias de cupo (evento). Poda las que nadie retiró en 7 días (el que
+  //    esperaba cupo ya se fue) para que la tabla no crezca ni se escanee de más.
+  await run('DELETE FROM push_watch WHERE ts < ?', [ahora - 7 * 24 * 3600000]);
   const watches = await all('SELECT endpoint, id, nombre FROM push_watch');
   if (watches.length && typeof hayCupo === 'function') {
     const estado = {};

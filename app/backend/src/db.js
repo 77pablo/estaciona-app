@@ -39,7 +39,7 @@ const DATABASE_URL = process.env.DATABASE_URL;
 // Traductor de dialecto SQLite → PostgreSQL (solo se usa en el backend Postgres)
 // ---------------------------------------------------------------------------
 // Llave primaria de las tablas que usan INSERT OR REPLACE (para el ON CONFLICT).
-const PK = { destacados: ['id'], an_evento: ['tipo'], an_dia: ['dia', 'tipo'], an_ciudad: ['ciudad'] };
+const PK = { destacados: ['id'], an_evento: ['tipo'], an_dia: ['dia', 'tipo'], an_ciudad: ['ciudad'], usuario_datos: ['email'] };
 
 export function toPg(sql) {
   const mTable = sql.match(/^INSERT(?: OR \w+)? INTO (\w+)/i);
@@ -124,6 +124,16 @@ if (DATABASE_URL) {
       CREATE INDEX IF NOT EXISTS ix_push_jobs_cuando ON push_jobs(cuando);
       CREATE TABLE IF NOT EXISTS push_watch (endpoint TEXT, id TEXT, nombre TEXT, ts BIGINT, PRIMARY KEY (endpoint, id));
       CREATE INDEX IF NOT EXISTS ix_push_watch_id ON push_watch(id);
+
+      CREATE TABLE IF NOT EXISTS usuarios (email TEXT PRIMARY KEY, clave TEXT, pro INTEGER DEFAULT 0, pro_ts BIGINT, creado BIGINT, ts BIGINT);
+      CREATE TABLE IF NOT EXISTS sesiones (token TEXT PRIMARY KEY, email TEXT, ts BIGINT);
+      CREATE INDEX IF NOT EXISTS ix_sesiones_email ON sesiones(email);
+      CREATE TABLE IF NOT EXISTS usuario_datos (email TEXT PRIMARY KEY, json TEXT, ts BIGINT);
+
+      CREATE TABLE IF NOT EXISTS feedback (seq BIGSERIAL, texto TEXT, contexto TEXT, ts BIGINT);
+      CREATE INDEX IF NOT EXISTS ix_feedback_ts ON feedback(ts);
+
+      CREATE TABLE IF NOT EXISTS precio_verificado (id TEXT PRIMARY KEY, precio_hora INTEGER, precio_min INTEGER, fuente TEXT, ts BIGINT);
     `);
     _run = async (sql, params = []) => { const r = await pool.query(toPg(sql), params); return { changes: r.rowCount, lastInsertRowid: 0 }; };
     _all = async (sql, params = []) => (await pool.query(toPg(sql), params)).rows;
@@ -185,6 +195,16 @@ if (!ready) {
       CREATE INDEX IF NOT EXISTS ix_push_jobs_cuando ON push_jobs(cuando);
       CREATE TABLE IF NOT EXISTS push_watch (endpoint TEXT, id TEXT, nombre TEXT, ts INTEGER, PRIMARY KEY (endpoint, id));
       CREATE INDEX IF NOT EXISTS ix_push_watch_id ON push_watch(id);
+
+      CREATE TABLE IF NOT EXISTS usuarios (email TEXT PRIMARY KEY, clave TEXT, pro INTEGER DEFAULT 0, pro_ts INTEGER, creado INTEGER, ts INTEGER);
+      CREATE TABLE IF NOT EXISTS sesiones (token TEXT PRIMARY KEY, email TEXT, ts INTEGER);
+      CREATE INDEX IF NOT EXISTS ix_sesiones_email ON sesiones(email);
+      CREATE TABLE IF NOT EXISTS usuario_datos (email TEXT PRIMARY KEY, json TEXT, ts INTEGER);
+
+      CREATE TABLE IF NOT EXISTS feedback (seq INTEGER PRIMARY KEY AUTOINCREMENT, texto TEXT, contexto TEXT, ts INTEGER);
+      CREATE INDEX IF NOT EXISTS ix_feedback_ts ON feedback(ts);
+
+      CREATE TABLE IF NOT EXISTS precio_verificado (id TEXT PRIMARY KEY, precio_hora INTEGER, precio_min INTEGER, fuente TEXT, ts INTEGER);
     `);
     // node:sqlite es síncrono; lo envolvemos en promesas. `run` devuelve el
     // { changes, lastInsertRowid } nativo (sin un 2º query con carrera).

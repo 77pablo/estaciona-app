@@ -78,11 +78,18 @@
     if (!codigo) return;
     $('#msg').textContent = 'Verificando…'; $('#msg').className = 'msg';
     try {
-      const r = await fetch('/api/pro/activar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo }) });
+      // Si hay sesión iniciada, mandamos el token para que el Pro quede atado a la
+      // CUENTA (viaja a otros dispositivos), no solo a este teléfono.
+      let token = ''; try { token = (JSON.parse(localStorage.getItem('estaciona_cuenta') || 'null') || {}).token || ''; } catch (e) {}
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['x-sesion'] = token;
+      const r = await fetch('/api/pro/activar', { method: 'POST', headers, body: JSON.stringify({ codigo }) });
       const j = await r.json().catch(() => ({}));
       if (j.ok) {
         try { localStorage.setItem('estaciona_pro', codigo); } catch (e) {}
-        $('#msg').innerHTML = '¡Listo! Pro activado ✨ <a href="/app">Abrir la app</a>';
+        // Refresca el estado Pro guardado de la cuenta para que la app lo vea al instante.
+        if (j.cuenta) { try { const c = JSON.parse(localStorage.getItem('estaciona_cuenta') || 'null'); if (c) { c.pro = true; localStorage.setItem('estaciona_cuenta', JSON.stringify(c)); } } catch (e) {} }
+        $('#msg').innerHTML = (j.cuenta ? '¡Listo! Pro activado en tu cuenta ✨' : '¡Listo! Pro activado ✨') + ' <a href="/app">Abrir la app</a>';
         $('#msg').className = 'msg ok';
       } else if (r.status === 429) {
         $('#msg').textContent = 'Demasiados intentos, espera un momento.'; $('#msg').className = 'msg err';

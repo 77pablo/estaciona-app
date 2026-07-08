@@ -19,9 +19,11 @@ import { snapshotCiudad, shapeFichas, curvaDisponibilidad, curvaSemana, idExiste
 import { liveOcupacionMapa } from './ocupacion-live.js';
 import { geocodificar, geocodificarInverso, geocoderInfo } from './geocoder.js';
 import { registrarReporte, reportesRecientes, eliminarReporte, contarReportes } from './reportes.js';
+import { registrarFeedback, feedbackReciente, eliminarFeedback, contarFeedback } from './feedback.js';
 import { CENTRO, ZONAS, REGIONES } from './data.js';
 import { paginaCiudad, ciudadDeSlug, sitemapXML, robotsTxt } from './seo.js';
 import { crearCodigoOperador, operadorPorCodigo, setCupoOperador, listarOperadores, eliminarOperador, setPrecioOperador, getPreciosOperador } from './operadores.js';
+import { setPrecioVerificado, quitarPrecioVerificado, getPreciosVerificados, listarPreciosVerificados } from './precios-verificados.js';
 import { pushActivo, vapidPublic, guardarSub, agendar, cancelarAgendados, vigilar, noVigilar, tickPush, enviarTest } from './push.js';
 import { registrarVoto, tallyReciente, senalReciente, contarVotos } from './votos.js';
 import { registrarAporte, resumenAportes, aportesDe, comentariosRecientes, eliminarAporte, preciosReportados } from './aportes.js';
@@ -33,6 +35,8 @@ import { registrarInteres } from './interes.js';
 import { registrarEvento, resumenAnalytics, vistasLugar } from './analytics.js';
 import { agregarDestacado, quitarDestacado, mapaDestacados, listarDestacados } from './destacados.js';
 import { revisarFoto } from './modera-foto.js';
+import { registrar, entrar, entrarConGoogle, sesion, salir, marcarPro, cambiarClave, borrarCuenta, guardarDatos, leerDatos } from './cuentas.js';
+import { verificarIdTokenGoogle } from './google-auth.js';
 import { ready as dbReady, backend as dbBackend } from './db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -56,6 +60,10 @@ function leerKey(envName, file) {
 }
 const MAPTILER_KEY = leerKey('MAPTILER_KEY', 'maptiler.key');
 const TOMTOM_KEY = leerKey('TOMTOM_KEY', 'tomtom.key');   // tráfico en vivo + ETA real
+// "Continuar con Google" (inicio rápido). El Client ID de OAuth es PÚBLICO (va al
+// frontend); el backend lo usa como `aud` al verificar el token de Google. Vacío
+// => se oculta el botón de Google (la cuenta con correo+clave sigue funcionando).
+const GOOGLE_CLIENT_ID = leerKey('GOOGLE_CLIENT_ID', 'google-client.key');
 
 // Clave de acceso (modo privado mientras se pule la app). Si la variable de
 // entorno ACCESO_CLAVE está puesta (en Railway), la app pide usuario/clave al
@@ -200,6 +208,23 @@ function adminFallo(req) {
   logSeg('admin-clave-incorrecta', req, `intentos=${arr.length}/15`);   // fuerza-bruta de /admin
 }
 
+// Anti fuerza-bruta de LOGIN por CUENTA (además del límite por IP): frena un
+// ataque distribuido (IPs rotando) contra un mismo correo. ≥10 fallos/15 min ⇒
+// bloqueado un rato para esa cuenta.
+const _loginFails = new Map();
+function loginBloqueado(email) {
+  const ahora = Date.now();
+  const arr = (_loginFails.get(email) || []).filter((t) => ahora - t < 900000);
+  _loginFails.set(email, arr);
+  return arr.length >= 10;
+}
+function loginFallo(email) {
+  const arr = _loginFails.get(email) || [];
+  arr.push(Date.now());
+  _loginFails.set(email, arr);
+  if (_loginFails.size > 10000) { const n = Date.now(); for (const [k, v] of _loginFails) if (!v.some((t) => n - t < 900000)) _loginFails.delete(k); }
+}
+
 // Agregados de TODO el país (votos recientes, precios/comentarios, destacados).
 // Son iguales para todas las ciudades y requests, y su cálculo recorre tablas
 // completas → se cachean unos segundos para que un flood de requests al home NO
@@ -229,11 +254,12 @@ const ALIAS = { '/': '/landing.html', '/app': '/index.html', '/app/': '/index.ht
 const R2_ORIGEN = (() => { try { return new URL(process.env.R2_PUBLIC_URL).origin; } catch { return 'https://*.r2.dev'; } })();
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
+  "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://accounts.google.com/gsi/client",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://accounts.google.com/gsi/style",
   "font-src 'self' https://fonts.gstatic.com data:",
-  `img-src 'self' data: blob: https://api.maptiler.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://api.tomtom.com ${R2_ORIGEN}`,
-  "connect-src 'self' https://api.maptiler.com https://api.tomtom.com https://cdn.jsdelivr.net",
+  `img-src 'self' data: blob: https://api.maptiler.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://api.tomtom.com https://lh3.googleusercontent.com ${R2_ORIGEN}`,
+  "connect-src 'self' https://api.maptiler.com https://api.tomtom.com https://cdn.jsdelivr.net https://accounts.google.com/gsi/",
+  "frame-src https://accounts.google.com/gsi/",
   "worker-src 'self' blob:",
   "frame-ancestors 'none'",
   "object-src 'none'",
@@ -345,11 +371,16 @@ const server = http.createServer(async (req, res) => {
       const { tally, senal, com, dest, res: resenasAgg } = await agregados();  // votos + señal fresca + precios/comentarios + destacados + reseñas (cacheados)
       const live = await liveOcupacionMapa(lista.map((e) => e.id));   // cupo en vivo del operador (B2B)
       const preciosOp = await getPreciosOperador(lista.map((e) => e.id));   // tarifas fijadas por operadores
+      const preciosVerif = await getPreciosVerificados();   // precios verificados por el admin (DB)
       for (const e of lista) {
         if (tally[e.id]) e.votos = tally[e.id];   // contexto 3 h (se sigue mostrando)
         if (com[e.id]) e.comunidad = com[e.id];
         if (resenasAgg[e.id]) e.resena = resenasAgg[e.id];   // { promedio, n } de reseñas con estrellas
         if (dest[e.id]) { e.destacado = true; e.destacadoEtiqueta = dest[e.id].etiqueta; e.destacadoPremium = dest[e.id].premium; e.destacadoTagline = dest[e.id].tagline; }
+        // Precio VERIFICADO por el admin (Abel): pisa la estimación y marca la ficha
+        // como verificada. El operador dueño (más abajo) tiene prioridad sobre esto.
+        const pv = preciosVerif[e.id];
+        if (pv) { e.precioHora = pv.precioHora; e.precioMin = pv.precioMin || null; e.verificado = true; e.fuente = pv.fuente; }
         // Tarifa REAL fijada por el operador: pisa la estimación, marcada como verificada.
         const po = preciosOp[e.id];
         if (po) {
@@ -491,9 +522,12 @@ const server = http.createServer(async (req, res) => {
         lugares: await lugaresRecientes(),
         reportes: await reportesRecientes(),
         resenas: await resenasRecientes(),
+        feedback: await feedbackReciente(),
+        preciosVerif: await listarPreciosVerificados(),
         nVotos: await contarVotos(),
         nLugares: await contarLugares(),
         nReportes: await contarReportes(),
+        nFeedback: await contarFeedback(),
         analytics: await resumenAnalytics(),
         destacados: await listarDestacados(),
         vistasLugar: await vistasLugar(),
@@ -512,6 +546,7 @@ const server = http.createServer(async (req, res) => {
         else if (tipo === 'lugar') ok = await eliminarLugar(id);
         else if (tipo === 'reporte') ok = (await eliminarReporte(id)) > 0;   // borra TODOS los reportes de la ficha (feed agrupado por ficha)
         else if (tipo === 'resena') ok = (await eliminarResena(id, ts)) > 0;
+        else if (tipo === 'feedback') ok = (await eliminarFeedback(id)) > 0;
         else if (tipo === 'operador') ok = await eliminarOperador(id);   // aquí `id` es el CÓDIGO del operador
         if (ok && tipo === 'foto') _fotoCache.delete(id);   // refleja el borrado al instante
         sendJSON(res, ok ? 200 : 400, { ok });
@@ -542,6 +577,33 @@ const server = http.createServer(async (req, res) => {
         const { id, nombre } = JSON.parse(body || '{}');
         const codigo = await crearCodigoOperador(id, nombre);
         sendJSON(res, codigo ? 200 : 400, codigo ? { ok: true, codigo } : { ok: false, error: 'id no existe' });
+      } catch { sendJSON(res, 400, { ok: false }); }
+      return;
+    }
+    // Admin: marcar (o quitar) Pro a una cuenta por su correo. Respaldo manual
+    // por si prefieres no entregar código.
+    if (url.pathname === '/api/mod/pro' && req.method === 'POST') {
+      if (adminBloqueado(req)) return sendJSON(res, 429, { error: 'demasiados intentos' });
+      if (!esAdmin(req)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
+      const { tooBig, body } = await readBody(req, 800);
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { email, pro } = JSON.parse(body || '{}');
+        const ok = await marcarPro(email, pro !== false);
+        sendJSON(res, ok ? 200 : 400, ok ? { ok: true } : { ok: false, error: 'cuenta no existe' });
+      } catch { sendJSON(res, 400, { ok: false }); }
+      return;
+    }
+    // Admin: fijar (o quitar) un PRECIO VERIFICADO de una ficha, en caliente.
+    if (url.pathname === '/api/mod/precio' && req.method === 'POST') {
+      if (adminBloqueado(req)) return sendJSON(res, 429, { error: 'demasiados intentos' });
+      if (!esAdmin(req)) { adminFallo(req); return sendJSON(res, 403, { error: 'no autorizado' }); }
+      const { tooBig, body } = await readBody(req, 800);
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { id, precioHora, precioMin, fuente, quitar } = JSON.parse(body || '{}');
+        const ok = quitar ? (await quitarPrecioVerificado(id)) > 0 : await setPrecioVerificado(id, { precioHora, precioMin, fuente });
+        sendJSON(res, ok ? 200 : 400, { ok });
       } catch { sendJSON(res, 400, { ok: false }); }
       return;
     }
@@ -600,6 +662,7 @@ const server = http.createServer(async (req, res) => {
         const { sub, tipo, id, nombre, cuando } = JSON.parse(body || '{}');
         const t = tipo === 'gratis' ? 'gratis' : 'alarma';
         if (cuando == null && sub?.endpoint) { await cancelarAgendados(t, sub.endpoint); return sendJSON(res, 200, { ok: true, cancelado: true }); }
+        if (id != null && !idExiste(id) && !(await lugarExiste(id))) return sendJSON(res, 400, { ok: false, error: 'lugar' });   // no agendar por ids inexistentes (anti-basura)
         const ok = await agendar(t, sub, id, nombre, Number(cuando));
         sendJSON(res, ok ? 200 : 400, { ok });
       } catch { sendJSON(res, 400, { ok: false }); }
@@ -624,6 +687,7 @@ const server = http.createServer(async (req, res) => {
       try {
         const { sub, id, nombre, activar } = JSON.parse(body || '{}');
         if (activar === false) { if (sub?.endpoint) await noVigilar(sub.endpoint, id); return sendJSON(res, 200, { ok: true }); }
+        if (!idExiste(id) && !(await lugarExiste(id))) return sendJSON(res, 400, { ok: false, error: 'lugar' });   // solo se vigilan lugares reales (anti-basura + evita full-scans por ids falsos)
         const ok = await vigilar(sub, id, nombre);
         sendJSON(res, ok ? 200 : 400, { ok });
       } catch { sendJSON(res, 400, { ok: false }); }
@@ -650,6 +714,19 @@ const server = http.createServer(async (req, res) => {
       try {
         const r = await registrarLugar(JSON.parse(body || '{}'));
         sendJSON(res, r.ok ? 200 : 400, r);
+      } catch { sendJSON(res, 400, { ok: false, error: 'json inválido' }); }
+      return;
+    }
+    if (url.pathname === '/api/feedback' && req.method === 'POST') {
+      // Sugerencia / reporte de problema de la app (beta). Sin datos personales.
+      const okRate = rateLimit(req, 10, 600000);   // máx 10 / 10 min por IP
+      const { tooBig, body } = await readBody(req, 3000);
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false, error: 'cuerpo demasiado grande' });
+      try {
+        const { texto, contexto } = JSON.parse(body || '{}');
+        const ok = await registrarFeedback(texto, contexto);
+        sendJSON(res, ok ? 200 : 400, { ok });
       } catch { sendJSON(res, 400, { ok: false, error: 'json inválido' }); }
       return;
     }
@@ -691,6 +768,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/pro/activar' && req.method === 'POST') {
       // Activar Estaciona Pro con un código (lo entrega Abel tras cobrar). Sin pasarela.
+      // Si el usuario tiene SESIÓN, el Pro queda atado a su CUENTA (viaja a otros
+      // dispositivos). Sin sesión, se activa solo en este teléfono (compatibilidad).
       const okRate = rateLimit(req, 20, 600000);   // freno anti fuerza-bruta de códigos
       const { tooBig, body } = await readBody(req, 500);
       if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
@@ -698,15 +777,117 @@ const server = http.createServer(async (req, res) => {
       try {
         const { codigo } = JSON.parse(body || '{}');
         const ok = PRO_CODES.size > 0 && PRO_CODES.has(String(codigo || '').trim().toLowerCase());
-        sendJSON(res, ok ? 200 : 400, { ok });
+        if (!ok) return sendJSON(res, 400, { ok: false });
+        const cuenta = await sesion(req.headers['x-sesion']);
+        if (cuenta) await marcarPro(cuenta.email, true);
+        sendJSON(res, 200, { ok: true, cuenta: !!cuenta });
       } catch { sendJSON(res, 400, { ok: false }); }
+      return;
+    }
+    // -- Cuentas: registro / ingreso / sesión / salir --------------------------
+    if (url.pathname === '/api/cuenta/registrar' && req.method === 'POST') {
+      const okRate = rateLimit(req, 12, 600000);   // anti-abuso de creación de cuentas
+      const { tooBig, body } = await readBody(req, 800);
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { email, clave } = JSON.parse(body || '{}');
+        const r = await registrar(email, clave);
+        sendJSON(res, r.ok ? 200 : 400, r);
+      } catch { sendJSON(res, 400, { ok: false, error: 'json' }); }
+      return;
+    }
+    if (url.pathname === '/api/cuenta/entrar' && req.method === 'POST') {
+      const okRate = rateLimit(req, 20, 600000);   // freno anti fuerza-bruta de contraseñas
+      const { tooBig, body } = await readBody(req, 800);
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { email, clave } = JSON.parse(body || '{}');
+        const emailN = String(email || '').trim().toLowerCase();
+        if (loginBloqueado(emailN)) return sendJSON(res, 429, { ok: false, error: 'rate' });
+        const r = await entrar(email, clave);
+        if (!r.ok) loginFallo(emailN);
+        sendJSON(res, r.ok ? 200 : 401, r);
+      } catch { sendJSON(res, 400, { ok: false, error: 'json' }); }
+      return;
+    }
+    if (url.pathname === '/api/cuenta/google' && req.method === 'POST') {
+      // Inicio rápido con Google: recibe el id_token del botón de Google, lo
+      // VERIFICA contra las llaves de Google (firma + aud + iss + exp) y abre sesión.
+      const okRate = rateLimit(req, 30, 600000);
+      const { tooBig, body } = await readBody(req, 4000);
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      if (!GOOGLE_CLIENT_ID) return sendJSON(res, 400, { ok: false, error: 'google-off' });
+      try {
+        const { credential } = JSON.parse(body || '{}');
+        const g = await verificarIdTokenGoogle(credential, GOOGLE_CLIENT_ID);
+        if (!g) return sendJSON(res, 401, { ok: false, error: 'google' });
+        const r = await entrarConGoogle(g.email);
+        sendJSON(res, r.ok ? 200 : 400, r);
+      } catch { sendJSON(res, 400, { ok: false, error: 'json' }); }
+      return;
+    }
+    if (url.pathname === '/api/cuenta/yo' && req.method === 'GET') {
+      // Valida la sesión y devuelve el estado de la cuenta (lo usa el otro
+      // dispositivo al abrir la app para saber si es Pro).
+      const cuenta = await sesion(req.headers['x-sesion']);
+      return sendJSON(res, cuenta ? 200 : 401, cuenta ? { ok: true, ...cuenta } : { ok: false });
+    }
+    if (url.pathname === '/api/cuenta/salir' && req.method === 'POST') {
+      await salir(req.headers['x-sesion']);
+      return sendJSON(res, 200, { ok: true });
+    }
+    // Cuenta: establecer / cambiar la contraseña (con sesión).
+    if (url.pathname === '/api/cuenta/clave' && req.method === 'POST') {
+      const okRate = rateLimit(req, 20, 600000);
+      const cuenta = await sesion(req.headers['x-sesion']);
+      const { tooBig, body } = await readBody(req, 800);
+      if (!cuenta) return sendJSON(res, 401, { ok: false });
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { claveActual, claveNueva } = JSON.parse(body || '{}');
+        const r = await cambiarClave(cuenta.email, claveNueva, claveActual);
+        sendJSON(res, r.ok ? 200 : 400, r);
+      } catch { sendJSON(res, 400, { ok: false, error: 'json' }); }
+      return;
+    }
+    // Cuenta: borrar la cuenta y sus datos (derecho Ley 19.628).
+    if (url.pathname === '/api/cuenta/borrar' && req.method === 'POST') {
+      const cuenta = await sesion(req.headers['x-sesion']);
+      if (!cuenta) return sendJSON(res, 401, { ok: false });
+      await borrarCuenta(cuenta.email);
+      return sendJSON(res, 200, { ok: true });
+    }
+    // -- Cuentas: sincronización de datos (favoritos, mi auto, historial) ------
+    if (url.pathname === '/api/cuenta/datos' && req.method === 'GET') {
+      if (!rateLimit(req, 120, 600000)) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      const cuenta = await sesion(req.headers['x-sesion']);
+      if (!cuenta) return sendJSON(res, 401, { ok: false });
+      const d = await leerDatos(cuenta.email);
+      return sendJSON(res, 200, { ok: true, ...d });
+    }
+    if (url.pathname === '/api/cuenta/datos' && req.method === 'POST') {
+      const okRate = rateLimit(req, 120, 600000);
+      const cuenta = await sesion(req.headers['x-sesion']);
+      const { tooBig, body } = await readBody(req, 220000);
+      if (!cuenta) return sendJSON(res, 401, { ok: false });
+      if (!okRate) return sendJSON(res, 429, { ok: false, error: 'rate' });
+      if (tooBig) return sendJSON(res, 413, { ok: false });
+      try {
+        const { datos, ts } = JSON.parse(body || '{}');
+        const ok = await guardarDatos(cuenta.email, datos, ts);
+        sendJSON(res, ok ? 200 : 400, { ok });
+      } catch { sendJSON(res, 400, { ok: false, error: 'json' }); }
       return;
     }
     if (url.pathname === '/api/config' && req.method === 'GET') {
       // Config pública para el frontend. La API key de MapTiler vive en una
       // variable de entorno (NO en el repo, que es público). Si no está, el
       // frontend cae de vuelta a los tiles gratis de OSM.
-      return sendJSON(res, 200, { maptilerKey: MAPTILER_KEY, tomtomKey: TOMTOM_KEY, vapidPublic: vapidPublic() });
+      return sendJSON(res, 200, { maptilerKey: MAPTILER_KEY, tomtomKey: TOMTOM_KEY, vapidPublic: vapidPublic(), googleClientId: GOOGLE_CLIENT_ID });
     }
     if (url.pathname === '/api/health' && req.method === 'GET') {
       // `db:false` => SQLite no cargó: la app responde pero NADA persiste (las
@@ -775,7 +956,7 @@ function validarEntorno() {
     // Recomendaciones de prod (no fatales):
     if (!tiene('ADMIN_CLAVE')) avisos.push('Sin ADMIN_CLAVE: el panel /admin queda sin acceso; no vas a poder moderar.');
     if (r2Faltan.length === R2.length) avisos.push('Sin R2_*: las fotos van a disco local y se BORRAN en cada redeploy. Configurá Cloudflare R2 para que persistan.');
-    if (!tiene('SIGHTENGINE_USER') || !tiene('SIGHTENGINE_SECRET')) avisos.push('Sin SIGHTENGINE_*: la moderación automática de fotos está desactivada.');
+    if (!tiene('SIGHTENGINE_USER') || !tiene('SIGHTENGINE_SECRET')) avisos.push('Sin SIGHTENGINE_*: la subida de fotos queda BLOQUEADA (fail-closed: sin moderación no se acepta ninguna foto). Configurá SIGHTENGINE_* o, a riesgo, FOTOS_SIN_MODERAR=1.');
     if (geo === 'nominatim' && !tiene('NOMINATIM_URL')) avisos.push('Geocoder = Nominatim público: NO permitido para uso comercial (ver LICENCIAS.md). Usá NOMINATIM_URL self-host o GEOCODER=locationiq|maptiler.');
   }
 

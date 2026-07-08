@@ -41,11 +41,381 @@ function fetchConTimeout(url, ms = 12000, opts = {}) {
   return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
 }
 
-// Estaciona Pro (plan premium del conductor). El flag se guarda en el teléfono
-// (lo escribe la página /pro al activar un código). esPro = ¿tiene Pro activo?
-function esPro() { try { return !!localStorage.getItem('estaciona_pro'); } catch { return false; } }
+// --- Cuenta del usuario (email + contraseña) --------------------------------
+// La cuenta le da identidad al conductor para que su plan PRO y sus datos lo
+// SIGAN a otros dispositivos. El token de sesión se guarda en el teléfono; el
+// estado Pro de la CUENTA manda sobre el código local antiguo (compatibilidad).
+function cuentaActual() { try { return JSON.parse(localStorage.getItem('estaciona_cuenta') || 'null'); } catch { return null; } }
+function cuentaToken() { const c = cuentaActual(); return c && c.token ? c.token : ''; }
+function guardarCuenta(c) { lsSet('estaciona_cuenta', JSON.stringify(c)); actualizarBotonCuenta(); }
+function authHeaders() { const t = cuentaToken(); return t ? { 'x-sesion': t } : {}; }
+// Claves de localStorage que se respaldan/sincronizan con la nube al tener cuenta.
+const SYNC_KEYS = ['estaciona_favs', 'estaciona_miauto', 'estaciona_recs', 'estaciona_meta_gasto', 'estaciona_comparaciones', 'estaciona_vigilados', 'estaciona_historial', 'estaciona_aportes', 'estaciona_vistos', 'estaciona_cupoask'];
+
+// Estaciona Pro: Pro si la CUENTA es Pro, o (compatibilidad) si hay código local.
+function esPro() {
+  const c = cuentaActual();
+  if (c && c.pro) return true;
+  try { return !!localStorage.getItem('estaciona_pro'); } catch { return false; }
+}
 // ¿Mostrar este lugar como publicidad (destacado)? No, si el usuario es Pro (sin avisos).
 function adDe(p) { return !!p.destacado && !esPro(); }
+
+// --- API de cuenta ----------------------------------------------------------
+async function registrarCuenta(email, clave) {
+  const r = await fetch('/api/cuenta/registrar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, clave }) });
+  const j = await r.json().catch(() => ({}));
+  if (j.ok) { guardarCuenta({ email: j.email, token: j.token, pro: !!j.pro }); await sincronizarCuenta(); }
+  return { ...j, status: r.status };
+}
+async function entrarCuenta(email, clave) {
+  const r = await fetch('/api/cuenta/entrar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, clave }) });
+  const j = await r.json().catch(() => ({}));
+  if (j.ok) { guardarCuenta({ email: j.email, token: j.token, pro: !!j.pro }); await sincronizarCuenta(); }
+  return { ...j, status: r.status };
+}
+window.salirCuenta = async () => {
+  try { await fetch('/api/cuenta/salir', { method: 'POST', headers: authHeaders() }); } catch {}
+  lsRemove('estaciona_cuenta');
+  actualizarBotonCuenta();
+  toast('Cerraste sesión en este dispositivo');
+  if (vistaActual === 'miauto') renderMiAuto();
+};
+// Al abrir la app: valida la sesión guardada y refresca el estado Pro (por si te
+// hiciste Pro en otro equipo). Si el token venció, lo limpia sin molestar.
+async function validarCuenta() {
+  const c = cuentaActual();
+  if (!c || !c.token) return;
+  try {
+    const r = await fetch('/api/cuenta/yo', { headers: authHeaders() });
+    if (r.status === 401) { lsRemove('estaciona_cuenta'); return; }
+    const j = await r.json().catch(() => ({}));
+    if (j.ok) { guardarCuenta({ email: j.email, token: c.token, pro: !!j.pro }); await sincronizarCuenta(); }
+  } catch { /* sin conexión: se conserva lo local */ }
+}
+
+// --- Sincronización de datos con la nube ------------------------------------
+// Empuje con antirrebote cuando cambian datos locales (lo dispara lsSet).
+let _pushNubeT = null;
+function programarPushNube() {
+  if (!cuentaToken()) return;
+  clearTimeout(_pushNubeT);
+  _pushNubeT = setTimeout(pushNube, 2500);
+}
+async function pushNube() {
+  if (!cuentaToken()) return;
+  const datos = {};
+  for (const k of SYNC_KEYS) { try { const v = localStorage.getItem(k); if (v != null) datos[k] = v; } catch {} }
+  try {
+    await fetch('/api/cuenta/datos', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ datos, ts: Date.now() }) });
+    lsSet('estaciona_sync_ts', String(Date.now()));
+  } catch { /* reintenta en el próximo cambio */ }
+}
+// Une dos listas JSON conservando TODO (dedup por id/inicio/ts, o por contenido).
+function fusionarLista(localStr, servStr) {
+  try {
+    const a = JSON.parse(localStr || '[]'), b = JSON.parse(servStr || '[]');
+    if (!Array.isArray(a) || !Array.isArray(b)) return localStr ?? servStr;
+    const seen = new Set(), out = [];
+    for (const x of [...a, ...b]) {   // local primero (respeta su orden)
+      const base = (x && typeof x === 'object') ? `${x.id ?? ''}|${x.inicio ?? ''}|${x.ts ?? ''}` : `v:${x}`;
+      const key = base === '||' ? JSON.stringify(x) : base;   // objeto sin id/inicio/ts → por contenido
+      if (!seen.has(key)) { seen.add(key); out.push(x); }
+    }
+    return JSON.stringify(out);
+  } catch { return localStr ?? servStr; }
+}
+const esListaJSON = (s) => { try { return Array.isArray(JSON.parse(s)); } catch { return false; } };
+
+// Al entrar/validar: baja la copia de la nube y la FUSIONA con lo local SIN perder
+// datos. Las listas (favoritos, historial, vigilados, comparaciones, vistos) se
+// UNEN; el contador de aportes toma el mayor; los valores sueltos (mi auto, meta de
+// gasto) se conservan si ya hay algo local y solo se traen del server cuando local
+// está vacío o el server es realmente más nuevo. Luego re-sube el resultado.
+async function sincronizarCuenta() {
+  if (!cuentaToken()) return;
+  let serv = null;
+  try { const r = await fetch('/api/cuenta/datos', { headers: authHeaders() }); if (r.ok) serv = await r.json().catch(() => null); }
+  catch { return; }
+  if (serv && serv.datos) {
+    let localTs = 0; try { localTs = +localStorage.getItem('estaciona_sync_ts') || 0; } catch {}
+    const primeraVez = localTs === 0;                                   // este equipo nunca sincronizó
+    const servMasNuevo = !primeraVez && (serv.ts || 0) > localTs;
+    for (const k of SYNC_KEYS) {
+      const sv = serv.datos[k];
+      if (sv == null) continue;
+      let lv = null; try { lv = localStorage.getItem(k); } catch {}
+      try {
+        if (k === 'estaciona_aportes') {
+          localStorage.setItem(k, String(Math.max(+lv || 0, +sv || 0)));   // contador → el mayor
+        } else if (esListaJSON(sv) || esListaJSON(lv)) {
+          localStorage.setItem(k, fusionarLista(lv, sv));                  // listas → unión (nada se pierde)
+        } else {
+          const localVacio = lv == null || lv === '' || lv === 'null' || lv === '0';
+          if (localVacio || servMasNuevo) localStorage.setItem(k, sv);     // suelto → no pisar lo local
+        }
+      } catch {}
+    }
+    try { renderLista(); } catch {}
+    try { if (vistaActual === 'miauto') renderMiAuto(); } catch {}
+  }
+  pushNube();   // deja en el servidor el estado ya fusionado (y actualiza sync_ts)
+}
+
+// --- UI de cuenta -----------------------------------------------------------
+// Botón de cuenta del header (visible en TODAS las vistas). Sin sesión abre el
+// modal de entrar/crear; con sesión abre "Tu cuenta" (con Salir).
+window.abrirCuentaMenu = () => { if (cuentaActual()?.email) gestionarCuenta(); else abrirCuenta('entrar'); };
+// Refleja en el botón del header si hay sesión (punto verde + tooltip con el correo).
+function actualizarBotonCuenta() {
+  const b = document.getElementById('btn-cuenta');
+  if (!b) return;
+  const c = cuentaActual();
+  b.classList.toggle('on', !!(c && c.email));
+  b.title = c && c.email ? `Tu cuenta: ${c.email}` : 'Entrar / crear cuenta';
+}
+// Tarjeta de estado que se muestra arriba de la vista "Mi auto".
+function cuentaHTML() {
+  const c = cuentaActual();
+  if (c && c.email) {
+    return `<div class="cuenta-card">
+      <div class="cuenta-info">
+        <div class="cuenta-em">${ic('user', 16)} ${esc(c.email)}</div>
+        <div class="cuenta-estado">${c.pro ? '<span class="cuenta-pro">PRO</span> Tu plan viaja contigo' : 'Cuenta gratis · <a href="/pro">Hazte Pro</a>'} · <a href="#" onclick="gestionarCuenta();return false">Gestionar</a></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="salirCuenta()">Salir</button>
+    </div>`;
+  }
+  return `<button class="cuenta-card cuenta-out" onclick="abrirCuenta()">
+    <div class="cuenta-info">
+      <div class="cuenta-em">${ic('user', 16)} Iniciar sesión</div>
+      <div class="cuenta-estado">Crea tu cuenta o entra para guardar tus datos y usarlos en cualquier dispositivo.</div>
+    </div>
+    <span class="cuenta-cta">${ic('arrowRight', 18)}</span>
+  </button>`;
+}
+// Modal de entrar / crear cuenta. `modo` = 'entrar' | 'crear'.
+window.abrirCuenta = (modo = 'entrar') => {
+  const crear = modo === 'crear';
+  $('#modal').innerHTML = `
+    <h3>${ic('user', 20)} ${crear ? 'Crear cuenta' : 'Iniciar sesión'}</h3>
+    <p class="ap-ctx">${crear ? 'Crea tu cuenta para guardar tus favoritos e historial y tenerlos en cualquier dispositivo.' : 'Entra a tu cuenta para tener tus datos guardados también en este dispositivo.'}</p>
+    ${GOOGLE_CLIENT_ID ? `<div class="g-signin"><div id="g-btn" aria-label="Continuar con Google"></div></div><div class="g-sep"><span>o con tu correo</span></div>` : ''}
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+      <input id="cta-email" type="email" inputmode="email" autocomplete="email" placeholder="Tu correo" aria-label="Correo" />
+      <input id="cta-clave" type="password" autocomplete="${crear ? 'new-password' : 'current-password'}" placeholder="Tu contraseña${crear ? ' (mín. 6)' : ''}" aria-label="Contraseña" />
+    </div>
+    <div id="cta-msg" class="msg"></div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="enviarCuenta(${crear})">${crear ? 'Crear cuenta' : 'Entrar'}</button>
+      <button class="btn btn-ghost" onclick="abrirCuenta('${crear ? 'entrar' : 'crear'}')">${crear ? '¿Ya tienes cuenta? Entra' : 'Crear una cuenta nueva'}</button>
+    </div>`;
+  abrirModal();
+  montarBotonGoogle();
+  setTimeout(() => {
+    const e = $('#cta-email'); if (e) e.focus();
+    $('#cta-clave')?.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') enviarCuenta(crear); });
+  }, 60);
+};
+window.enviarCuenta = async (crear) => {
+  const email = $('#cta-email')?.value.trim();
+  const clave = $('#cta-clave')?.value || '';
+  const msg = $('#cta-msg');
+  if (!email || !clave) { if (msg) { msg.textContent = 'Escribe tu correo y contraseña.'; msg.className = 'msg err'; } return; }
+  if (msg) { msg.textContent = 'Un momento…'; msg.className = 'msg'; }
+  try {
+    const r = crear ? await registrarCuenta(email, clave) : await entrarCuenta(email, clave);
+    if (r.ok) {
+      cerrarModal();
+      toast(crear ? '¡Cuenta creada! Ya está guardada en este dispositivo ✨' : `Hola de nuevo${r.pro ? ' — Pro activo ✨' : ''}`);
+      if (vistaActual === 'miauto') renderMiAuto();
+      renderLista();
+    } else if (msg) {
+      const errs = { existe: 'Ese correo ya tiene cuenta. Entra en vez de crear.', email: 'Ese correo no parece válido.', clave: 'La contraseña debe tener al menos 6 caracteres.', credenciales: 'Correo o contraseña incorrectos.', rate: 'Demasiados intentos, espera un momento.' };
+      msg.textContent = errs[r.error] || 'No se pudo, intenta de nuevo.';
+      msg.className = 'msg err';
+    }
+  } catch { if (msg) { msg.textContent = 'Sin conexión, intenta de nuevo.'; msg.className = 'msg err'; } }
+};
+
+// --- Continuar con Google (Google Identity Services) ------------------------
+// El script de Google se carga solo cuando hace falta (al abrir el modal) y solo
+// si el backend entregó un Client ID. El botón renderiza en un iframe de Google.
+let _gisP = null;
+function cargarGIS() {
+  if (window.google?.accounts?.id) return Promise.resolve(true);
+  if (_gisP) return _gisP;
+  _gisP = new Promise((resolve) => {
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true; s.defer = true;
+    s.onload = () => resolve(!!window.google?.accounts?.id);
+    s.onerror = () => { _gisP = null; resolve(false); };
+    document.head.appendChild(s);
+  });
+  return _gisP;
+}
+async function montarBotonGoogle() {
+  if (!GOOGLE_CLIENT_ID || !$('#g-btn')) return;
+  const ok = await cargarGIS();
+  if (!ok || !$('#g-btn')) return;   // el modal pudo cerrarse mientras cargaba el script
+  try {
+    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleCred });
+    google.accounts.id.renderButton($('#g-btn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', width: 260 });
+  } catch { /* GIS bloqueado: queda el correo+clave */ }
+}
+async function onGoogleCred(resp) {
+  const cred = resp?.credential;
+  if (!cred) return;
+  const msg = $('#cta-msg'); if (msg) { msg.textContent = 'Entrando con Google…'; msg.className = 'msg'; }
+  try {
+    const r = await fetch('/api/cuenta/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: cred }) });
+    const j = await r.json().catch(() => ({}));
+    if (j.ok) {
+      guardarCuenta({ email: j.email, token: j.token, pro: !!j.pro });
+      await sincronizarCuenta();
+      cerrarModal();
+      if (j.claveReseteada) toast('Cuenta vinculada con Google. Si tenías contraseña, vuelve a ponerla en Gestionar.');
+      else toast(`Hola ${j.email}${j.pro ? ' — Pro activo ✨' : ''}`);
+      if (vistaActual === 'miauto') renderMiAuto();
+      renderLista();
+    } else if (msg) { msg.textContent = 'No se pudo entrar con Google, intenta de nuevo.'; msg.className = 'msg err'; }
+  } catch { if (msg) { msg.textContent = 'Sin conexión, intenta de nuevo.'; msg.className = 'msg err'; } }
+}
+
+// --- Gestionar la cuenta (cambiar contraseña / borrar cuenta) ----------------
+window.gestionarCuenta = () => {
+  const c = cuentaActual();
+  if (!c || !c.email) return;
+  $('#modal').innerHTML = `
+    <h3>${ic('user', 20)} Tu cuenta</h3>
+    <p class="ap-ctx">${esc(c.email)}${c.pro ? ' · <b>Pro activo</b> ✨' : ''}</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+      <input id="gc-actual" type="password" autocomplete="current-password" placeholder="Contraseña actual (si ya tienes)" aria-label="Contraseña actual" />
+      <input id="gc-nueva" type="password" autocomplete="new-password" placeholder="Nueva contraseña (mín. 6)" aria-label="Nueva contraseña" />
+    </div>
+    <div id="gc-msg" class="msg"></div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="guardarClaveCuenta()">Guardar contraseña</button>
+      <button class="btn btn-ghost" onclick="cerrarModal(); salirCuenta()">${ic('user', 15)} Cerrar sesión</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cerrar</button>
+      <button class="btn btn-ghost cuenta-del" onclick="borrarMiCuenta()">Borrar mi cuenta</button>
+    </div>`;
+  abrirModal();
+  setTimeout(() => { const i = $('#gc-actual'); if (i) i.focus(); }, 60);
+};
+window.guardarClaveCuenta = async () => {
+  const claveActual = $('#gc-actual')?.value || '';
+  const claveNueva = $('#gc-nueva')?.value || '';
+  const msg = $('#gc-msg');
+  if (!claveNueva) { if (msg) { msg.textContent = 'Escribe la nueva contraseña.'; msg.className = 'msg err'; } return; }
+  if (msg) { msg.textContent = 'Guardando…'; msg.className = 'msg'; }
+  try {
+    const r = await fetch('/api/cuenta/clave', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ claveActual, claveNueva }) });
+    const j = await r.json().catch(() => ({}));
+    if (j.ok) { cerrarModal(); toast('Contraseña actualizada ✓'); }
+    else if (r.status === 401) { cerrarModal(); toast('Tu sesión venció, entra de nuevo'); lsRemove('estaciona_cuenta'); if (vistaActual === 'miauto') renderMiAuto(); }
+    else if (msg) { const e = { clave: 'La contraseña debe tener al menos 6 caracteres.', actual: 'La contraseña actual no coincide.' }; msg.textContent = e[j.error] || 'No se pudo, intenta de nuevo.'; msg.className = 'msg err'; }
+  } catch { if (msg) { msg.textContent = 'Sin conexión, intenta de nuevo.'; msg.className = 'msg err'; } }
+};
+window.borrarMiCuenta = async () => {
+  if (!confirm('¿Borrar tu cuenta? Se elimina tu cuenta y los datos que guardaste en la nube (favoritos, historial). Tus favoritos seguirán en este teléfono. Esto no se puede deshacer.')) return;
+  try { await fetch('/api/cuenta/borrar', { method: 'POST', headers: authHeaders() }); } catch {}
+  lsRemove('estaciona_cuenta');
+  cerrarModal();
+  toast('Tu cuenta fue borrada');
+  if (vistaActual === 'miauto') renderMiAuto();
+};
+
+// --- Feedback (sugerencias / reportar problema) -----------------------------
+function feedbackLinkHTML() {
+  return `<div class="fb-link">
+    <button class="linklike" onclick="compartirApp()">${ic('share', 14)} Compartir Estaciona con un amigo</button>
+    <button class="linklike" onclick="enviarFeedbackModal()">${ic('bulb', 14)} Enviar sugerencia o reportar un problema</button>
+  </div>`;
+}
+// Compartir la app (crecimiento boca a boca). Usa el menú nativo si existe; si no,
+// copia el link al portapapeles.
+window.compartirApp = async () => {
+  const url = location.origin + '/';
+  const texto = 'Estaciona — encuentra dónde estacionar en Chile: dónde hay, cuánto cuesta y si está abierto.';
+  if (navigator.share) { try { await navigator.share({ title: 'Estaciona', text: texto, url }); } catch { /* el usuario canceló */ } return; }
+  try { await navigator.clipboard.writeText(texto + ' ' + url); toast('¡Link copiado! Pégalo para compartir 🙌'); }
+  catch { prompt('Copia y comparte este link:', texto + ' ' + url); }
+};
+window.enviarFeedbackModal = () => {
+  $('#modal').innerHTML = `
+    <h3>${ic('bulb', 20)} Tu opinión</h3>
+    <p class="ap-ctx">¿Una idea, algo que no funciona o un dato equivocado? Cuéntanos — nos ayuda a mejorar Estaciona. <b>No pedimos tus datos.</b></p>
+    <textarea id="fb-texto" rows="4" placeholder="Escribe aquí tu sugerencia o el problema…" aria-label="Tu mensaje" style="width:100%;resize:vertical"></textarea>
+    <div id="fb-msg" class="msg"></div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+      <button class="btn btn-primary" onclick="mandarFeedback()">Enviar</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    </div>`;
+  abrirModal();
+  setTimeout(() => $('#fb-texto')?.focus(), 60);
+};
+window.mandarFeedback = async () => {
+  const texto = $('#fb-texto')?.value.trim() || '';
+  const msg = $('#fb-msg');
+  if (texto.length < 2) { if (msg) { msg.textContent = 'Escribe tu mensaje.'; msg.className = 'msg err'; } return; }
+  if (msg) { msg.textContent = 'Enviando…'; msg.className = 'msg'; }
+  // Contexto técnico (ayuda a reproducir): ciudad y tamaño de pantalla. Sin datos personales.
+  const contexto = `ciudad:${ciudadActual || '?'} · ${innerWidth}x${innerHeight}`;
+  try {
+    const r = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, contexto }) });
+    if (r.ok) { cerrarModal(); toast('¡Gracias! Recibimos tu mensaje 🙌'); }
+    else if (r.status === 429) { if (msg) { msg.textContent = 'Muchos mensajes seguidos, espera un momento.'; msg.className = 'msg err'; } }
+    else if (msg) { msg.textContent = 'No se pudo enviar, intenta de nuevo.'; msg.className = 'msg err'; }
+  } catch { if (msg) { msg.textContent = 'Sin conexión, intenta de nuevo.'; msg.className = 'msg err'; } }
+};
+
+// --- Instalar como app (PWA) ------------------------------------------------
+// Android/Chrome dispara 'beforeinstallprompt': lo guardamos y ofrecemos un botón
+// propio. iOS no lo soporta → mostramos las instrucciones de "Agregar a inicio".
+let _deferredInstall = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();                       // no mostrar el mini-infobar del navegador
+  _deferredInstall = e;                     // lo disparamos nosotros desde el botón
+  if (vistaActual === 'miauto') renderMiAuto();
+});
+window.addEventListener('appinstalled', () => {
+  _deferredInstall = null;
+  toast('¡Instalada! Ábrela desde tu pantalla de inicio 🅿️');
+  if (vistaActual === 'miauto') renderMiAuto();
+});
+const enStandalone = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch { return false; } };
+const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+function instalarAppHTML() {
+  if (enStandalone()) return '';                    // ya está abierta como app
+  if (!_deferredInstall && !esIOS()) return '';     // navegador sin instalación disponible
+  return `<button class="instalar-card" onclick="instalarApp()">
+    <span class="instalar-ic">${ic('parking', 20)}</span>
+    <span class="instalar-txt"><b>Instala Estaciona</b><span>Ábrela como app, a un toque desde tu inicio</span></span>
+    <span class="cuenta-cta">${ic('arrowRight', 18)}</span>
+  </button>`;
+}
+window.instalarApp = async () => {
+  if (_deferredInstall) {
+    _deferredInstall.prompt();
+    try { await _deferredInstall.userChoice; } catch {}
+    _deferredInstall = null;
+    if (vistaActual === 'miauto') renderMiAuto();
+    return;
+  }
+  if (esIOS()) {
+    $('#modal').innerHTML = `
+      <h3>${ic('parking', 20)} Instalar en iPhone</h3>
+      <p class="ap-ctx">En 2 pasos, con Safari:</p>
+      <ol style="margin:0 0 4px 18px;line-height:1.7;font-size:14px">
+        <li>Toca el botón <b>Compartir</b> (el cuadrito con la flecha ↑, abajo).</li>
+        <li>Elige <b>“Agregar a inicio”</b> y luego <b>Agregar</b>.</li>
+      </ol>
+      <div style="margin-top:14px"><button class="btn btn-primary" onclick="cerrarModal()">Entendido</button></div>`;
+    abrirModal();
+  }
+};
 
 // Estado en memoria.
 let DATA = [];
@@ -53,8 +423,10 @@ let CENTRO = { lat: -38.7359, lng: -72.5905, nombre: 'Temuco' };
 const CENTRO_DEFAULT = { ...CENTRO };   // copia inmutable de Temuco (ciudad casa); CENTRO sí se sobrescribe por ciudad
 let ZONAS = [];                    // ciudades con datos (del backend)
 let REGIONES = [];                 // 16 regiones de Chile, orden norte→sur (del backend)
+let vistaActual = 'buscar';        // vista activa (buscar | miauto | favoritos)
 let MAPTILER_KEY = '';             // key de MapTiler (del backend); vacío => tiles OSM
 let VAPID_PUB = '';                // clave pública Web Push (del backend); vacío => push desactivado
+let GOOGLE_CLIENT_ID = '';         // Client ID de "Continuar con Google" (del backend); vacío => sin botón Google
 let TOMTOM_KEY = '';               // key de TomTom (del backend); vacío => ETA estimada
 let ciudadActual = 'Temuco';       // ciudad que se está mirando ahora
 let USER = { ...CENTRO };          // "estás aquí" (Temuco por defecto)
@@ -139,6 +511,7 @@ const ICONS = {
   starFull:'<path d="m12 3.5 2.6 5.3 5.9.8-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8-4.3-4.2 5.9-.8L12 3.5Z" fill="currentColor"/>',
   arrowLeft:'<path d="M19 12H5"/><path d="m11 18-6-6 6-6"/>',
   arrowRight:'<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
   share:'<path d="M21 3 3 10.5l7 2.5 2.5 7L21 3Z"/>',
   home:'<path d="m3 11 9-7 9 7"/><path d="M5.5 9.5V20h13V9.5"/>',
   work:'<rect x="3" y="7.5" width="18" height="12.5" rx="2"/><path d="M8.5 7.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1.5"/>',
@@ -412,7 +785,11 @@ function cambiarCiudad(nombre, mover = true) {
 // pero NUNCA dejamos a medias el flujo que llamó (ej. cerrar la bienvenida).
 let _lsAvisado = false;
 function lsSet(key, value) {
-  try { localStorage.setItem(key, value); return true; }
+  try {
+    localStorage.setItem(key, value);
+    if (SYNC_KEYS.includes(key)) programarPushNube();   // respalda en la nube si hay cuenta
+    return true;
+  }
   catch { if (!_lsAvisado) { _lsAvisado = true; toast('No pude guardar en este dispositivo (¿modo privado?)'); } return false; }
 }
 function lsRemove(key) { try { localStorage.removeItem(key); } catch {} }
@@ -2361,15 +2738,15 @@ function renderMiAuto() {
   const a = LS.getAuto(), v = $('#view-miauto');
   destruirMiniMapa();                 // limpia instancia previa antes de recrear
   if (!a) {
-    v.innerHTML = `<div class="simple"><div class="empty-big">
+    v.innerHTML = `<div class="simple">${cuentaHTML()}${instalarAppHTML()}<div class="empty-big">
       <span class="em">${ic('car', 46)}</span>
       <div class="empty-tit">Aún no estás estacionado</div>
       <p>Cuando dejes el auto, abre un lugar y toca <b>"Estacioné aquí"</b>. Te guardo dónde quedó, con cronómetro y costo estimado.</p>
       <button class="btn btn-primary" style="margin-top:18px" onclick="buscarDondeEstacionar()">${ic('search', 16)} Buscar dónde estacionar</button>
-    </div>${gastoHTML()}${historialHTML()}</div>`;
+    </div>${gastoHTML()}${historialHTML()}${feedbackLinkHTML()}</div>`;
     return;
   }
-  v.innerHTML = `<div class="simple">
+  v.innerHTML = `<div class="simple">${cuentaHTML()}${instalarAppHTML()}
     <h2>${ic('car', 22)} Mi auto</h2>
     <div class="miauto-card">
       <div class="ma-loc">
@@ -2403,7 +2780,7 @@ function renderMiAuto() {
       <button class="btn btn-primary" onclick="llevame('${a.id}')">${ic('compass', 17)} Volver a mi auto</button>
       <button class="btn btn-second" onclick="compartirAuto()">${ic('share', 16)} Compartir dónde lo dejé</button>
       <button class="btn btn-ghost" onclick="terminarAuto()">${ic('check', 16)} Terminar</button>
-    </div>${gastoHTML()}${historialHTML()}</div>`;
+    </div>${gastoHTML()}${historialHTML()}${feedbackLinkHTML()}</div>`;
   crearMiniMapa(a);
   actualizarMiAutoVivo();             // rellena tiempo/costo/alarma/ETA
 }
@@ -3394,6 +3771,7 @@ function irA(view) {
   if (view !== 'miauto') destruirMiniMapa();   // libera el mini-mapa al salir
   // GPS solo mientras miras el mapa: lo pausa al salir y lo reanuda al volver (si ya estaba activo).
   if (view === 'buscar') { if (userReal) iniciarSeguimiento(); } else { detenerSeguimiento(); }
+  vistaActual = view;
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
   $('#view-' + view).classList.add('active');
   document.querySelectorAll('.bottomnav .nav').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
@@ -3528,9 +3906,7 @@ function chequearRecordatorios() {
         const txt = esGratis ? `${esc(r.nombre)} — ahora suele ser gratis 🎉` : `Revisa ${esc(r.nombre)} — ¿hay cupo ahora?`;
         b.innerHTML = `<span>${ic(esGratis ? 'tag' : 'clock', 16)} ${txt}</span><button onclick="this.parentElement.classList.remove('show')">OK</button>`;
         b.classList.remove('urgent'); b.classList.add('show');   // recordatorio amigable (borde teal)
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('Estaciona 🅿️', { body: esGratis ? `${r.nombre} — ahora suele ser gratis 🎉` : `Revisa ${r.nombre} — ¿encontraste cupo?` });
-        }
+        notificar('Estaciona 🅿️', esGratis ? `${r.nombre} — ahora suele ser gratis 🎉` : `Revisa ${r.nombre} — ¿encontraste cupo?`);
         break;
       }
     }
@@ -3734,7 +4110,7 @@ function skeletonHtml() {
 async function cargarConfig() {
   try {
     const r = await fetchConTimeout('/api/config', 8000);   // no bloquear initMap si /api/config cuelga
-    if (r.ok) { const c = await r.json(); MAPTILER_KEY = c.maptilerKey || ''; TOMTOM_KEY = c.tomtomKey || ''; VAPID_PUB = c.vapidPublic || ''; }
+    if (r.ok) { const c = await r.json(); MAPTILER_KEY = c.maptilerKey || ''; TOMTOM_KEY = c.tomtomKey || ''; VAPID_PUB = c.vapidPublic || ''; GOOGLE_CLIENT_ID = c.googleClientId || ''; }
   } catch { /* sin config: usamos OSM */ }
 }
 
@@ -3857,6 +4233,8 @@ window.instruccionesIOS = () => {
 async function init() {
   $('#lista').innerHTML = skeletonHtml();   // esqueleto con shimmer mientras carga
   mostrarBienvenida();                       // tarjeta de bienvenida (1ª vez)
+  validarCuenta();                           // valida la sesión y sincroniza (en 2º plano)
+  actualizarBotonCuenta();                    // refleja el estado de sesión en el botón del header
 
   // Ciudad inicial (deep link ?ciudad= > última guardada > default) — se decide
   // ANTES de pedir datos, para pedir la ciudad correcta de una.

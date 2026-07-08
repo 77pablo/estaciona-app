@@ -10,8 +10,9 @@
 // Credenciales (NO van en el repo, que es público):
 //   - Railway: variables  SIGHTENGINE_USER  y  SIGHTENGINE_SECRET
 //   - Local:   archivo  app/backend/sightengine.key  con  "usuario:secreto"
-// Sin credenciales => la revisión del servidor se omite (deja pasar; la IA del
-// navegador sigue filtrando desnudos). Capa gratis de Sightengine: ~2.000/mes.
+// Sin credenciales => FAIL-CLOSED: la subida se RECHAZA (no se guarda nada sin
+// revisar). Para permitir subir sin moderación de servidor: FOTOS_SIN_MODERAR=1
+// (opt-in, a riesgo del operador). Capa gratis de Sightengine: ~2.000/mes.
 // ============================================================================
 
 import https from 'node:https';
